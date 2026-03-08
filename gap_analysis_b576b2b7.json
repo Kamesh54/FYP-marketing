@@ -1,0 +1,180 @@
+{
+    "company_info": {
+        "name": "The Ordinary",
+        "url": "",
+        "product_description": "E-commerce Skincare and Beauty in None. The Ordinary is an e-commerce skincare and beauty company that offers a wide range of high-quality products. They focus on providing simple, effective, and affordable skincare solutions. The company prioritizes creating engaging content and optimizing their website for a seamless user experience."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "and",
+            "skincare",
+            "commerce skincare",
+            "skincare and",
+            "and beauty",
+            "commerce",
+            "beauty",
+            "the",
+            "company",
+            "beauty in",
+            "in none",
+            "none the",
+            "the ordinary",
+            "ordinary is",
+            "is an",
+            "an commerce",
+            "beauty company",
+            "company that",
+            "that offers",
+            "offers wide",
+            "wide range",
+            "range of",
+            "of high",
+            "high quality",
+            "quality products"
+        ],
+        "long_tail_keywords": [
+            "commerce skincare and beauty",
+            "commerce skincare and",
+            "skincare and beauty",
+            "skincare and beauty in",
+            "and beauty in none",
+            "beauty in none the",
+            "in none the ordinary",
+            "none the ordinary is",
+            "the ordinary is an",
+            "ordinary is an commerce",
+            "is an commerce skincare",
+            "an commerce skincare and",
+            "skincare and beauty company",
+            "and beauty company that",
+            "beauty company that offers",
+            "company that offers wide",
+            "that offers wide range",
+            "offers wide range of",
+            "wide range of high",
+            "range of high quality",
+            "of high quality products",
+            "high quality products they",
+            "quality products they focus",
+            "products they focus on",
+            "they focus on providing"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 4,
+        "competitor_details": [
+            {
+                "name": "Haut.AI: Science-Backed AI Skin Analysis Solutions for Beauty",
+                "url": "https://haut.ai/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 11
+            },
+            {
+                "name": "Cosmetics Store POS",
+                "url": "https://novapointofsale.com/cosmetic-pos/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Cosmetics eCommerce Websites and Templates",
+                "url": "https://themeforest.net/category/ecommerce?term=cosmetics&srsltid=AfmBOopYLCVa6ZN_iju1oBVKWtruByQtjK3T-ymLd3Rt-87XZ6PViexS",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "Online Perfume Shop Management Software",
+                "url": "https://www.enerpize.com/perfume-shop/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "growth",
+                "exciting rewards",
+                "amazon haut",
+                "flexible pricing",
+                "shipping companies",
+                "receive alerts",
+                "stay informed",
+                "ais clinically",
+                "renting vehicles",
+                "medium businesses"
+            ],
+            "long_tail": [
+                "set custom commission levels",
+                "efficientlyfrom enticing loyalty programs",
+                "cosmetics store pos solution",
+                "announcing seasonal sales events",
+                "create automated purchase orders",
+                "calculate periodical net profits",
+                "automatically deducting raw materials",
+                "enerpize business management software",
+                "wages advanced reports",
+                "sebastian chaviano .. sebastian"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "and",
+                "skincare",
+                "commerce skincare",
+                "skincare and",
+                "and beauty",
+                "commerce",
+                "the",
+                "company",
+                "beauty in",
+                "in none"
+            ],
+            "long_tail": [
+                "commerce skincare and beauty",
+                "commerce skincare and",
+                "skincare and beauty",
+                "skincare and beauty in",
+                "and beauty in none",
+                "beauty in none the",
+                "in none the ordinary",
+                "none the ordinary is",
+                "the ordinary is an",
+                "ordinary is an commerce"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "growth",
+                "exciting rewards",
+                "amazon haut",
+                "flexible pricing",
+                "shipping companies"
+            ],
+            "long_tail": [
+                "set custom commission levels",
+                "efficiently from enticing loyalty programs",
+                "cosmetics store pos solution",
+                "announcing seasonal sales events",
+                "create automated purchase orders"
+            ]
+        },
+        "recommendations": [
+            "Incorporate missing short and long-tail keywords in the company's content strategy to improve search engine rankings",
+            "Develop a loyalty program that offers exciting rewards to customers",
+            "Explore partnerships with shipping companies to offer flexible pricing and fast delivery",
+            "Implement a system for customers to receive alerts and stay informed about new products and promotions",
+            "Optimize the website for keywords related to cosmetics and skincare to attract more organic traffic"
+        ],
+        "competitive_insights": [
+            "Competitors are using keywords related to growth, rewards, and flexible pricing to attract customers",
+            "The use of long-tail keywords like 'cosmetics store pos solution' and 'announcing seasonal sales events' can help the company rank for specific search queries",
+            "The company's unique keywords like 'skincare and beauty' and 'commerce skincare' can be used to create targeted content and improve brand visibility"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

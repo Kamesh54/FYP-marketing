@@ -1,0 +1,40 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.env
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+node_modules/
+.next/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+database/*.db
+
+# Generated / temp files
+generated_images/
+previews/
+tmp1/
+uploads/
+cache/
+reports/
+*.log
+job_status.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright screenshots
+*.png

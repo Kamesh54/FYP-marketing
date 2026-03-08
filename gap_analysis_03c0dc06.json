@@ -1,0 +1,165 @@
+{
+    "company_info": {
+        "name": "The Ordinary",
+        "url": "",
+        "product_description": "E-commerce Skincare and Beauty in None. The Ordinary is an e-commerce skincare and beauty company that offers a wide range of high-quality products. They focus on providing simple, effective, and affordable skincare solutions. The company prioritizes creating engaging content and optimizing their website for a seamless user experience."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "and",
+            "skincare",
+            "commerce skincare",
+            "skincare and",
+            "and beauty",
+            "commerce",
+            "beauty",
+            "the",
+            "company",
+            "beauty in",
+            "in none",
+            "none the",
+            "the ordinary",
+            "ordinary is",
+            "is an",
+            "an commerce",
+            "beauty company",
+            "company that",
+            "that offers",
+            "offers wide",
+            "wide range",
+            "range of",
+            "of high",
+            "high quality",
+            "quality products"
+        ],
+        "long_tail_keywords": [
+            "commerce skincare and beauty",
+            "commerce skincare and",
+            "skincare and beauty",
+            "skincare and beauty in",
+            "and beauty in none",
+            "beauty in none the",
+            "in none the ordinary",
+            "none the ordinary is",
+            "the ordinary is an",
+            "ordinary is an commerce",
+            "is an commerce skincare",
+            "an commerce skincare and",
+            "skincare and beauty company",
+            "and beauty company that",
+            "beauty company that offers",
+            "company that offers wide",
+            "that offers wide range",
+            "offers wide range of",
+            "wide range of high",
+            "range of high quality",
+            "of high quality products",
+            "high quality products they",
+            "quality products they focus",
+            "products they focus on",
+            "they focus on providing"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 3,
+        "competitor_details": [
+            {
+                "name": "SkinSort: Discover Skincare Products & Routines",
+                "url": "https://skinsort.com/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "Health & Beauty Ecommerce Platform",
+                "url": "https://www.bigcommerce.com/showcase/health-beauty/",
+                "short_keywords_count": 15,
+                "long_tail_keywords_count": 3
+            },
+            {
+                "name": "Lightspeed's beauty & cosmetics store POS system",
+                "url": "https://www.lightspeedhq.com/pos/retail/beauty-products-pos/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "teams",
+                "performance",
+                "series",
+                "help",
+                "find",
+                "technology partner",
+                "q",
+                "know",
+                "success",
+                "support"
+            ],
+            "long_tail": [
+                "new storefront yourwholeteam",
+                "agency partner find",
+                "loading showcase content ..."
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "and",
+                "skincare",
+                "commerce skincare",
+                "skincare and",
+                "and beauty",
+                "commerce",
+                "beauty",
+                "the",
+                "company",
+                "beauty in"
+            ],
+            "long_tail": [
+                "commerce skincare and beauty",
+                "commerce skincare and",
+                "skincare and beauty",
+                "skincare and beauty in",
+                "and beauty in none",
+                "beauty in none the",
+                "in none the ordinary",
+                "none the ordinary is",
+                "the ordinary is an",
+                "ordinary is an commerce"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "teams",
+                "performance",
+                "series",
+                "help",
+                "find"
+            ],
+            "long_tail": [
+                "new storefront yourwholeteam",
+                "agency partner find",
+                "loading showcase content"
+            ]
+        },
+        "recommendations": [
+            "Incorporate missing short-tail and long-tail keywords into the website's content and metadata",
+            "Create engaging content around the missing keywords to attract more organic traffic",
+            "Optimize the website's structure and navigation to improve user experience and search engine rankings",
+            "Develop a content marketing strategy that targets the identified keyword gaps",
+            "Leverage the unique company keywords to create a strong brand identity and improve search engine visibility"
+        ],
+        "competitive_insights": [
+            "Competitors are targeting keywords related to teamwork, performance, and technology partnerships, indicating a potential gap in The Ordinary's content strategy",
+            "The Ordinary's unique keywords suggest a strong focus on skincare and beauty, which can be leveraged to create targeted content and improve search engine rankings",
+            "The company's lack of presence in searches for 'teams', 'performance', and 'technology partner' may indicate a need to expand its content and services to appeal to a broader audience"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 3,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 8
+    }
+}

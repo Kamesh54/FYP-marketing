@@ -5,7 +5,7 @@ Fetches engagement metrics from Twitter and Instagram APIs
 import os
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import tweepy
 from instagrapi import Client as InstaClient
 from dotenv import load_dotenv

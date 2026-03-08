@@ -30,7 +30,7 @@ import json
 import socket
 import ssl
 from urllib.parse import urljoin, urlparse
-from collections import Counter, defaultdict
+from collections import Counter
 
 import requests
 from bs4 import BeautifulSoup
@@ -59,21 +59,38 @@ WEIGHTS = {
 
 # Utility helpers
 
-def safe_get(url, timeout=15, allow_redirects=True):
-    headers = {
-        'User-Agent': 'SEO-Agent/1.0 (+https://github.com/)'  # polite UA
-    }
-    try:
-        t0 = time.time()
-        r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=allow_redirects)
-        elapsed = time.time() - t0
-        return r, elapsed
-    except Exception as e:
-        return None, None
+# Rotate through real browser UAs to avoid bot-blocking
+_USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0',
+]
+
+def safe_get(url, timeout=20, allow_redirects=True):
+    import random
+    for ua in _USER_AGENTS:
+        headers = {
+            'User-Agent': ua,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        try:
+            t0 = time.time()
+            r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=allow_redirects)
+            elapsed = time.time() - t0
+            # Accept any response that has content (even 403/429 may have usable HTML)
+            if r.content:
+                return r, elapsed
+        except Exception:
+            continue
+    return None, None
 
 
 def fetch_head(url, timeout=10):
-    headers = {'User-Agent': 'SEO-Agent/1.0'}
+    headers = {'User-Agent': _USER_AGENTS[0]}
     try:
         r = requests.head(url, headers=headers, timeout=timeout, allow_redirects=True)
         return r
@@ -88,7 +105,9 @@ def crawl_page(url):
     """Fetches a page and returns parsed soup and raw response info."""
     r, elapsed = safe_get(url)
     if r is None:
-        raise RuntimeError(f"Failed to fetch {url}")
+        raise RuntimeError(f"Failed to fetch {url} — site may be unreachable or blocking all requests")
+    if r.status_code in (403, 429) and not r.content:
+        raise RuntimeError(f"Access blocked by {url} (HTTP {r.status_code}). Try a different URL.")
 
     soup = BeautifulSoup(r.content, 'lxml')
     parsed = urlparse(r.url)
@@ -1264,10 +1283,88 @@ def run_audit(target_url):
     print(f" Open the report in your browser to view the results!")
 
 
+# ============================================================
+#  FastAPI server mode — started when no URL arg is provided
+# ============================================================
+try:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel as _BaseModel
+    import uvicorn as _uvicorn
+    _FASTAPI_AVAILABLE = True
+except ImportError:
+    _FASTAPI_AVAILABLE = False
+
+if _FASTAPI_AVAILABLE:
+    app = FastAPI(title="SEO Agent", version="1.0.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    class _AnalyzeRequest(_BaseModel):
+        url: str
+
+    @app.get("/")
+    def health():
+        return {"service": "seo_agent", "port": 5000, "status": "ok"}
+
+    @app.post("/analyze")
+    def analyze_endpoint(req: _AnalyzeRequest):
+        """Run full SEO audit and return the report path + summary."""
+        import io as _io, contextlib as _ctx
+        _buf = _io.StringIO()
+        try:
+            # Capture stdout from run_audit so the server stays clean
+            with _ctx.redirect_stdout(_buf):
+                data = crawl_page(req.url)
+                soup = data["soup"]
+                onpage      = analyze_onpage(soup)
+                links       = analyze_links(soup, data["final_url"])
+                performance = analyze_performance(data, soup)
+                usability   = analyze_usability(soup, data["final_url"])
+                social      = analyze_social(soup)
+                local       = analyze_local(soup)
+                technical   = analyze_technical(data["final_url"])
+                analyses = {
+                    "onpage": onpage, "links": links, "performance": performance,
+                    "usability": usability, "social": social, "local": local,
+                    "technical": technical, "raw_soup": soup,
+                }
+                analyses["recommendations"] = generate_recommendations(analyses)
+                from urllib.parse import urlparse as _up
+                host = _up(data["final_url"]).netloc.replace(":", "_")
+                out  = f"report_{host}.html"
+                path = render_html_report(analyses, data["final_url"], out)
+            scores = {k: v.get("score", 0) for k, v in analyses.items() if isinstance(v, dict) and "score" in v}
+            return {
+                "status": "completed",
+                "url": req.url,
+                "final_url": data["final_url"],
+                "report_path": path,
+                "scores": scores,
+                "recommendations": analyses.get("recommendations", [])[:5],
+            }
+        except Exception as exc:
+            return {"status": "error", "url": req.url, "error": str(exc)}
+
+    @app.get("/report/{host}")
+    def get_report_path(host: str):
+        path = f"report_{host}.html"
+        import os as _os
+        return {"exists": _os.path.isfile(path), "path": path}
+
+
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python seo_agent.py <url>")
-        print("Example: python seo_agent.py https://example.com")
-        sys.exit(1)
-    url = sys.argv[1]
-    run_audit(url)
+    if len(sys.argv) >= 2:
+        # CLI mode: python seo_agent.py https://example.com
+        run_audit(sys.argv[1])
+    else:
+        # Server mode: python seo_agent.py  (no args)
+        if not _FASTAPI_AVAILABLE:
+            print("fastapi/uvicorn not installed. Run: pip install fastapi uvicorn")
+            sys.exit(1)
+        print("Starting SEO Agent server on port 5000...")
+        _uvicorn.run("seo_agent:app", host="0.0.0.0", port=5000, reload=False)

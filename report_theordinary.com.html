@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO Analysis Report - theordinary.com</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: #f8fafc;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header .url {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+        
+        .header .date {
+            font-size: 0.95rem;
+            opacity: 0.8;
+        }
+        
+        .overall-score {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        
+        .score-display {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 8px solid #F97316;
+            margin-bottom: 20px;
+        }
+        
+        .score-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #F97316;
+        }
+        
+        .score-label {
+            font-size: 1.2rem;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+        
+        .score-description {
+            color: #6b7280;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .category-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .category-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .score-circle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+        
+        .score-unit {
+            font-size: 0.6rem;
+            opacity: 0.7;
+        }
+        
+        .category-description {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .section h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .priority-section {
+            margin-bottom: 30px;
+        }
+        
+        .priority-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .priority-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .priority-count {
+            color: #6b7280;
+            font-weight: 400;
+            font-size: 1rem;
+        }
+        
+        .recommendations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .recommendation-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fefefe;
+        }
+        
+        .recommendation-header {
+            margin-bottom: 10px;
+        }
+        
+        .area-tag {
+            background: #f3f4f6;
+            color: #374151;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .issue-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+        
+        .suggestion {
+            color: #4b5563;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-card {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .detail-item {
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .detail-item strong {
+            color: #1f2937;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 0.9rem;
+            border-top: 1px solid #e5e7eb;
+            margin-top: 40px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .recommendations-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .no-issues {
+            text-align: center;
+            color: #10b981;
+            font-weight: 500;
+            padding: 20px;
+            background: #d1fae5;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>SEO Analysis Report</h1>
+            <div class="url">https://theordinary.com/en-in</div>
+            <div class="date">Generated on March 05, 2026 at 05:26 UTC</div>
+        </header>
+
+        <div class="overall-score">
+            <div class="score-display">
+                <span class="score-number">43.83</span>
+            </div>
+            <div class="score-label">Overall SEO Score</div>
+            <div class="score-description">
+                This score represents a comprehensive analysis of your website's search engine optimization across multiple key factors.
+            </div>
+        </div>
+
+        <div class="categories-grid">
+            
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">Content & Keywords</h3>
+                <div class="score-circle" style="border-color: #EF4444; color: #EF4444;">
+                    16.67<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">Content optimization, titles, descriptions, and keyword usage</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 16.67%; background-color: #EF4444;"></div>
+            </div>
+        </div>
+        
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">Speed & Performance</h3>
+                <div class="score-circle" style="border-color: #F59E0B; color: #F59E0B;">
+                    72.05<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">Page load speed, file sizes, and technical performance</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 72.05%; background-color: #F59E0B;"></div>
+            </div>
+        </div>
+        
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">User Experience</h3>
+                <div class="score-circle" style="border-color: #EF4444; color: #EF4444;">
+                    30.0<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">Mobile-friendliness, accessibility, and user interface</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 30.0%; background-color: #EF4444;"></div>
+            </div>
+        </div>
+        
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">Links & Structure</h3>
+                <div class="score-circle" style="border-color: #F59E0B; color: #F59E0B;">
+                    75<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">Internal linking, external links, and site structure</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 75%; background-color: #F59E0B;"></div>
+            </div>
+        </div>
+        
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">Technical Setup</h3>
+                <div class="score-circle" style="border-color: #10B981; color: #10B981;">
+                    95<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">HTTPS, robots.txt, sitemaps, and technical configuration</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 95%; background-color: #10B981;"></div>
+            </div>
+        </div>
+        
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">Social Media</h3>
+                <div class="score-circle" style="border-color: #EF4444; color: #EF4444;">
+                    0.0<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">Social media integration and sharing optimization</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0.0%; background-color: #EF4444;"></div>
+            </div>
+        </div>
+        
+        <div class="category-card">
+            <div class="category-header">
+                <h3 class="category-name">Local Business</h3>
+                <div class="score-circle" style="border-color: #EF4444; color: #EF4444;">
+                    0.0<span class="score-unit">/100</span>
+                </div>
+            </div>
+            <p class="category-description">Local business information and local SEO factors</p>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 0.0%; background-color: #EF4444;"></div>
+            </div>
+        </div>
+        
+        </div>
+
+        <div class="section">
+            <h2>
+                <span class="section-icon">!</span>
+                Priority Recommendations
+            </h2>
+            
+            <div class="priority-section">
+                <h3 class="priority-title">
+                    <span class="priority-badge" style="background-color: #FEE2E2; color: #DC2626;">
+                        High Priority
+                    </span>
+                    <span class="priority-count">(3 items)</span>
+                </h3>
+                <div class="recommendations-grid">
+            
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Content & Keywords</span>
+                    </div>
+                    <h4 class="issue-title">No page title found</h4>
+                    <p class="suggestion">Add a unique, descriptive page title. Keep it 50-60 characters and include your main keyword near the beginning.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Content & Keywords</span>
+                    </div>
+                    <h4 class="issue-title">Meta description is missing</h4>
+                    <p class="suggestion">Add a compelling meta description (120-160 characters) that summarizes your page and includes your target keyword.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Content & Keywords</span>
+                    </div>
+                    <h4 class="issue-title">Main heading (H1) tag is missing</h4>
+                    <p class="suggestion">Add a clear main heading (H1) that contains your primary topic and keyword for the page.</p>
+                </div>
+                </div></div>
+            <div class="priority-section">
+                <h3 class="priority-title">
+                    <span class="priority-badge" style="background-color: #FEF3C7; color: #D97706;">
+                        Medium Priority
+                    </span>
+                    <span class="priority-count">(2 items)</span>
+                </h3>
+                <div class="recommendations-grid">
+            
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Content & Keywords</span>
+                    </div>
+                    <h4 class="issue-title">Canonical URL tag is missing</h4>
+                    <p class="suggestion">Add a canonical URL tag to prevent duplicate content issues and consolidate page authority.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">User Experience</span>
+                    </div>
+                    <h4 class="issue-title">Mobile viewport tag is missing</h4>
+                    <p class="suggestion">Add a viewport meta tag to ensure your site displays properly on mobile devices.</p>
+                </div>
+                </div></div>
+            <div class="priority-section">
+                <h3 class="priority-title">
+                    <span class="priority-badge" style="background-color: #D1FAE5; color: #059669;">
+                        Low Priority
+                    </span>
+                    <span class="priority-count">(6 items)</span>
+                </h3>
+                <div class="recommendations-grid">
+            
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">User Experience</span>
+                    </div>
+                    <h4 class="issue-title">Website favicon is missing</h4>
+                    <p class="suggestion">Add a favicon to improve your brand recognition in browser tabs and bookmarks.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Social Media</span>
+                    </div>
+                    <h4 class="issue-title">No social media profiles are linked</h4>
+                    <p class="suggestion">Create business profiles on relevant social media platforms and link to them from your website.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Social Media</span>
+                    </div>
+                    <h4 class="issue-title">Social sharing tags (OpenGraph) are missing</h4>
+                    <p class="suggestion">Add OpenGraph tags (og:title, og:description, og:image) to control how your page appears when shared on social media.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Local Business</span>
+                    </div>
+                    <h4 class="issue-title">Business address is not clearly displayed</h4>
+                    <p class="suggestion">Display your business address prominently and add structured data markup (LocalBusiness schema) for better local SEO.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Local Business</span>
+                    </div>
+                    <h4 class="issue-title">Contact phone number is not found</h4>
+                    <p class="suggestion">Include your business phone number or primary contact method clearly on the page.</p>
+                </div>
+                
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="area-tag">Analytics & Tracking</span>
+                    </div>
+                    <h4 class="issue-title">Website analytics not detected</h4>
+                    <p class="suggestion">Install Google Analytics or similar to monitor traffic and user behavior.</p>
+                </div>
+                </div></div>
+        </div>
+
+        <div class="section">
+            <h2>
+                <span class="section-icon">📊</span>
+                Key Metrics Overview
+            </h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value">0</div>
+                    <div class="metric-label">Words on Page</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">0</div>
+                    <div class="metric-label">Title Length</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">0</div>
+                    <div class="metric-label">Meta Description Length</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">0.05 MB</div>
+                    <div class="metric-label">Page Size</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">2.74s</div>
+                    <div class="metric-label">Server Response Time</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">0</div>
+                    <div class="metric-label">Total Links Found</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="details-grid">
+            <div class="section">
+                <h2>
+                    <span class="section-icon">📝</span>
+                    Content Details
+                </h2>
+                <div class="detail-item">
+                    <strong>Page Title:</strong>
+                    
+                </div>
+                <div class="detail-item">
+                    <strong>Meta Description:</strong>
+                    
+                </div>
+                <div class="detail-item">
+                    <strong>Most Common Words:</strong>
+                    
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>
+                    <span class="section-icon">🔗</span>
+                    Link Analysis
+                </h2>
+                <div class="detail-item">
+                    <strong>Internal Links:</strong>
+                    0 found
+                </div>
+                <div class="detail-item">
+                    <strong>External Links:</strong>
+                    0 found
+                </div>
+                <div class="detail-item">
+                    <strong>NoFollow Links:</strong>
+                    0 found
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>
+                    <span class="section-icon">🛡️</span>
+                    Technical Status
+                </h2>
+                <div class="detail-item">
+                    <strong>HTTPS/SSL:</strong>
+                    ✅ Secure
+                </div>
+                <div class="detail-item">
+                    <strong>Robots.txt:</strong>
+                    ✅ Found
+                </div>
+                <div class="detail-item">
+                    <strong>Sitemap:</strong>
+                    ❌ Missing
+                </div>
+                <div class="detail-item">
+                    <strong>HTTP/2 Support:</strong>
+                    ❌ Not Detected
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>
+                    <span class="section-icon">📱</span>
+                    Social & Local
+                </h2>
+                <div class="detail-item">
+                    <strong>OpenGraph Tags:</strong>
+                    ❌ Missing
+                </div>
+                <div class="detail-item">
+                    <strong>Twitter Cards:</strong>
+                    ❌ Missing
+                </div>
+                <div class="detail-item">
+                    <strong>Social Profiles Linked:</strong>
+                    0 found
+                </div>
+                <div class="detail-item">
+                    <strong>Business Contact Info:</strong>
+                    ⚠️ Incomplete
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>SEO Analysis Tool</strong> • This report provides insights to improve your search engine optimization.</p>
+            <p>For more detailed analysis, consider integrating with Google Search Console, PageSpeed Insights, and professional SEO tools.</p>
+        </div>
+    </div>
+</body>
+</html>

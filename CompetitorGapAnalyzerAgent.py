@@ -14,6 +14,11 @@ from datetime import datetime
 from groq import Groq
 from dotenv import load_dotenv
 import time
+try:
+    from graph.dual_write_helper import sync_new_competitor
+except Exception:
+    def sync_new_competitor(*args, **kwargs):
+        pass
 
 # Load environment variables
 load_dotenv()
@@ -28,7 +33,7 @@ if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY environment variable not set.")
 
 # Job status file
-JOB_STATUS_FILE = "job_status.json"
+JOB_STATUS_FILE = "gap_job_status.json"
 
 # FastAPI app
 app = FastAPI(title="Keyword Gap Analysis API", description="API for performing keyword gap analysis")
@@ -429,6 +434,13 @@ async def perform_gap_analysis_background(
         output_file = f"gap_analysis_{job_id[:8]}.json"
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=4, ensure_ascii=False)
+        
+        # Best-effort: sync discovered competitors to the knowledge graph
+        for comp in competitor_data:
+            try:
+                sync_new_competitor(comp)
+            except Exception as e:
+                logger.error(f"Failed to sync competitor to KG: {e}")
         
         job_status[job_id] = {
             "status": "completed",

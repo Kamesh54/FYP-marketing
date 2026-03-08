@@ -1,5 +1,4 @@
 import requests
-import asyncio
 import json
 import re
 import os
@@ -29,12 +28,15 @@ def clean_text(text: str) -> str:
     return text
 
 # ---------------- NLTK Setup ----------------
-required_packages = ['stopwords', 'punkt', 'punkt_tab']
-for package in required_packages:
+nltk_packages = {
+    "stopwords": "corpora/stopwords",
+    "punkt": "tokenizers/punkt"
+}
+for package, resource in nltk_packages.items():
     try:
-        nltk.data.find(f'corpora/{package}' if package == 'stopwords' else f'tokenizers/{package}')
+        nltk.data.find(resource)
     except LookupError:
-        print(f"Downloading {package}...")
+        print(f"Downloading NLTK resource: {package}")
         nltk.download(package, quiet=True)
 
 # ---------------- Env + Logging ----------------

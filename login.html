@@ -516,10 +516,56 @@
             }
         });
 
-        // Check if already logged in
-        if (localStorage.getItem("authToken")) {
-            window.location.href = "agent.html";
+        // Check if already logged in (with redirect guard to prevent loops)
+        let isRedirecting = false;
+        
+        async function checkExistingAuth() {
+            const token = localStorage.getItem("authToken");
+            if (!token) {
+                return; // No token, stay on login page
+            }
+            
+            // Verify token is still valid before redirecting
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                
+                const response = await fetch(`${API_BASE_URL}/auth/me`, {
+                    headers: { "Authorization": `Bearer ${token}` },
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    // Token is valid, redirect
+                    if (!isRedirecting) {
+                        isRedirecting = true;
+                        window.location.href = "agent.html";
+                    }
+                } else {
+                    // Token is invalid, clear it
+                    localStorage.removeItem("authToken");
+                    localStorage.removeItem("userId");
+                    localStorage.removeItem("userEmail");
+                }
+            } catch (error) {
+                // Network error or timeout - don't redirect, let user login manually
+                console.warn("Could not verify existing token:", error);
+                // Only clear token if it's an auth error, not a network error
+                if (error.name !== 'AbortError' && !error.message.includes('fetch') && !error.message.includes('Failed to fetch')) {
+                    // Auth error - clear token
+                    localStorage.removeItem("authToken");
+                    localStorage.removeItem("userId");
+                    localStorage.removeItem("userEmail");
+                }
+                // For network errors, keep the token but don't auto-redirect
+                // User can manually try to access agent.html
+            }
         }
+        
+        // Check auth on page load
+        checkExistingAuth();
     </script>
 </body>
 </html>

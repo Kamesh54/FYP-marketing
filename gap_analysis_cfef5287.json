@@ -1,0 +1,174 @@
+{
+    "company_info": {
+        "name": "The Ordinary",
+        "url": "",
+        "product_description": "E-commerce Skincare and Beauty in None. The Ordinary is an e-commerce skincare and beauty company that offers a wide range of high-quality products. They focus on providing simple, effective, and affordable skincare solutions. The company prioritizes creating engaging content and optimizing their website for a seamless user experience."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "and",
+            "skincare",
+            "commerce skincare",
+            "skincare and",
+            "and beauty",
+            "commerce",
+            "beauty",
+            "the",
+            "company",
+            "beauty in",
+            "in none",
+            "none the",
+            "the ordinary",
+            "ordinary is",
+            "is an",
+            "an commerce",
+            "beauty company",
+            "company that",
+            "that offers",
+            "offers wide",
+            "wide range",
+            "range of",
+            "of high",
+            "high quality",
+            "quality products"
+        ],
+        "long_tail_keywords": [
+            "commerce skincare and beauty",
+            "commerce skincare and",
+            "skincare and beauty",
+            "skincare and beauty in",
+            "and beauty in none",
+            "beauty in none the",
+            "in none the ordinary",
+            "none the ordinary is",
+            "the ordinary is an",
+            "ordinary is an commerce",
+            "is an commerce skincare",
+            "an commerce skincare and",
+            "skincare and beauty company",
+            "and beauty company that",
+            "beauty company that offers",
+            "company that offers wide",
+            "that offers wide range",
+            "offers wide range of",
+            "wide range of high",
+            "range of high quality",
+            "of high quality products",
+            "high quality products they",
+            "quality products they focus",
+            "products they focus on",
+            "they focus on providing"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 3,
+        "competitor_details": [
+            {
+                "name": "Pomp | Retail + Client Management Software for Estheticians",
+                "url": "https://www.pompbeauty.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "AR Beauty, Makeup AR & Virtual Makeover Software",
+                "url": "https://www.mirrar.com/industries/makeup-ar",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Lightspeed's beauty & cosmetics store POS system",
+                "url": "https://www.lightspeedhq.com/pos/retail/beauty-products-pos/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "retail sales",
+                "zuri g",
+                "received everything",
+                "new eyeliner",
+                "zuris aestetica",
+                "precise tracking",
+                "mobile app",
+                "virtual skus",
+                "online orders",
+                "machine learning"
+            ],
+            "long_tail": [
+                "client base withclinically proven",
+                "ar makeup tool",
+                "life virtual makeover experience",
+                "estheticiansadd 3 new brandsto",
+                "ar makeup effects created",
+                "virtual makeup tool",
+                "pomps email marketing working",
+                "skin care professional",
+                "higher average order value",
+                "storefront manage clients"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "and",
+                "skincare",
+                "commerce skincare",
+                "skincare and",
+                "and beauty",
+                "commerce",
+                "beauty",
+                "the",
+                "company",
+                "beauty in"
+            ],
+            "long_tail": [
+                "commerce skincare and beauty",
+                "commerce skincare and",
+                "skincare and beauty",
+                "skincare and beauty in",
+                "and beauty in none",
+                "beauty in none the",
+                "in none the ordinary",
+                "none the ordinary is",
+                "the ordinary is an",
+                "ordinary is an commerce"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "retail sales",
+                "zuri g",
+                "received everything",
+                "new eyeliner",
+                "zuris aestetica"
+            ],
+            "long_tail": [
+                "client base with clinically proven",
+                "ar makeup tool",
+                "life virtual makeover experience",
+                "estheticians add 3 new brands to",
+                "ar makeup effects created"
+            ]
+        },
+        "recommendations": [
+            "Optimize product pages for retail sales and online orders",
+            "Create content around new eyeliner and virtual makeup tools",
+            "Develop a mobile app for seamless user experience",
+            "Utilize machine learning for personalized skincare recommendations",
+            "Partner with estheticians to offer virtual makeover experiences"
+        ],
+        "competitive_insights": [
+            "Competitors are using keywords like 'zuri g' and 'zuris aestetica', indicating a potential gap in brand presence",
+            "The use of 'ar makeup tool' and 'virtual makeup tool' by competitors suggests a growing trend in virtual try-on experiences",
+            "Competitors are leveraging 'client base with clinically proven' and 'skin care professional' to establish credibility"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

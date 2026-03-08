@@ -25,11 +25,17 @@ app = FastAPI(title="Web Crawler API", description="A powerful web crawler for e
 
 # Request and response models
 class CrawlRequest(BaseModel):
-    start_url: HttpUrl
+    start_url: Optional[HttpUrl] = None
+    url: Optional[HttpUrl] = None          # alias — orchestrator sends "url"
     delay: Optional[float] = 1.0
     timeout: Optional[int] = 10
-    max_pages: Optional[int] = 10  # Added max_pages limit
+    max_pages: Optional[int] = 10
     output_filename: Optional[str] = None
+
+    @property
+    def resolved_url(self) -> str:
+        """Return whichever of start_url / url was provided."""
+        return str(self.start_url or self.url or "")
 
 class CrawlResponse(BaseModel):
     job_id: str
@@ -288,8 +294,8 @@ async def crawl_website_background(
             'start_time': datetime.now()
         }
 
-        crawler = WebCrawler(delay=delay, timeout=timeout, max_pages=1)
-        logger.info(f"Job {job_id}: Starting crawl for {start_url}")
+        crawler = WebCrawler(delay=delay, timeout=timeout, max_pages=max_pages)
+        logger.info(f"Job {job_id}: Starting crawl for {start_url} (max_pages={max_pages})")
         content = crawler.crawl(start_url)
 
         if output_filename:
@@ -298,10 +304,8 @@ async def crawl_website_background(
             domain = urlparse(start_url).netloc.replace('www.', '')
             base_name = f"crawl_{domain}"
 
-        word_filename = generate_filename(base_name, 'docx', job_id)
         json_filename = generate_filename(base_name, 'json', job_id)
 
-        word_path = crawler.generate_word_document(word_filename)
         json_path = crawler.save_json(json_filename)
 
         combined_content = " ".join(
@@ -313,7 +317,6 @@ async def crawl_website_background(
             'status': 'completed',
             'message': 'Crawling completed successfully',
             'pages_crawled': len(content),
-            'word_document': word_path,
             'json_file': json_path,
             'end_time': datetime.now(),
             'content': combined_content
@@ -331,10 +334,13 @@ async def crawl_website_background(
 @app.post("/crawl", response_model=CrawlResponse)
 async def start_crawl(request: CrawlRequest, background_tasks: BackgroundTasks):
     """Start a web crawling job."""
+    target = request.resolved_url
+    if not target:
+        raise HTTPException(status_code=422, detail="Provide 'start_url' or 'url'")
     job_id = str(uuid.uuid4())
     background_tasks.add_task(
         crawl_website_background,
-        str(request.start_url),
+        target,
         request.delay,
         request.timeout,
         request.max_pages,

@@ -1,58 +1,27 @@
 @echo off
-REM ============================================================================
-REM  AI Multi-Agent System Launcher with Port Cleanup
-REM ============================================================================
-REM This script kills any process using ports 8000–8004, then launches each
-REM microservice in its own command prompt window.
-REM Make sure dependencies are installed: pip install -r requirements.txt
-REM ============================================================================
+SET PY=%~dp0venv\Scripts\python.exe
 
-
-FOR %%P IN (8000 8001 8002 8003 8004) DO (
-    FOR /F "tokens=5" %%T IN ('netstat -aon ^| findstr :%%P') DO (
-        ECHO Killing process on ports
+ECHO Killing old processes...
+netstat -aon | findstr " LISTENING" > "%TEMP%\ag_ports.txt"
+FOR %%P IN (5000 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010) DO (
+    FOR /F "tokens=5" %%T IN ('findstr ":%%P " "%TEMP%\ag_ports.txt"') DO (
         taskkill /F /PID %%T >nul 2>&1
     )
 )
-timeout /t 2 /nobreak >nul
+DEL "%TEMP%\ag_ports.txt" >nul 2>&1
 
-ECHO Starting all AI agent microservices...
-ECHO.
+ECHO Starting agents...
+START "Webcrawler:8000"    cmd /k "%PY%" webcrawler.py
+START "Keywords:8001"      cmd /k "%PY%" keywordExtraction.py
+START "GapAnalyzer:8002"   cmd /k "%PY%" CompetitorGapAnalyzerAgent.py
+START "Content:8003"       cmd /k "%PY%" content_agent.py
+START "Image:8005"         cmd /k "%PY%" image_agent.py
+START "Brand:8006"         cmd /k "%PY%" brand_agent.py
+START "Critic:8007"        cmd /k "%PY%" critic_agent.py
+START "Campaign:8008"      cmd /k "%PY%" campaign_agent.py
+START "Research:8009"      cmd /k "%PY%" research_agent.py
+START "SEO:5000"           cmd /k "%PY%" seo_agent.py
+START "Reddit:8010"        cmd /k "%PY%" reddit_agent.py
+START "Orchestrator:8004"  cmd /k "%PY%" orchestrator.py
 
-REM --- Start Microservice Agents ---
-ECHO Launching Web Crawler on port 8000...
-START "web crawler (Port 8000)" cmd /k python webcrawler.py
-timeout /t 3 /nobreak >nul
-
-ECHO Launching Keyword Extractor on port 8001...
-START "Keyword Extraction (Port 8001)" cmd /k python keywordExtraction.py
-timeout /t 3 /nobreak >nul
-
-ECHO Launching Gap Analyzer on port 8002...
-START "Gap Analyzer (Port 8002)" cmd /k python CompetitorGapAnalyzerAgent.py
-timeout /t 3 /nobreak >nul
-
-ECHO Launching Content Agent on port 8003...
-START "Content Agent (Port 8003)" cmd /k python content_agent.py
-timeout /t 3 /nobreak >nul
-
-REM --- Start the Main Orchestrator ---
-ECHO Launching the main Orchestrator on port 8004...
-START "Orchestrator (Port 8004)" cmd /k python orchestrator.py
-timeout /t 3 /nobreak >nul
-
-ECHO.
-ECHO ============================================================================
-ECHO All backend services have been launched in separate windows.
-ECHO.
-ECHO Next Step: Run the Frontend
-ECHO -----------------------------
-ECHO Open a new terminal and serve the index.html file.
-ECHO For example, using Python's built-in web server:
-ECHO   cd [directory_with_index.html]
-ECHO   python -m http.server
-ECHO Then open http://localhost:8000 in your browser.
-ECHO ============================================================================
-ECHO.
-
-PAUSE
+ECHO Done. All 12 agents launched.

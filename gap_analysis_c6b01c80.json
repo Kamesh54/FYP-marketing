@@ -1,0 +1,118 @@
+{
+    "company_info": {
+        "name": "SpiceBox",
+        "url": "https://yoursite.com",
+        "product_description": "SpiceBox — cloud kitchen food delivery Chennai"
+    },
+    "company_keywords": {
+        "short_keywords": [],
+        "long_tail_keywords": []
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 6,
+        "competitor_details": [
+            {
+                "name": "Postmates: Food Delivery, Groceries, Alcohol - Anything from ...",
+                "url": "https://postmates.com/",
+                "short_keywords_count": 12,
+                "long_tail_keywords_count": 1
+            },
+            {
+                "name": "Meal Delivery Software",
+                "url": "https://www.mealdeliverysoftware.com/",
+                "short_keywords_count": 5,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "CloudKitchens: Technology optimized for Delivery + Pickup",
+                "url": "https://cloudkitchens.com/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "White Label Grocery eCommerce Software Platform Solution",
+                "url": "https://mycloudgrocer.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "MealTrack Meal Prep Software for your Meal Prep Business ...",
+                "url": "https://www.mealtrack.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "FoodTec Solutions: Our solutions drive revenue.",
+                "url": "https://foodtecsolutions.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 2
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "drinks",
+                "someone immediately",
+                "twitter page",
+                "delivered",
+                "valuable intelligence",
+                "term relationships",
+                "whats going",
+                "user experience",
+                "team effort",
+                "answer questions"
+            ],
+            "long_tail": [
+                "customer management systems",
+                "solutions drive revenue",
+                "hard work mealtrack",
+                "help supermarket executives evaluate",
+                "help supermarkets thrive",
+                "interactive digital circulars",
+                "payment provider whatever youre",
+                "store process efficiencies save",
+                "shopping list much faster",
+                "print today ?)"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [],
+            "long_tail": []
+        },
+        "organic_opportunities": {
+            "short": [
+                "drinks",
+                "someone immediately",
+                "twitter page",
+                "delivered",
+                "valuable intelligence"
+            ],
+            "long_tail": [
+                "customer management systems",
+                "solutions drive revenue",
+                "hard work mealtrack",
+                "help supermarket executives evaluate",
+                "help supermarkets thrive"
+            ]
+        },
+        "recommendations": [
+            "Create a Twitter page to increase online presence and engagement",
+            "Optimize website for 'drinks' and 'delivered' keywords to attract food and beverage-related searches",
+            "Develop a user experience-focused content strategy to address 'user experience' and 'answer questions' keywords",
+            "Explore partnerships with supermarkets to leverage 'customer management systems' and 'help supermarkets thrive' keywords",
+            "Invest in digital marketing campaigns targeting 'hard work mealtrack' and 'solutions drive revenue' keywords"
+        ],
+        "competitive_insights": [
+            "Competitors are leveraging social media platforms like Twitter to engage with customers",
+            "The use of 'valuable intelligence' and 'term relationships' keywords suggests competitors are focusing on data-driven decision making",
+            "Competitors are emphasizing 'team effort' and 'someone immediately' to highlight their customer service and support"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 0,
+        "organic_opportunities": 10
+    }
+}

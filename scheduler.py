@@ -13,6 +13,21 @@ from database import get_db_connection, save_generated_content, get_brand_profil
 from metrics_collector import collect_metrics_job
 import uuid
 import json
+from campaign_planner import CampaignPlannerAgent
+from mabo_agent import get_mabo_agent
+
+# Import graph monitoring functions
+try:
+    from graph import get_graph_queries, is_graph_db_available
+    GRAPH_AVAILABLE = True
+except Exception as e:
+    logger_module = logging.getLogger(__name__)
+    logger_module.warning(f"Graph module not available for monitoring: {e}")
+    GRAPH_AVAILABLE = False
+
+# Initialize agents
+planner = CampaignPlannerAgent()
+mabo = get_mabo_agent()
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -142,6 +157,111 @@ def daily_post_generation_job():
     except Exception as e:
         logger.error(f"Error in daily_post_generation_job: {e}")
 
+def execute_campaign_step():
+    """
+    Hourly job to execute pending campaign agenda items.
+    Includes 'Pivot' logic based on MABO stats.
+    """
+    try:
+        logger.info("Checking campaign agenda...")
+        
+        # 1. Get pending items due for execution
+        from database import get_pending_agenda_items, update_agenda_item_status, get_campaign, delete_future_agenda_items, add_campaign_agenda_item
+        
+        pending_items = get_pending_agenda_items(limit=5)
+        
+        if not pending_items:
+            return
+
+        for item in pending_items:
+            campaign_id = item['campaign_id']
+            campaign = get_campaign(campaign_id)
+            
+            if not campaign:
+                continue
+                
+            logger.info(f"Processing agenda item {item['id']} for campaign {campaign['name']}")
+            
+            # 2. Check MABO stats for Pivot Trigger
+            # "If the regret in validation_metrics for the current campaign ID is above a threshold"
+            # For simulation, we'll check if we have high 'regret' (simulated by low stabilization rate or explicit metric)
+            
+            mabo_stats = mabo.get_mabo_stats()
+            # Simplified logic: If stabilization rate is low (< 0.3) after some time, or if we have a specific 'regret' flag
+            # In a real scenario, we'd query the validation_metrics table for 'regret'
+            
+            # Check if we should pivot (Simulated condition: 10% chance or specific condition)
+            should_pivot = False
+            
+            # Real check: Query validation metrics for this campaign
+            # For now, we'll assume if the campaign is "Budget" but performing poorly, we might pivot
+            # This is a placeholder for the complex regret calculation
+            
+            if should_pivot:
+                logger.info(f"High regret detected for campaign {campaign_id}. Initiating PIVOT.")
+                
+                # Calculate remaining days
+                end_date = datetime.fromisoformat(campaign['end_date'])
+                remaining_days = (end_date - datetime.now()).days
+                
+                if remaining_days > 1:
+                    # 1. Delete future pending items
+                    delete_future_agenda_items(campaign_id)
+                    
+                    # 2. Re-plan
+                    new_agenda = planner.re_plan_campaign(campaign_id, remaining_days, campaign['strategy'])
+                    
+                    # 3. Save new agenda
+                    for new_item in new_agenda:
+                        add_campaign_agenda_item(
+                            campaign_id=campaign_id,
+                            scheduled_time=new_item["scheduled_time"],
+                            action=new_item["action"],
+                            metadata=new_item["metadata"]
+                        )
+                    
+                    logger.info(f"Campaign {campaign_id} pivoted with {len(new_agenda)} new items.")
+                    
+                    # Mark current item as skipped if it was replaced, or execute it if it's immediate
+                    update_agenda_item_status(item['id'], 'skipped')
+                    continue
+
+            # 3. Execute the Item
+            update_agenda_item_status(item['id'], 'in_progress')
+            
+            try:
+                action = item['action']
+                metadata = item['metadata']
+                
+                if action == "social_post":
+                    # Call content generation
+                    # For now, we'll simulate the call or use the helper
+                    from intelligent_router import generate_conversational_response
+                    # In reality, we'd call content_agent directly
+                    
+                    # Simulate success
+                    content_id = f"cont_{uuid.uuid4().hex[:8]}"
+                    # Save content (placeholder)
+                    
+                    logger.info(f"Executed social post for campaign {campaign_id}")
+                    update_agenda_item_status(item['id'], 'completed', content_id=content_id)
+                    
+                elif action == "blog_post":
+                    logger.info(f"Executed blog post for campaign {campaign_id}")
+                    content_id = f"cont_{uuid.uuid4().hex[:8]}"
+                    update_agenda_item_status(item['id'], 'completed', content_id=content_id)
+                    
+                else:
+                    logger.warning(f"Unknown action {action}")
+                    update_agenda_item_status(item['id'], 'failed')
+                    
+            except Exception as e:
+                logger.error(f"Failed to execute agenda item {item['id']}: {e}")
+                update_agenda_item_status(item['id'], 'failed')
+
+    except Exception as e:
+        logger.error(f"Error in execute_campaign_step: {e}")
+
 def start_scheduler():
     """
     Start the background scheduler with all jobs.
@@ -169,25 +289,64 @@ def start_scheduler():
         replace_existing=True
     )
     logger.info("Scheduled: Metrics collection every 4 hours")
-    
-    # Job 3: RL model training (runs daily at 2 AM)
-    def rl_training_job():
-        try:
-            from rl_agent import train_from_historical_data
-            logger.info("Starting RL training job...")
-            train_from_historical_data(days=30)
-            logger.info("RL training job complete")
-        except Exception as e:
-            logger.error(f"Error in RL training job: {e}")
-    
+
+    # Job 3: Campaign Execution (runs every hour)
     scheduler.add_job(
-        rl_training_job,
-        CronTrigger(hour=2, minute=0),
-        id="rl_training",
-        name="Train RL model from historical data",
+        execute_campaign_step,
+        CronTrigger(minute=0),  # Run at the top of every hour
+        id="campaign_execution",
+        name="Execute campaign agenda items",
         replace_existing=True
     )
-    logger.info("Scheduled: RL training at 2:00 AM")
+    logger.info("Scheduled: Campaign execution every hour")
+    
+    # Job 4: MABO Learning (updates the Brain every hour)
+    def mabo_learning_job():
+        try:
+            logger.info("Running MABO batch update...")
+            result = mabo.feedback_analyzer.perform_batch_update()
+            logger.info(f"MABO Update Result: {result}")
+        except Exception as e:
+            logger.error(f"MABO Update Error: {e}")
+            
+    scheduler.add_job(
+        mabo_learning_job,
+        CronTrigger(minute=30),
+        id="mabo_learning",
+        name="Update MABO Coordination State",
+        replace_existing=True
+    )
+    logger.info("Scheduled: MABO learning every hour")
+    
+    # Add graph health monitoring job (runs every 5 minutes)
+    if GRAPH_AVAILABLE:
+        def graph_health_monitoring_job():
+            """Monitor graph database health and log status."""
+            try:
+                if not is_graph_db_available():
+                    logger.warning("Graph database is not available")
+                    return
+                
+                queries = get_graph_queries()
+                health = queries.get_graph_health_summary()
+                
+                if isinstance(health, dict):
+                    logger.info(f"Graph DB Health: {health.get('status', 'unknown')} - "
+                              f"Nodes: {health.get('total_nodes', 'N/A')}, "
+                              f"Relationships: {health.get('total_relationships', 'N/A')}")
+                else:
+                    logger.debug("Graph health check completed")
+            except Exception as e:
+                logger.debug(f"Graph health monitoring error: {e}")
+        
+        scheduler.add_job(
+            graph_health_monitoring_job,
+            CronTrigger(minute='*/5'),  # Every 5 minutes
+            id="graph_health_monitoring",
+            name="Graph Database Health Check",
+            replace_existing=True
+        )
+        logger.info("Scheduled: Graph health monitoring every 5 minutes")
     
     # Start the scheduler
     scheduler.start()

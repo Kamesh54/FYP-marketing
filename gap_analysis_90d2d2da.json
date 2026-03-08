@@ -1,0 +1,186 @@
+{
+    "company_info": {
+        "name": "Sephora",
+        "url": "",
+        "product_description": "E-commerce Beauty and Cosmetics Retailer in None. Sephora is an e-commerce beauty and cosmetics retailer that offers a wide range of products from various brands. They provide an online platform for customers to purchase beauty and cosmetic products. Sephora aims to provide a seamless shopping experience for its customers."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "beauty and",
+            "beauty",
+            "and",
+            "commerce beauty",
+            "and cosmetics",
+            "cosmetics retailer",
+            "commerce",
+            "cosmetics",
+            "retailer",
+            "sephora",
+            "an",
+            "products",
+            "provide",
+            "for",
+            "customers",
+            "to",
+            "retailer in",
+            "in none",
+            "none sephora",
+            "sephora is",
+            "is an",
+            "an commerce",
+            "retailer that",
+            "that offers",
+            "offers wide"
+        ],
+        "long_tail_keywords": [
+            "commerce beauty and cosmetics",
+            "beauty and cosmetics retailer",
+            "commerce beauty and",
+            "beauty and cosmetics",
+            "and cosmetics retailer",
+            "and cosmetics retailer in",
+            "cosmetics retailer in none",
+            "retailer in none sephora",
+            "in none sephora is",
+            "none sephora is an",
+            "sephora is an commerce",
+            "is an commerce beauty",
+            "an commerce beauty and",
+            "and cosmetics retailer that",
+            "cosmetics retailer that offers",
+            "retailer that offers wide",
+            "that offers wide range",
+            "offers wide range of",
+            "wide range of products",
+            "range of products from",
+            "of products from various",
+            "products from various brands",
+            "from various brands they",
+            "various brands they provide",
+            "brands they provide an"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "Beauty & Cosmetics Retail Software | Omnichannel Platform",
+                "url": "https://www.xyretail.com/retail-industries/beauty-retail-software",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Best beauty and cosmetics e-commerce websites in 2025",
+                "url": "https://dominikatracy.com/best-beauty-and-cosmetics-e-commerce-websites/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Data & AI for Luxury and Beauty",
+                "url": "https://www.artefact.com/industries/data-ai-for-luxury-and-beauty/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Online Perfume Shop Management Software",
+                "url": "https://www.enerpize.com/perfume-shop/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Cosmetics Inventory Software",
+                "url": "https://orderry.com/cosmetics-inventory-software/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "would place",
+                "status chains",
+                "tower 28",
+                "wonderfully designed",
+                "product visibility",
+                "sales reports",
+                "would leave",
+                "obvious names",
+                "lets collaborate",
+                "worldsleading brands"
+            ],
+            "long_tail": [
+                "mixing branded product shots",
+                "agility armani group wanted",
+                "enerpize user manuals",
+                "ai strategy luxury brands",
+                "guiding yournext bigretail move",
+                "ensuring optimal stock levels",
+                "client reach may decrease",
+                "perform periodical stocktaking",
+                "ai enhances security",
+                "without enerpize user manuals"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "beauty and",
+                "beauty",
+                "and",
+                "commerce beauty",
+                "and cosmetics",
+                "cosmetics retailer",
+                "commerce",
+                "cosmetics",
+                "retailer",
+                "sephora"
+            ],
+            "long_tail": [
+                "commerce beauty and cosmetics",
+                "beauty and cosmetics retailer",
+                "commerce beauty and",
+                "beauty and cosmetics",
+                "and cosmetics retailer",
+                "and cosmetics retailer in",
+                "cosmetics retailer in none",
+                "retailer in none sephora",
+                "in none sephora is",
+                "none sephora is an"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "would place",
+                "status chains",
+                "tower 28",
+                "wonderfully designed",
+                "product visibility"
+            ],
+            "long_tail": [
+                "mixing branded product shots",
+                "agility armani group wanted",
+                "enerpize user manuals",
+                "ai strategy luxury brands",
+                "guiding yournext bigretail move"
+            ]
+        },
+        "recommendations": [
+            "Optimize product pages with missing short keywords to improve search visibility",
+            "Create content around long-tail keywords to attract targeted traffic",
+            "Use unique company keywords to create brand-specific content",
+            "Collaborate with influencers to increase brand awareness and reach",
+            "Implement AI-powered tools to enhance security and optimize stock levels"
+        ],
+        "competitive_insights": [
+            "Competitors are using keywords related to product visibility and sales reports, indicating a focus on e-commerce optimization",
+            "The use of keywords like 'tower 28' and 'worldsleading brands' suggests competitors are emphasizing high-end or luxury products",
+            "The presence of keywords like 'ai strategy luxury brands' and 'ai enhances security' indicates competitors are investing in AI technology"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

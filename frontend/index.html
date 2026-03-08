@@ -1,0 +1,3741 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuroPulse AI Chat</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* 
+==============================================
+ULTRA-MODERN CHAT INTERFACE WITH DYNAMIC THEMES
+==============================================
+*/
+
+/* ===== THEME VARIABLES ===== */
+:root {
+  /* --- Animation Speed --- */
+  --transition-fast: 0.2s;
+  --transition-medium: 0.3s;
+  --transition-slow: 0.5s;
+  
+  /* --- Sizing & Spacing --- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+  
+  /* --- Typography --- */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-xxl: 1.5rem;
+  --font-size-xxxl: 2rem;
+  
+  /* --- Base UI --- */
+  --font-main: 'Inter', sans-serif;
+  --font-accent: 'Orbitron', sans-serif;
+  --border-width: 2px;
+  --shadow-strength: 1;
+  --blur-strength: 8px;
+}
+
+/* ===== PULSE THEME (DEFAULT) ===== */
+.theme-pulse {
+  /* --- Core Colors --- */
+  --primary: 126, 87, 194; /* #7e57c2 - Purple */
+  --primary-light: 167, 137, 218; /* #a789da */
+  --primary-dark: 86, 47, 154; /* #562f9a */
+  
+  --secondary: 3, 169, 244; /* #03a9f4 - Blue */
+  --secondary-light: 77, 208, 255; /* #4dd0ff */
+  --secondary-dark: 0, 123, 191; /* #007bbf */
+  
+  --accent: 255, 87, 34; /* #ff5722 - Orange */
+  
+  /* --- Semantic Colors --- */
+  --success: 76, 175, 80; /* #4CAF50 */
+  --warning: 255, 152, 0; /* #FF9800 */
+  --error: 244, 67, 54; /* #F44336 */
+  --info: 33, 150, 243; /* #2196F3 */
+  
+  /* --- UI Colors --- */
+  --text-primary: 255, 255, 255; /* #ffffff */
+  --text-secondary: 205, 205, 215; /* #cdcdd7 */
+  --text-disabled: 140, 140, 150; /* #8c8c96 */
+  
+  --background-main: 25, 25, 35; /* #191923 */
+  --background-light: 35, 35, 45; /* #23232d */
+  --background-dark: 15, 15, 25; /* #0f0f19 */
+  --background-accent: 40, 40, 60; /* #28283c */
+  
+  --surface: 45, 45, 65; /* #2d2d41 */
+  --surface-hover: 55, 55, 75; /* #37374b */
+  --border: 70, 70, 90; /* #46465a */
+  
+  /* --- Effects --- */
+  --glow-primary: rgba(var(--primary), 0.35);
+  --glow-secondary: rgba(var(--secondary), 0.35);
+  --glow-accent: rgba(var(--accent), 0.35);
+  
+  /* --- Gradients --- */
+  --gradient-primary: linear-gradient(135deg, 
+    rgba(var(--primary), 1) 0%, 
+    rgba(var(--primary-dark), 1) 100%);
+    
+  --gradient-secondary: linear-gradient(135deg, 
+    rgba(var(--secondary), 1) 0%, 
+    rgba(var(--secondary-dark), 1) 100%);
+    
+  --gradient-surface: linear-gradient(135deg, 
+    rgba(var(--surface), 0.8) 0%, 
+    rgba(var(--surface), 0.6) 100%);
+    
+  --gradient-glass: linear-gradient(160deg, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(255, 255, 255, 0.05) 100%);
+    
+  --gradient-glow: linear-gradient(135deg, 
+    rgba(var(--primary), 0.5) 0%, 
+    rgba(var(--secondary), 0.5) 100%);
+    
+  /* --- Special Effects --- */
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* ===== AURORA THEME ===== */
+.theme-aurora {
+  --primary: 102, 204, 153; /* #66cc99 - Mint */
+  --primary-light: 153, 229, 178; /* #99e5b2 */
+  --primary-dark: 78, 154, 116; /* #4e9a74 */
+  
+  --secondary: 102, 153, 255; /* #6699ff - Sky Blue */
+  --secondary-light: 153, 187, 255; /* #99bbff */
+  --secondary-dark: 77, 116, 191; /* #4d74bf */
+  
+  --accent: 255, 102, 204; /* #ff66cc - Pink */
+  
+  --background-main: 20, 27, 33; /* #141b21 */
+  --background-light: 30, 40, 49; /* #1e2831 */
+  --background-dark: 13, 17, 23; /* #0d1117 */
+  --background-accent: 32, 43, 56; /* #202b38 */
+  
+  --surface: 36, 47, 61; /* #242f3d */
+  --surface-hover: 45, 58, 74; /* #2d3a4a */
+  --border: 59, 73, 87; /* #3b4957 */
+  
+  --text-primary: 240, 248, 255; /* #f0f8ff */
+  --text-secondary: 189, 215, 231; /* #bdd7e7 */
+  
+  --glow-primary: rgba(var(--primary), 0.3);
+  --glow-secondary: rgba(var(--secondary), 0.3);
+  
+  --gradient-primary: linear-gradient(135deg, 
+    rgba(var(--primary), 1) 0%, 
+    rgba(var(--secondary), 1) 100%);
+  
+  --gradient-surface: linear-gradient(135deg, 
+    rgba(36, 47, 61, 0.8) 0%, 
+    rgba(32, 43, 56, 0.6) 100%);
+}
+
+/* ===== MIDNIGHT THEME ===== */
+.theme-midnight {
+  --primary: 123, 31, 162; /* #7b1fa2 - Deep Purple */
+  --primary-light: 171, 71, 188; /* #ab47bc */
+  --primary-dark: 106, 27, 154; /* #6a1b9a */
+  
+  --secondary: 0, 151, 167; /* #0097a7 - Teal */
+  --secondary-light: 38, 198, 218; /* #26c6da */
+  --secondary-dark: 0, 131, 143; /* #00838f */
+  
+  --accent: 255, 64, 129; /* #ff4081 - Pink */
+  
+  --background-main: 13, 17, 23; /* #0d1117 */
+  --background-light: 22, 27, 34; /* #161b22 */
+  --background-dark: 8, 9, 14; /* #08090e */
+  --background-accent: 27, 38, 54; /* #1b2636 */
+  
+  --surface: 30, 41, 59; /* #1e293b */
+  --surface-hover: 37, 49, 70; /* #253146 */
+  --border: 50, 64, 89; /* #324059 */
+  
+  --text-primary: 248, 250, 252; /* #f8fafc */
+  --text-secondary: 203, 213, 225; /* #cbd5e1 */
+  
+  --gradient-primary: linear-gradient(135deg, 
+    rgba(var(--primary), 1) 0%, 
+    rgba(var(--accent), 0.8) 100%);
+}
+
+/* ===== CYBER THEME ===== */
+.theme-cyber {
+  --primary: 0, 255, 170; /* #00ffaa - Neon Green */
+  --primary-light: 102, 255, 204; /* #66ffcc */
+  --primary-dark: 0, 204, 136; /* #00cc88 */
+  
+  --secondary: 255, 0, 170; /* #ff00aa - Neon Pink */
+  --secondary-light: 255, 102, 204; /* #ff66cc */
+  --secondary-dark: 204, 0, 136; /* #cc0088 */
+  
+  --accent: 255, 230, 0; /* #ffe600 - Yellow */
+  
+  --background-main: 10, 3, 33; /* #0a0321 */
+  --background-light: 20, 9, 49; /* #140931 */
+  --background-dark: 5, 1, 20; /* #050114 */
+  --background-accent: 30, 8, 60; /* #1e083c */
+  
+  --surface: 35, 10, 66; /* #230a42 */
+  --surface-hover: 46, 14, 85; /* #2e0e55 */
+  --border: 71, 15, 93; /* #470f5d */
+  
+  --text-primary: 245, 245, 255; /* #f5f5ff */
+  --text-secondary: 180, 180, 215; /* #b4b4d7 */
+  
+  --glow-primary: rgba(var(--primary), 0.5);
+  --glow-secondary: rgba(var(--secondary), 0.5);
+  
+  --gradient-primary: linear-gradient(135deg, 
+    rgba(var(--primary), 1) 0%, 
+    rgba(var(--secondary), 1) 100%);
+  
+  --shadow-strength: 1.5;
+}
+
+/* ===== RESET & BASE STYLES ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: rgba(var(--background-main), 1);
+  background-image: var(--bg-noise);
+  background-blend-mode: overlay;
+  background-size: 200px;
+  color: rgba(var(--text-primary), 1);
+  font-family: var(--font-main);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  transition: background-color 0.6s ease, color 0.6s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Remove focus outlines for mouse users, keep for keyboard */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(var(--primary), 0.8);
+  outline-offset: 2px;
+}
+
+/* ===== CUSTOM SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(var(--background-dark), 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--primary), 0.5);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--primary), 0.7);
+}
+
+/* ===== CUSTOM CURSOR ===== */
+.neo-cursor {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  mix-blend-mode: exclusion;
+  transition: transform 0.1s ease;
+  will-change: transform;
+}
+
+.cursor-ring {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -20px;
+  border: 2px solid rgba(var(--primary), 0.8);
+  border-radius: 50%;
+  transform-origin: center center;
+  transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
+  opacity: 0.7;
+}
+
+.cursor-dot {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  background-color: rgba(var(--primary), 1);
+  border-radius: 50%;
+  transition: transform 0.1s ease;
+}
+
+/* Cursor hover effect on interactive elements */
+button:hover ~ .neo-cursor .cursor-ring,
+a:hover ~ .neo-cursor .cursor-ring,
+input:hover ~ .neo-cursor .cursor-ring,
+textarea:hover ~ .neo-cursor .cursor-ring {
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  margin-top: -23px;
+  opacity: 1;
+  border-color: rgba(var(--accent), 0.9);
+}
+
+body[data-cursor="off"] .neo-cursor {
+  display: none;
+}
+
+body[data-cursor="off"] {
+  cursor: auto;
+}
+
+body:not([data-cursor="off"]) {
+  cursor: none;
+}
+
+/* ===== 3D BACKGROUND ELEMENTS ===== */
+.bg-elements {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.floating-cube, .floating-sphere, .floating-pyramid {
+  position: absolute;
+  opacity: 0.15;
+  filter: blur(1px);
+  animation: float 15s infinite ease-in-out;
+}
+
+.floating-cube {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, rgba(var(--primary), 0.4), rgba(var(--primary-dark), 0.2));
+  border: 1px solid rgba(var(--primary-light), 0.3);
+  top: 15%;
+  right: 10%;
+  transform: rotate(-15deg) translate3d(0, 0, 0);
+  animation-delay: 0s;
+  box-shadow: 0 0 40px rgba(var(--primary), 0.3);
+}
+
+.floating-sphere {
+  width: 150px;
+  height: 150px;
+  background: linear-gradient(135deg, rgba(var(--secondary), 0.3), rgba(var(--secondary-dark), 0.1));
+  border-radius: 50%;
+  border: 1px solid rgba(var(--secondary-light), 0.2);
+  bottom: 15%;
+  left: 10%;
+  transform: translate3d(0, 0, 0);
+  animation-delay: -4s;
+  box-shadow: 0 0 40px rgba(var(--secondary), 0.3);
+}
+
+.floating-pyramid {
+  width: 0;
+  height: 0;
+  border-left: 80px solid transparent;
+  border-right: 80px solid transparent;
+  border-bottom: 140px solid rgba(var(--accent), 0.2);
+  top: 60%;
+  right: 20%;
+  transform: translate3d(0, 0, 0);
+  animation-delay: -8s;
+  filter: drop-shadow(0 0 40px rgba(var(--accent), 0.3));
+}
+
+.grid-floor {
+  position: absolute;
+  bottom: -20%;
+  left: -20%;
+  width: 140%;
+  height: 40%;
+  background-image: 
+    linear-gradient(rgba(var(--primary), 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--primary), 0.3) 1px, transparent 1px);
+  background-size: 40px 40px;
+  transform: perspective(500px) rotateX(60deg);
+  opacity: 0.1;
+  animation: gridMove 20s linear infinite;
+}
+
+.ambient-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ambient-particles::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(rgba(var(--primary), 0.1) 1px, transparent 1px),
+                    radial-gradient(rgba(var(--secondary), 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+  animation: particleDrift 40s linear infinite;
+  opacity: 0.3;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-15px, 15px) rotate(5deg); }
+  50% { transform: translate(0, 30px) rotate(0deg); }
+  75% { transform: translate(15px, 15px) rotate(-5deg); }
+}
+
+@keyframes gridMove {
+  0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+  100% { transform: perspective(500px) rotateX(60deg) translateY(40px); }
+}
+
+@keyframes particleDrift {
+  0% { background-position: 0 0, 20px 20px; }
+  100% { background-position: 40px 40px, 60px 60px; }
+}
+
+body[data-perspective="off"] .bg-elements {
+  display: none;
+}
+
+/* ===== LAYOUT COMPONENTS ===== */
+.app-container {
+  display: flex;
+  height: 100vh;
+  max-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== HEADER ===== */
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-lg);
+  background: linear-gradient(180deg, 
+    rgba(var(--background-dark), 0.9) 0%, 
+    rgba(var(--background-dark), 0.7) 80%, 
+    rgba(var(--background-dark), 0) 100%);
+  z-index: 100;
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.logo-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(var(--primary), 0.2);
+  border: 2px solid rgba(var(--primary), 0.4);
+  box-shadow: 0 0 20px rgba(var(--primary), 0.3);
+  overflow: hidden;
+}
+
+.neural-icon {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 3px;
+  width: 24px;
+  height: 16px;
+}
+
+.neural-icon span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: rgba(var(--primary), 0.8);
+  position: relative;
+}
+
+.neural-icon span::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: rgba(var(--primary), 0.5);
+  transform: translate(-50%, -50%) scale(0);
+  animation: pulse 2s infinite;
+}
+
+.neural-icon span:nth-child(1)::after { animation-delay: 0s; }
+.neural-icon span:nth-child(2)::after { animation-delay: 0.3s; }
+.neural-icon span:nth-child(3)::after { animation-delay: 0.6s; }
+.neural-icon span:nth-child(4)::after { animation-delay: 0.9s; }
+.neural-icon span:nth-child(5)::after { animation-delay: 1.2s; }
+.neural-icon span:nth-child(6)::after { animation-delay: 1.5s; }
+
+@keyframes pulse {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  70% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+
+.logo-text {
+  font-family: var(--font-accent);
+  font-size: var(--font-size-xxl);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(
+    to right, 
+    rgba(var(--primary), 1), 
+    rgba(var(--secondary), 1)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 2px 10px rgba(var(--primary), 0.3);
+}
+
+.logo-text span {
+  color: rgba(var(--secondary), 1);
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: var(--space-md);
+  padding: var(--space-xs) var(--space-md) var(--space-xs) var(--space-xs);
+  background: rgba(var(--surface), 0.4);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(var(--border), 0.5);
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(var(--secondary), 0.7), rgba(var(--secondary-dark), 0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  position: relative;
+}
+
+.avatar[data-status="active"]::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(var(--success), 1);
+  border: 2px solid rgba(var(--background-dark), 1);
+}
+
+.token-display {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: rgba(var(--text-secondary), 1);
+}
+
+.token-display i {
+  color: rgba(var(--accent), 1);
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 260px;
+  height: 100%;
+  background: rgba(var(--background-light), 0.7);
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
+  border-right: 1px solid rgba(var(--border), 0.5);
+  display: flex;
+  flex-direction: column;
+  padding-top: 90px;
+  z-index: 10;
+  transition: width var(--transition-medium) ease;
+}
+
+.main-nav {
+  flex: 1;
+  padding: var(--space-md);
+}
+
+.main-nav ul {
+  list-style: none;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: background-color var(--transition-fast) ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item i {
+  margin-right: var(--space-md);
+  font-size: var(--font-size-lg);
+  width: 24px;
+  text-align: center;
+  transition: color var(--transition-fast) ease;
+}
+
+.nav-item:hover {
+  background-color: rgba(var(--surface-hover), 0.4);
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  height: 0;
+  background: linear-gradient(to bottom, rgba(var(--primary), 1), rgba(var(--secondary), 1));
+  transition: height var(--transition-fast) ease;
+}
+
+.main-nav li.active .nav-item {
+  background: var(--gradient-primary);
+  color: rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 12px rgba(var(--primary), calc(0.3 * var(--shadow-strength)));
+}
+
+.main-nav li.active .nav-item::before {
+  height: 100%;
+}
+
+.nav-item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 70%);
+  opacity: 0;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.nav-item:hover::after {
+  opacity: 1;
+  animation: shine 1.5s infinite;
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+
+.sidebar-footer {
+  padding: var(--space-md);
+  border-top: 1px solid rgba(var(--border), 0.3);
+}
+
+.model-selector-container {
+  margin-top: var(--space-md);
+}
+
+.model-selector-container label {
+  display: block;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-xs);
+  color: rgba(var(--text-secondary), 1);
+}
+
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(var(--surface), 0.5);
+  border: 1px solid rgba(var(--border), 0.5);
+  border-radius: var(--radius-md);
+  color: rgba(var(--text-primary), 0.9);
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+select:focus {
+  border-color: rgba(var(--primary), 0.7);
+  box-shadow: 0 0 0 2px rgba(var(--primary), 0.3);
+}
+
+.select-arrow {
+  position: absolute;
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: rgba(var(--text-secondary), 1);
+}
+
+/* ===== MAIN CONTENT ===== */
+.main-content {
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 90px var(--space-md) var(--space-md) var(--space-md);
+  position: relative;
+}
+
+.view {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--space-md);
+}
+
+.active-view {
+  display: flex;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ===== CHAT CONTROLS ===== */
+.chat-controls {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: var(--space-xs) 0;
+}
+
+.control-group {
+  position: relative;
+}
+
+.tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-xs) var(--space-sm);
+  background: rgba(var(--background-dark), 0.9);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  color: rgba(var(--text-secondary), 1);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast) ease, transform var(--transition-fast) ease;
+  z-index: 10;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.control-group:hover .tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(5px);
+}
+
+/* ===== GLASS PANEL COMPONENT ===== */
+.glass-panel {
+  background: var(--gradient-glass);
+  backdrop-filter: blur(calc(var(--blur-strength) * 1.5));
+  -webkit-backdrop-filter: blur(calc(var(--blur-strength) * 1.5));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(var(--border), 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+  overflow: hidden;
+  position: relative;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-noise);
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+.glass-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent 100%);
+  pointer-events: none;
+}
+
+/* ===== MESSAGES CONTAINER ===== */
+.messages-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.conversation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: 1px solid rgba(var(--border), 0.3);
+}
+
+.conversation-header h2 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.icon-action {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--text-secondary), 1);
+  background: transparent;
+  transition: all var(--transition-fast) ease;
+}
+
+.icon-action:hover {
+  background: rgba(var(--surface-hover), 0.5);
+  color: rgba(var(--text-primary), 1);
+}
+
+.messages-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  scroll-behavior: smooth;
+}
+
+/* ===== MESSAGE STYLES ===== */
+.message {
+  display: flex;
+  position: relative;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.message.user {
+  justify-content: flex-end;
+}
+
+.message-content {
+  max-width: 80%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+  transform: translateZ(0);
+  transition: transform var(--transition-fast) ease;
+}
+
+.message:hover .message-content {
+  transform: translateZ(10px);
+}
+
+.message.ai .message-content {
+  background: linear-gradient(135deg, 
+    rgba(var(--primary-dark), 0.2) 0%, 
+    rgba(var(--surface), 0.4) 100%);
+  border: 1px solid rgba(var(--primary), 0.2);
+  box-shadow: 0 4px 12px rgba(var(--primary-dark), calc(0.1 * var(--shadow-strength)));
+}
+
+.message.user .message-content {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: 0 4px 12px rgba(var(--primary), calc(0.2 * var(--shadow-strength)));
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.message.ai .message-header {
+  border-bottom: 1px solid rgba(var(--primary), 0.2);
+}
+
+.message.user .message-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--space-sm);
+  font-weight: 600;
+}
+
+.message.ai .avatar {
+  background: linear-gradient(135deg, rgba(var(--primary), 0.7), rgba(var(--primary-dark), 0.4));
+  box-shadow: 0 2px 6px rgba(var(--primary), 0.3);
+}
+
+.message.user .avatar {
+  background: linear-gradient(135deg, rgba(var(--secondary), 0.7), rgba(var(--secondary-dark), 0.4));
+  box-shadow: 0 2px 6px rgba(var(--secondary), 0.3);
+}
+
+.sender-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.sender-name {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.message-time {
+  font-size: var(--font-size-xs);
+  color: rgba(var(--text-secondary), 0.8);
+}
+
+.message.user .message-time {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.bubble {
+  padding: var(--space-md);
+  line-height: 1.6;
+}
+
+.bubble p {
+  margin-bottom: var(--space-sm);
+}
+
+.bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.message-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  opacity: 0;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action {
+  background: none;
+  border: none;
+  color: rgba(var(--text-secondary), 1);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast) ease;
+}
+
+.message-action:hover {
+  background-color: rgba(var(--surface-hover), 0.5);
+  color: rgba(var(--primary), 1);
+}
+
+.message.user .message-action {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.message.user .message-action:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* ===== TYPING INDICATOR ===== */
+.typing-indicator {
+  display: none;
+  align-items: center;
+  margin: var(--space-md);
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(var(--surface), 0.2);
+  border: 1px solid rgba(var(--primary), 0.2);
+  border-radius: var(--radius-lg);
+}
+
+.typing-indicator.visible {
+  display: flex;
+}
+
+.thinking-animation {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 3px;
+  width: 30px;
+  height: 20px;
+}
+
+.thinking-animation span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(var(--primary), 0.5);
+  animation: pulse-thinking 1.5s infinite;
+}
+
+.thinking-animation span:nth-child(1) { animation-delay: 0.0s; }
+.thinking-animation span:nth-child(2) { animation-delay: 0.1s; }
+.thinking-animation span:nth-child(3) { animation-delay: 0.2s; }
+.thinking-animation span:nth-child(4) { animation-delay: 0.3s; }
+.thinking-animation span:nth-child(5) { animation-delay: 0.4s; }
+.thinking-animation span:nth-child(6) { animation-delay: 0.5s; }
+
+@keyframes pulse-thinking {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+.thinking-label {
+  font-size: var(--font-size-sm);
+  color: rgba(var(--text-secondary), 1);
+}
+
+/* ===== SUGGESTION CHIPS ===== */
+.suggestions {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  overflow-x: auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding-bottom: var(--space-md);
+}
+
+.suggestion-chip {
+  position: relative;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(var(--surface), 0.4);
+  border: 1px solid rgba(var(--border), 0.5);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  overflow: hidden;
+}
+
+.suggestion-chip:hover {
+  background: rgba(var(--primary), 0.2);
+  border-color: rgba(var(--primary), 0.5);
+}
+
+/* Glow effect for chips */
+.glow-effect {
+  overflow: hidden;
+}
+
+.glow-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.glow {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, 
+    rgba(var(--primary), 0.8) 0%, 
+    rgba(var(--primary), 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.suggestion-chip:hover .glow {
+  opacity: 0.8;
+  animation: glow-move 2s infinite linear;
+}
+
+@keyframes glow-move {
+  0% {
+    transform: translate(0%, 0%) rotate(0deg);
+  }
+  100% {
+    transform: translate(0%, 0%) rotate(360deg);
+  }
+}
+
+/* ===== INPUT CONTAINER ===== */
+.input-container {
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+textarea {
+  width: 100%;
+  padding: var(--space-md);
+  background: rgba(var(--background-light), 0.5);
+  border: var(--border-width) solid rgba(var(--border), 0.5);
+  border-radius: var(--radius-lg);
+  resize: none;
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+  transition: all var(--transition-fast) ease;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: rgba(var(--primary), 0.7);
+  box-shadow: 0 0 0 1px rgba(var(--primary), 0.3);
+}
+
+.input-actions {
+  display: flex;
+  align-items: center;
+  margin-top: var(--space-sm);
+}
+
+.action-button {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--text-secondary), 1);
+  background: transparent;
+  transition: all var(--transition-fast) ease;
+}
+
+.action-button:hover {
+  background: rgba(var(--surface-hover), 0.5);
+  color: rgba(var(--primary), 1);
+}
+
+.action-button .tooltip {
+  white-space: nowrap;
+}
+
+.character-count {
+  margin-left: auto;
+  margin-right: var(--space-md);
+  font-size: var(--font-size-xs);
+  color: rgba(var(--text-secondary), 0.7);
+}
+
+.character-count.near-limit {
+  color: rgba(var(--warning), 0.8);
+}
+
+.character-count.at-limit {
+  color: rgba(var(--error), 0.8);
+}
+
+/* ===== BUTTONS AND CONTROLS ===== */
+.neo-button {
+  position: relative;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(var(--surface), 0.6);
+  border: 1px solid rgba(var(--border), 0.6);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  color: rgba(var(--text-primary), 0.9);
+  transition: all var(--transition-fast) ease;
+  overflow: hidden;
+}
+
+.neo-button:hover {
+  background: rgba(var(--surface-hover), 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, calc(0.15 * var(--shadow-strength)));
+}
+
+.neo-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+}
+
+.primary-button {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(var(--primary), calc(0.3 * var(--shadow-strength)));
+}
+
+.primary-button:hover {
+  box-shadow: 0 6px 16px rgba(var(--primary), calc(0.4 * var(--shadow-strength)));
+}
+
+.primary-button:active {
+  box-shadow: 0 2px 8px rgba(var(--primary), calc(0.2 * var(--shadow-strength)));
+}
+
+.hover-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(120deg, 
+    rgba(255,255,255,0) 30%, 
+    rgba(255,255,255,0.3) 50%, 
+    rgba(255,255,255,0) 70%);
+  opacity: 0;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.neo-button:hover .hover-effect {
+  opacity: 1;
+  animation: shine-button 1.5s infinite;
+}
+
+@keyframes shine-button {
+  0% { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+
+.icon-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-lg);
+}
+
+.button-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  z-index: 1;
+}
+
+.send-button {
+  position: relative;
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  border-radius: var(--radius-lg);
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(var(--primary), calc(0.2 * var(--shadow-strength)));
+  overflow: hidden;
+}
+
+.send-button:disabled {
+  opacity: 0.5;
+  background: rgba(var(--surface), 0.6);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.neo-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-pill);
+  background: rgba(var(--surface), 0.4);
+  border: 1px solid rgba(var(--border), 0.4);
+  transition: all var(--transition-fast) ease;
+  cursor: pointer;
+}
+
+.switch-indicator {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: rgba(var(--text-disabled), 0.3);
+  transition: background-color var(--transition-fast) ease;
+}
+
+.switch-indicator::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(var(--text-secondary), 1);
+  transition: transform var(--transition-fast) ease, background-color var(--transition-fast) ease;
+}
+
+.neo-switch[aria-pressed="true"] .switch-indicator {
+  background: rgba(var(--primary), 0.5);
+}
+
+.neo-switch[aria-pressed="true"] .switch-indicator::before {
+  transform: translateX(16px);
+  background: rgba(var(--primary), 1);
+}
+
+.switch-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.neo-switch:hover {
+  background: rgba(var(--surface-hover), 0.6);
+}
+
+/* ===== SETTINGS PANEL ===== */
+.settings-panel {
+  position: fixed;
+  top: 0;
+  right: -450px;
+  width: 450px;
+  height: 100vh;
+  z-index: 1000;
+  transition: right var(--transition-medium) ease;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  border-left: 1px solid rgba(var(--border), 0.5);
+}
+
+.settings-panel.visible {
+  right: 0;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength)));
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  border-bottom: 1px solid rgba(var(--border), 0.3);
+}
+
+.settings-header h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-xl);
+}
+
+.settings-header h2 i {
+  color: rgba(var(--primary), 1);
+}
+
+.tabs-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabs-header {
+  display: flex;
+  border-bottom: 1px solid rgba(var(--border), 0.3);
+}
+
+.tab-button {
+  flex: 1;
+  padding: var(--space-md) 0;
+  text-align: center;
+  font-weight: 500;
+  color: rgba(var(--text-secondary), 1);
+  background: transparent;
+  transition: all var(--transition-fast) ease;
+  position: relative;
+}
+
+.tab-button::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: rgba(var(--primary), 0.8);
+  transform: scaleX(0);
+  transition: transform var(--transition-fast) ease;
+}
+
+.tab-button.active {
+  color: rgba(var(--text-primary), 1);
+}
+
+.tab-button.active::after {
+  transform: scaleX(1);
+}
+
+.tab-content {
+  display: none;
+  padding: var(--space-md);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tab-content.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+.settings-section {
+  margin-bottom: var(--space-xl);
+}
+
+.settings-section h3 {
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-lg);
+  color: rgba(var(--primary), 1);
+}
+
+.settings-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.control-item label {
+  font-size: var(--font-size-sm);
+  color: rgba(var(--text-secondary), 1);
+}
+
+.button-group {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.size-button {
+  flex: 1;
+  padding: var(--space-sm);
+}
+
+.size-button small {
+  font-size: 70%;
+  opacity: 0.7;
+}
+
+.size-button.active {
+  background: rgba(var(--primary), 0.2);
+  border-color: rgba(var(--primary), 0.5);
+  color: rgba(var(--primary), 1);
+}
+
+.neo-select {
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(var(--surface), 0.5);
+  border: 1px solid rgba(var(--border), 0.5);
+  border-radius: var(--radius-md);
+  color: rgba(var(--text-primary), 0.9);
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  appearance: none;
+}
+
+.neo-select:focus {
+  border-color: rgba(var(--primary), 0.7);
+  box-shadow: 0 0 0 2px rgba(var(--primary), 0.3);
+}
+
+.neo-slider-container {
+  position: relative;
+  padding: var(--space-md) 0;
+}
+
+.neo-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(var(--border), 0.5);
+  outline: none;
+}
+
+.neo-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(var(--primary), 0.4);
+}
+
+.neo-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(var(--primary), 0.4);
+  border: none;
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-xs);
+  font-size: var(--font-size-xs);
+  color: rgba(var(--text-secondary), 1);
+}
+
+/* ===== THEME PICKER ===== */
+.theme-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  background: transparent;
+  transition: transform var(--transition-fast) ease;
+}
+
+.theme-preview {
+  width: 100%;
+  height: 80px;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  transition: border-color var(--transition-fast) ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.theme-option:hover {
+  transform: translateY(-3px);
+}
+
+.theme-option span {
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-xs);
+}
+
+.theme-option[data-theme="pulse"] .theme-preview {
+  background: linear-gradient(135deg, #7e57c2 0%, #03a9f4 100%);
+}
+
+.theme-option[data-theme="aurora"] .theme-preview {
+  background: linear-gradient(135deg, #66cc99 0%, #6699ff 100%);
+}
+
+.theme-option[data-theme="midnight"] .theme-preview {
+  background: linear-gradient(135deg, #7b1fa2 0%, #ff4081 100%);
+}
+
+.theme-option[data-theme="sunset"] .theme-preview {
+  background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+}
+
+.theme-option[data-theme="cyber"] .theme-preview {
+  background: linear-gradient(135deg, #00ffaa 0%, #ff00aa 100%);
+}
+
+.theme-option[data-theme="minimal"] .theme-preview {
+  background: linear-gradient(135deg, #607d8b 0%, #90a4ae 100%);
+}
+
+/* ===== MODEL CARDS ===== */
+.model-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.model-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(var(--surface), 0.3);
+  border: 1px solid rgba(var(--border), 0.4);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast) ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.model-card:hover {
+  background: rgba(var(--surface-hover), 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+}
+
+.model-card.active {
+  background: rgba(var(--primary), 0.1);
+  border-color: rgba(var(--primary), 0.5);
+}
+
+.model-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xl);
+  color: white;
+}
+
+.model-info {
+  flex: 1;
+}
+
+.model-info h4 {
+  font-size: var(--font-size-md);
+  margin-bottom: var(--space-xs);
+}
+
+.model-info p {
+  font-size: var(--font-size-sm);
+  color: rgba(var(--text-secondary), 1);
+}
+
+.model-badge {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.model-badge.premium {
+  background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+  color: white;
+}
+
+.model-badge.pro {
+  background: linear-gradient(135deg, #2196f3 0%, #03a9f4 100%);
+  color: white;
+}
+
+.model-badge.free {
+  background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%);
+  color: white;
+}
+
+/* ===== THEME PANEL ===== */
+.theme-panel {
+  position: fixed;
+  top: 80px;
+  right: -300px;
+  width: 300px;
+  height: calc(100vh - 80px);
+  background: rgba(var(--background-light), 0.9);
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
+  z-index: 100;
+  transition: right var(--transition-medium) ease;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid rgba(var(--border), 0.5);
+  box-shadow: -5px 0 15px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+}
+
+.theme-panel.visible {
+  right: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: 1px solid rgba(var(--border), 0.3);
+}
+
+.panel-header h3 {
+  font-size: var(--font-size-lg);
+}
+
+.theme-list {
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  overflow-y: auto;
+}
+
+.theme-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: transparent;
+  transition: transform var(--transition-fast) ease;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+}
+
+.theme-item:hover {
+  background: rgba(var(--surface-hover), 0.3);
+}
+
+.theme-item.active {
+  background: rgba(var(--primary), 0.1);
+}
+
+.theme-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 2px solid rgba(var(--border), 0.7);
+}
+
+.pulse-preview {
+  background: linear-gradient(135deg, #7e57c2 0%, #03a9f4 100%);
+}
+
+.aurora-preview {
+  background: linear-gradient(135deg, #66cc99 0%, #6699ff 100%);
+}
+
+.midnight-preview {
+  background: linear-gradient(135deg, #7b1fa2 0%, #ff4081 100%);
+}
+
+.sunset-preview {
+  background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+}
+
+.cyber-preview {
+  background: linear-gradient(135deg, #00ffaa 0%, #ff00aa 100%);
+}
+
+.minimal-preview {
+  background: linear-gradient(135deg, #607d8b 0%, #90a4ae 100%);
+}
+
+.custom-theme-controls {
+  padding: var(--space-md);
+  border-top: 1px solid rgba(var(--border), 0.3);
+  margin-top: auto;
+}
+
+.custom-theme-controls h4 {
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-md);
+}
+
+.color-pickers {
+  display: flex;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.color-picker {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.color-picker label {
+  font-size: var(--font-size-sm);
+  color: rgba(var(--text-secondary), 1);
+}
+
+.color-picker input[type="color"] {
+  -webkit-appearance: none;
+  border: none;
+  width: 100%;
+  height: 36px;
+  cursor: pointer;
+  background: transparent;
+  border-radius: var(--radius-sm);
+}
+
+.color-picker input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker input[type="color"]::-webkit-color-swatch {
+  border: 1px solid rgba(var(--border), 0.5);
+  border-radius: var(--radius-sm);
+}
+
+/* ===== OVERLAY ===== */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-medium) ease, visibility var(--transition-medium) ease;
+}
+
+.overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  color: rgba(var(--text-secondary), 1);
+}
+
+.placeholder-image {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  opacity: 0.7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, calc(0.1 * var(--shadow-strength)));
+}
+
+/* ===== RESPONSIVE STYLES ===== */
+@media (max-width: 1200px) {
+  .settings-panel {
+    width: 400px;
+  }
+}
+
+@media (max-width: 992px) {
+  .sidebar {
+    width: 220px;
+  }
+  
+  .app-header {
+    padding: 0 var(--space-md);
+  }
+  
+  .logo-text {
+    font-size: var(--font-size-xl);
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    width: 80px;
+    z-index: 90;
+  }
+  
+  .sidebar .nav-item span,
+  .sidebar .model-selector-container,
+  .sidebar .sidebar-footer {
+    display: none;
+  }
+  
+  .main-content {
+    padding-left: calc(80px + var(--space-md));
+  }
+  
+  .settings-panel {
+    width: 320px;
+  }
+  
+  .message-content {
+    max-width: 90%;
+  }
+  
+  .control-group {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 576px) {
+  .app-header {
+    height: 60px;
+  }
+  
+  .logo-text {
+    font-size: var(--font-size-lg);
+  }
+  
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .main-content {
+    padding: 70px var(--space-sm) var(--space-sm) calc(80px + var(--space-sm));
+  }
+  
+  .settings-panel {
+    width: 100%;
+    right: -100%;
+  }
+  
+  .theme-panel {
+    width: 260px;
+  }
+}
+  </style>
+</head>
+<body class="theme-pulse" data-perspective="on">
+  <!-- 3D Background Elements -->
+  <div class="bg-elements">
+    <div class="floating-cube"></div>
+    <div class="floating-sphere"></div>
+    <div class="floating-pyramid"></div>
+    <div class="grid-floor"></div>
+    <div class="ambient-particles"></div>
+  </div>
+
+  <!-- Custom Cursor -->
+  <div class="neo-cursor">
+    <div class="cursor-ring"></div>
+    <div class="cursor-dot"></div>
+  </div>
+
+  <!-- Header with Logo and Controls -->
+  <header class="app-header">
+    <div class="logo-container">
+      <div class="logo-icon">
+        <div class="neural-icon">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+      <h1 class="logo-text">NeuroPulse<span>AI</span></h1>
+    </div>
+    
+    <div class="header-controls">
+      <button id="theme-toggle" class="neo-button icon-button" aria-label="Toggle theme">
+        <i class="fas fa-palette"></i>
+      </button>
+      <button id="settings-toggle" class="neo-button icon-button" aria-label="Settings">
+        <i class="fas fa-sliders"></i>
+      </button>
+      <div class="user-profile">
+        <div class="avatar" data-status="active">U</div>
+        <span class="token-display">
+          <i class="fas fa-bolt"></i>
+          <span id="token-count">87,420</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-container">
+    <!-- Main Sidebar -->
+    <aside class="sidebar">
+      <nav class="main-nav">
+        <ul>
+          <li class="active">
+            <a href="#chat" class="nav-item">
+              <i class="fas fa-comment-dots"></i>
+              <span>Chat</span>
+            </a>
+          </li>
+          <li>
+            <a href="#code" class="nav-item">
+              <i class="fas fa-code"></i>
+              <span>Code Assist</span>
+            </a>
+          </li>
+          <li>
+            <a href="#image" class="nav-item">
+              <i class="fas fa-image"></i>
+              <span>Image Gen</span>
+            </a>
+          </li>
+          <li>
+            <a href="#voice" class="nav-item">
+              <i class="fas fa-microphone-alt"></i>
+              <span>Voice Mode</span>
+            </a>
+          </li>
+          <li>
+            <a href="#files" class="nav-item">
+              <i class="fas fa-file-alt"></i>
+              <span>Files</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <button id="new-chat" class="neo-button primary-button">
+          <i class="fas fa-plus"></i> New Chat
+        </button>
+        <div class="model-selector-container">
+          <label for="model-selector">AI Model</label>
+          <div class="custom-select">
+            <select id="model-selector">
+              <option value="pulse-standard">Pulse Standard</option>
+              <option value="pulse-ultra">Pulse Ultra</option>
+              <option value="pulse-architect">Pulse Architect</option>
+              <option value="pulse-scholar">Pulse Scholar</option>
+              <option value="pulse-creative">Pulse Creative</option>
+            </select>
+            <div class="select-arrow"><i class="fas fa-chevron-down"></i></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Chat Interface View -->
+      <section id="chat-view" class="view active-view">
+        <!-- Chat Controls -->
+        <div class="chat-controls">
+          <div class="control-group">
+            <button id="extended-thinking-toggle" class="neo-switch" aria-pressed="false">
+              <span class="switch-indicator"></span>
+              <span class="switch-label">Extended Thinking</span>
+            </button>
+            <div class="tooltip">Deep reasoning for complex questions</div>
+          </div>
+          
+          <div class="control-group">
+            <button id="memory-toggle" class="neo-switch" aria-pressed="true">
+              <span class="switch-indicator"></span>
+              <span class="switch-label">Memory</span>
+            </button>
+            <div class="tooltip">Remember conversation context</div>
+          </div>
+          
+          <div class="control-group">
+            <button id="citations-toggle" class="neo-switch" aria-pressed="false">
+              <span class="switch-indicator"></span>
+              <span class="switch-label">Citations</span>
+            </button>
+            <div class="tooltip">Include sources in responses</div>
+          </div>
+        </div>
+        
+        <!-- Messages Container -->
+        <div class="messages-container glass-panel">
+          <div class="conversation-header">
+            <h2>Conversation</h2>
+            <div class="action-buttons">
+              <button class="icon-action" aria-label="Download chat">
+                <i class="fas fa-download"></i>
+              </button>
+              <button class="icon-action" aria-label="Share chat">
+                <i class="fas fa-share-alt"></i>
+              </button>
+              <button class="icon-action" aria-label="Clear chat">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div id="messages-list" class="messages-list">
+            <!-- Welcome message will be inserted here -->
+          </div>
+          
+          <div id="typing-indicator" class="typing-indicator">
+            <div class="thinking-animation">
+              <span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+            </div>
+            <div class="thinking-label">Analyzing inputs and generating response...</div>
+          </div>
+        </div>
+        
+        <!-- Suggestions Section -->
+        <div class="suggestions">
+          <button class="suggestion-chip glow-effect">
+            <span class="glow-container">
+              <span class="glow"></span>
+            </span>
+            <span>Explain quantum computing</span>
+          </button>
+          <button class="suggestion-chip glow-effect">
+            <span class="glow-container">
+              <span class="glow"></span>
+            </span>
+            <span>Write code for a React form</span>
+          </button>
+          <button class="suggestion-chip glow-effect">
+            <span class="glow-container">
+              <span class="glow"></span>
+            </span>
+            <span>Summarize climate science</span>
+          </button>
+          <button class="suggestion-chip glow-effect">
+            <span class="glow-container">
+              <span class="glow"></span>
+            </span>
+            <span>Create a content strategy</span>
+          </button>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="input-container glass-panel">
+          <div class="input-wrapper">
+            <textarea id="message-input" placeholder="Ask me anything..." rows="1" maxlength="4000"></textarea>
+            
+            <div class="input-actions">
+              <button id="upload-button" class="action-button" aria-label="Upload file">
+                <i class="fas fa-paperclip"></i>
+                <div class="tooltip">Upload file</div>
+              </button>
+              <input type="file" id="file-upload" multiple style="display: none">
+              
+              <button id="voice-input" class="action-button" aria-label="Voice input">
+                <i class="fas fa-microphone"></i>
+                <div class="tooltip">Voice input</div>
+              </button>
+              
+              <div id="character-count" class="character-count">0/4000</div>
+              
+              <button id="send-button" class="send-button neo-button primary-button" disabled>
+                <span class="button-content">
+                  <i class="fas fa-paper-plane"></i>
+                  <span>Send</span>
+                </span>
+                <span class="hover-effect"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Settings Panel -->
+  <div id="settings-panel" class="settings-panel glass-panel">
+    <div class="settings-header">
+      <h2><i class="fas fa-sliders"></i> Settings</h2>
+      <button id="settings-close" class="close-button">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    
+    <div class="tabs-container">
+      <div class="tabs-header">
+        <button class="tab-button active" data-tab="interface">Interface</button>
+        <button class="tab-button" data-tab="models">AI Models</button>
+        <button class="tab-button" data-tab="account">Account</button>
+        <button class="tab-button" data-tab="advanced">Advanced</button>
+      </div>
+      
+      <div class="tab-content active" data-tab="interface">
+        <div class="settings-section">
+          <h3>Theme</h3>
+          <div class="theme-picker">
+            <button class="theme-option" data-theme="pulse">
+              <div class="theme-preview" data-theme-preview="pulse"></div>
+              <span>Pulse</span>
+            </button>
+            <button class="theme-option" data-theme="aurora">
+              <div class="theme-preview" data-theme-preview="aurora"></div>
+              <span>Aurora</span>
+            </button>
+            <button class="theme-option" data-theme="midnight">
+              <div class="theme-preview" data-theme-preview="midnight"></div>
+              <span>Midnight</span>
+            </button>
+            <button class="theme-option" data-theme="sunset">
+              <div class="theme-preview" data-theme-preview="sunset"></div>
+              <span>Sunset</span>
+            </button>
+            <button class="theme-option" data-theme="cyber">
+              <div class="theme-preview" data-theme-preview="cyber"></div>
+              <span>Cyber</span>
+            </button>
+            <button class="theme-option" data-theme="minimal">
+              <div class="theme-preview" data-theme-preview="minimal"></div>
+              <span>Minimal</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <h3>Visual Effects</h3>
+          <div class="settings-controls">
+            <div class="control-item">
+              <label for="animation-level">Animation Level</label>
+              <div class="control-group">
+                <select id="animation-level" class="neo-select">
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="control-item">
+              <label>3D Perspective</label>
+              <div class="control-group">
+                <button id="perspective-toggle" class="neo-switch" aria-pressed="true">
+                  <span class="switch-indicator"></span>
+                  <span class="switch-label">Enabled</span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="control-item">
+              <label>Custom Cursor</label>
+              <div class="control-group">
+                <button id="cursor-toggle" class="neo-switch" aria-pressed="true">
+                  <span class="switch-indicator"></span>
+                  <span class="switch-label">Enabled</span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="control-item">
+              <label>Background Effects</label>
+              <div class="control-group">
+                <button id="bg-effects-toggle" class="neo-switch" aria-pressed="true">
+                  <span class="switch-indicator"></span>
+                  <span class="switch-label">Enabled</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <h3>Text</h3>
+          <div class="settings-controls">
+            <div class="control-item">
+              <label>Text Size</label>
+              <div class="button-group">
+                <button class="neo-button size-button" data-size="small">A<small>A</small></button>
+                <button class="neo-button size-button active" data-size="medium">A<small>A</small></button>
+                <button class="neo-button size-button" data-size="large">A<small>A</small></button>
+              </div>
+            </div>
+            
+            <div class="control-item">
+              <label>Font</label>
+              <div class="control-group">
+                <select id="font-family" class="neo-select">
+                  <option value="Inter">Inter</option>
+                  <option value="Roboto">Roboto</option>
+                  <option value="Open Sans">Open Sans</option>
+                  <option value="Montserrat">Montserrat</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="models">
+        <div class="settings-section">
+          <h3>AI Model Settings</h3>
+          <div class="model-cards">
+            <div class="model-card active">
+              <div class="model-icon"><i class="fas fa-brain"></i></div>
+              <div class="model-info">
+                <h4>Pulse Ultra</h4>
+                <p>Most advanced reasoning, best for complex tasks</p>
+              </div>
+              <div class="model-badge premium">Premium</div>
+            </div>
+            
+            <div class="model-card">
+              <div class="model-icon"><i class="fas fa-code"></i></div>
+              <div class="model-info">
+                <h4>Pulse Architect</h4>
+                <p>Specialized for code and technical writing</p>
+              </div>
+              <div class="model-badge pro">Pro</div>
+            </div>
+            
+            <div class="model-card">
+              <div class="model-icon"><i class="fas fa-paint-brush"></i></div>
+              <div class="model-info">
+                <h4>Pulse Creative</h4>
+                <p>Enhanced for creative writing and ideation</p>
+              </div>
+              <div class="model-badge pro">Pro</div>
+            </div>
+            
+            <div class="model-card">
+              <div class="model-icon"><i class="fas fa-book"></i></div>
+              <div class="model-info">
+                <h4>Pulse Scholar</h4>
+                <p>Optimized for research and education</p>
+              </div>
+              <div class="model-badge pro">Pro</div>
+            </div>
+            
+            <div class="model-card">
+              <div class="model-icon"><i class="fas fa-comment"></i></div>
+              <div class="model-info">
+                <h4>Pulse Standard</h4>
+                <p>Fast responses for everyday questions</p>
+              </div>
+              <div class="model-badge free">Free</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="settings-section">
+          <h3>AI Behavior</h3>
+          <div class="settings-controls">
+            <div class="control-item">
+              <label>Response Length</label>
+              <div class="control-group">
+                <select id="response-length" class="neo-select">
+                  <option value="concise">Concise</option>
+                  <option value="balanced" selected>Balanced</option>
+                  <option value="detailed">Detailed</option>
+                  <option value="comprehensive">Comprehensive</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="control-item">
+              <label>Creativity</label>
+              <div class="neo-slider-container">
+                <input type="range" min="0" max="100" value="70" class="neo-slider" id="creativity-slider">
+                <div class="slider-labels">
+                  <span>Precise</span>
+                  <span>Balanced</span>
+                  <span>Creative</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="control-item">
+              <label>Knowledge Cutoff</label>
+              <div class="control-group">
+                <select id="knowledge-cutoff" class="neo-select">
+                  <option value="latest">March 2025 (Latest)</option>
+                  <option value="2024">December 2024</option>
+                  <option value="2023">December 2023</option>
+                  <option value="2022">December 2022</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="account">
+        <!-- Account settings content -->
+        <div class="placeholder-content">
+          <img src="https://via.placeholder.com/400x200?text=Account+Settings" alt="Account Settings Placeholder" class="placeholder-image">
+          <p>Account settings would be displayed here</p>
+        </div>
+      </div>
+      
+      <div class="tab-content" data-tab="advanced">
+        <!-- Advanced settings content -->
+        <div class="placeholder-content">
+          <img src="https://via.placeholder.com/400x200?text=Advanced+Settings" alt="Advanced Settings Placeholder" class="placeholder-image">
+          <p>Advanced settings would be displayed here</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Theme Selector Side Panel -->
+  <div id="theme-panel" class="theme-panel">
+    <div class="panel-header">
+      <h3>Choose Theme</h3>
+      <button id="theme-panel-close" class="close-button">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    
+    <div class="theme-list">
+      <button class="theme-item active" data-theme="pulse">
+        <div class="theme-preview pulse-preview"></div>
+        <span>Pulse</span>
+      </button>
+      <button class="theme-item" data-theme="aurora">
+        <div class="theme-preview aurora-preview"></div>
+        <span>Aurora</span>
+      </button>
+      <button class="theme-item" data-theme="midnight">
+        <div class="theme-preview midnight-preview"></div>
+        <span>Midnight</span>
+      </button>
+      <button class="theme-item" data-theme="sunset">
+        <div class="theme-preview sunset-preview"></div>
+        <span>Sunset</span>
+      </button>
+      <button class="theme-item" data-theme="cyber">
+        <div class="theme-preview cyber-preview"></div>
+        <span>Cyber</span>
+      </button>
+      <button class="theme-item" data-theme="minimal">
+        <div class="theme-preview minimal-preview"></div>
+        <span>Minimal</span>
+      </button>
+    </div>
+    
+    <div class="custom-theme-controls">
+      <h4>Customize Colors</h4>
+      <div class="color-pickers">
+        <div class="color-picker">
+          <label>Primary</label>
+          <input type="color" id="primary-color" value="#7e57c2">
+        </div>
+        <div class="color-picker">
+          <label>Secondary</label>
+          <input type="color" id="secondary-color" value="#03a9f4">
+        </div>
+        <div class="color-picker">
+          <label>Accent</label>
+          <input type="color" id="accent-color" value="#ff5722">
+        </div>
+      </div>
+      <button id="apply-custom-theme" class="neo-button primary-button">Apply Custom Theme</button>
+    </div>
+  </div>
+  
+  <div id="overlay" class="overlay"></div>
+       <script>
+       // Main JavaScript for NeuroPulse AI Chat Interface
+document.addEventListener('DOMContentLoaded', () => {
+  // DOM Elements
+  // Main UI Elements
+  const body = document.body;
+  const appContainer = document.querySelector('.app-container');
+  const overlay = document.getElementById('overlay');
+  const mainContent = document.querySelector('.main-content');
+  
+  // Header Elements
+  const themeToggle = document.getElementById('theme-toggle');
+  const settingsToggle = document.getElementById('settings-toggle');
+  const tokenCount = document.getElementById('token-count');
+  
+  // Sidebar Elements
+  const sidebar = document.querySelector('.sidebar');
+  const navItems = document.querySelectorAll('.nav-item');
+  const modelSelector = document.getElementById('model-selector');
+  const newChatButton = document.getElementById('new-chat');
+  
+  // Chat Elements
+  const messagesList = document.getElementById('messages-list');
+  const messageInput = document.getElementById('message-input');
+  const sendButton = document.getElementById('send-button');
+  const typingIndicator = document.getElementById('typing-indicator');
+  const suggestionChips = document.querySelectorAll('.suggestion-chip');
+  const uploadButton = document.getElementById('upload-button');
+  const fileUpload = document.getElementById('file-upload');
+  const characterCount = document.getElementById('character-count');
+  
+  // Settings Panel Elements
+  const settingsPanel = document.getElementById('settings-panel');
+  const settingsClose = document.getElementById('settings-close');
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const tabContents = document.querySelectorAll('.tab-content');
+  const themeOptions = document.querySelectorAll('.theme-option');
+  const animationLevel = document.getElementById('animation-level');
+  const perspectiveToggle = document.getElementById('perspective-toggle');
+  const cursorToggle = document.getElementById('cursor-toggle');
+  const bgEffectsToggle = document.getElementById('bg-effects-toggle');
+  const sizeButtons = document.querySelectorAll('.size-button');
+  const fontFamily = document.getElementById('font-family');
+  const responseLength = document.getElementById('response-length');
+  const creativitySlider = document.getElementById('creativity-slider');
+  const modelCards = document.querySelectorAll('.model-card');
+  
+  // Theme Panel Elements
+  const themePanel = document.getElementById('theme-panel');
+  const themePanelClose = document.getElementById('theme-panel-close');
+  const themeItems = document.querySelectorAll('.theme-item');
+  const primaryColorPicker = document.getElementById('primary-color');
+  const secondaryColorPicker = document.getElementById('secondary-color');
+  const accentColorPicker = document.getElementById('accent-color');
+  const applyCustomThemeBtn = document.getElementById('apply-custom-theme');
+  
+  // Chat Control Elements
+  const extendedThinkingToggle = document.getElementById('extended-thinking-toggle');
+  const memoryToggle = document.getElementById('memory-toggle');
+  const citationsToggle = document.getElementById('citations-toggle');
+  
+  // Custom Cursor
+  const neoCursor = document.querySelector('.neo-cursor');
+  const cursorRing = document.querySelector('.cursor-ring');
+  const cursorDot = document.querySelector('.cursor-dot');
+  
+  // Background Elements
+  const bgElements = document.querySelector('.bg-elements');
+  
+  // State Variables
+  let currentTheme = 'pulse';
+  let isAiTyping = false;
+  let aiResponseTimeout = null;
+  let userTokens = 87420;
+  let selectedModel = 'pulse-ultra';
+  let extendedThinking = false;
+  let memoryEnabled = true;
+  let citationsEnabled = false;
+  let currentTab = 'interface';
+  let customCursor = true;
+  let perspective3d = true;
+  let backgroundEffects = true;
+  let animationSetting = 'high';
+  let textSize = 'medium';
+  let currentFont = 'Inter';
+  let responseLengthSetting = 'balanced';
+  let creativityLevel = 70;
+  
+  // Response Data - More comprehensive for the enhanced interface
+  const aiResponses = {
+    'pulse-standard': {
+      greeting: [
+        "Hello! I'm NeuroPulse AI. How can I assist you today?",
+        "Welcome to NeuroPulse AI. What would you like to know?",
+        "Hi there! I'm your AI assistant. What can I help you with?"
+      ],
+      general: [
+        "I understand your question. Let me analyze that for you.",
+        "That's an interesting topic. Let me gather some relevant information.",
+        "I'd be happy to help with that. Here's what I know.",
+        "I've processed your request and have the following insights."
+      ],
+      technical: [
+        "Let me analyze this technical question for you.",
+        "I'll work through this step by step for clarity.",
+        "This is a complex topic. Here's my technical analysis."
+      ],
+      creative: [
+        "I've generated some creative ideas based on your request.",
+        "Here's a creative approach to your question.",
+        "I've explored some imaginative possibilities for you."
+      ],
+      extended: [
+        "I'm engaging extended thinking to give you the most accurate answer...",
+        "This requires deeper analysis. Let me think through this carefully...",
+        "I'm thoroughly examining multiple perspectives on this complex question..."
+      ]
+    },
+    'pulse-ultra': {
+      greeting: [
+        "Welcome! I'm running on NeuroPulse Ultra, optimized for complex reasoning. How can I assist you today?",
+        "Hello! You're connected to NeuroPulse Ultra. I'm designed for advanced problem-solving and nuanced understanding. What would you like to explore?",
+        "Greetings! I'm your Ultra-powered AI assistant with enhanced reasoning capabilities. What complex question can I help you with?"
+      ],
+      general: [
+        "I'm analyzing your question using my enhanced reasoning capabilities.",
+        "Let me leverage my advanced processing to provide you with a comprehensive answer.",
+        "I'm utilizing my optimized neural pathways to deeply understand your question.",
+        "I'm accessing my expanded knowledge base to give you the most accurate response."
+      ],
+      technical: [
+        "I'm applying specialized technical analysis to your question.",
+        "Let me break down this technical challenge systematically using my advanced reasoning.",
+        "I'll leverage my enhanced problem-solving framework to address this technical question."
+      ],
+      creative: [
+        "I'm engaging my creative synthesis capabilities to generate novel perspectives.",
+        "Let me explore multiple creative dimensions of your request.",
+        "I'm combining disparate concepts to provide you with unique creative insights."
+      ],
+      extended: [
+        "Activating extended cognition mode to deeply analyze all aspects of this question...",
+        "I'm performing multi-layered reasoning to ensure the most accurate and nuanced response...",
+        "Engaging in comprehensive contextual analysis to provide you with the optimal answer..."
+      ]
+    },
+    'pulse-architect': {
+      greeting: [
+        "Hello! I'm running Pulse Architect, specialized for technical and code-related tasks. How can I assist with your development needs?",
+        "Welcome to Pulse Architect! I'm optimized for coding, technical documentation, and system design. What are you working on today?",
+        "Greetings! You're connected to the Architect model, designed for programming and technical tasks. How can I help you build today?"
+      ],
+      technical: [
+        "Analyzing your technical requirements with specialized algorithms.",
+        "Let me architect a solution tailored to your technical specifications.",
+        "I'll develop a structured approach to address this technical challenge."
+      ],
+      code: [
+        "I'll generate efficient and well-documented code for your requirements.",
+        "Let me develop a clean, optimized implementation for you.",
+        "I'll design a maintainable code solution with best practices in mind."
+      ]
+    }
+  };
+  
+  // Default response for any model
+  const defaultResponses = [
+    "I understand your question. Let me provide a thoughtful response.",
+    "That's an interesting query. Let me analyze it carefully.",
+    "I'm processing your request to give you the most helpful information.",
+    "Let me consider the best approach to answer your question effectively."
+  ];
+  
+  // --- Core Initialization Functions ---
+  
+  function initializeUI() {
+    // Set initial token display
+    updateTokenDisplay();
+    
+    // Initialize custom cursor if enabled
+    updateCursorSettings();
+    
+    // Set perspective mode
+    updatePerspectiveMode();
+    
+    // Display initial AI message
+    displayAIWelcomeMessage();
+    
+    // Initialize textarea autosize
+    initTextareaAutosize();
+    
+    // Update button states
+    updateSendButtonState();
+    
+    // Set initial switch states
+    updateSwitchStates();
+  }
+  
+  function updateSwitchStates() {
+    if (extendedThinkingToggle) extendedThinkingToggle.setAttribute('aria-pressed', extendedThinking.toString());
+    if (memoryToggle) memoryToggle.setAttribute('aria-pressed', memoryEnabled.toString());
+    if (citationsToggle) citationsToggle.setAttribute('aria-pressed', citationsEnabled.toString());
+    if (perspectiveToggle) perspectiveToggle.setAttribute('aria-pressed', perspective3d.toString());
+    if (cursorToggle) cursorToggle.setAttribute('aria-pressed', customCursor.toString());
+    if (bgEffectsToggle) bgEffectsToggle.setAttribute('aria-pressed', backgroundEffects.toString());
+  }
+  
+  function displayAIWelcomeMessage() {
+    if (!messagesList) return;
+    
+    // Clear any existing messages
+    messagesList.innerHTML = '';
+    
+    // Get random greeting from current model
+    const model = modelSelector ? modelSelector.value : 'pulse-ultra';
+    const greetings = aiResponses[model]?.greeting || aiResponses['pulse-standard'].greeting;
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    
+    // Display with typing effect
+    displayMessage('ai', greeting, true);
+  }
+  
+  function initTextareaAutosize() {
+    if (!messageInput) return;
+    
+    messageInput.addEventListener('input', () => {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = messageInput.scrollHeight + 'px';
+    });
+  }
+  
+  // --- Theme & Visual Effects Functions ---
+  
+  function setTheme(theme) {
+    currentTheme = theme;
+    
+    // Remove all theme classes
+    document.querySelectorAll('.theme-option').forEach(option => {
+      option.classList.remove('active');
+    });
+    
+    document.querySelectorAll('.theme-item').forEach(item => {
+      item.classList.remove('active');
+    });
+    
+    // Add active class to selected theme
+    document.querySelector(`.theme-option[data-theme="${theme}"]`)?.classList.add('active');
+    document.querySelector(`.theme-item[data-theme="${theme}"]`)?.classList.add('active');
+    
+    // Set theme on body
+    body.className = `theme-${theme}`;
+    
+    // Preserve other body attributes
+    if (perspective3d) body.setAttribute('data-perspective', 'on');
+    if (!customCursor) body.setAttribute('data-cursor', 'off');
+    
+    // Apply text size
+    body.classList.add(`text-size-${textSize}`);
+    
+    // Show visual feedback
+    showToast('Theme Updated', `The ${theme.charAt(0).toUpperCase() + theme.slice(1)} theme has been applied`, 'success');
+  }
+  
+  function applyCustomTheme() {
+    const primary = hexToRgb(primaryColorPicker.value);
+    const secondary = hexToRgb(secondaryColorPicker.value);
+    const accent = hexToRgb(accentColorPicker.value);
+    
+    // Create custom CSS variables
+    const style = document.createElement('style');
+    style.textContent = `
+      .theme-pulse {
+        --primary: ${primary.r}, ${primary.g}, ${primary.b};
+        --primary-light: ${lightenColor(primary, 30).r}, ${lightenColor(primary, 30).g}, ${lightenColor(primary, 30).b};
+        --primary-dark: ${darkenColor(primary, 20).r}, ${darkenColor(primary, 20).g}, ${darkenColor(primary, 20).b};
+        
+        --secondary: ${secondary.r}, ${secondary.g}, ${secondary.b};
+        --secondary-light: ${lightenColor(secondary, 30).r}, ${lightenColor(secondary, 30).g}, ${lightenColor(secondary, 30).b};
+        --secondary-dark: ${darkenColor(secondary, 20).r}, ${darkenColor(secondary, 20).g}, ${darkenColor(secondary, 20).b};
+        
+        --accent: ${accent.r}, ${accent.g}, ${accent.b};
+      }
+    `;
+    
+    // Remove any existing custom theme
+    const existingStyle = document.getElementById('custom-theme-style');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+    
+    style.id = 'custom-theme-style';
+    document.head.appendChild(style);
+    
+    // Apply pulse theme with custom colors
+    setTheme('pulse');
+    
+    showToast('Custom Theme', 'Your personalized theme has been applied', 'success');
+  }
+  
+  function updatePerspectiveMode() {
+    body.setAttribute('data-perspective', perspective3d ? 'on' : 'off');
+  }
+  
+  function updateCursorSettings() {
+    body.setAttribute('data-cursor', customCursor ? 'on' : 'off');
+  }
+  
+  function updateTextSize(size) {
+    textSize = size;
+    
+    // Remove existing size classes
+    body.classList.remove('text-size-small', 'text-size-medium', 'text-size-large');
+    
+    // Add new size class
+    body.classList.add(`text-size-${size}`);
+    
+    // Update active button
+    sizeButtons.forEach(button => {
+      button.classList.toggle('active', button.dataset.size === size);
+    });
+  }
+  
+  function updateFontFamily(font) {
+    currentFont = font;
+    body.style.setProperty('--font-main', `'${font}', sans-serif`);
+  }
+  
+  // --- Messaging Functions ---
+  
+  function updateSendButtonState() {
+    if (!sendButton || !messageInput) return;
+    
+    const isEmpty = !messageInput.value.trim();
+    sendButton.disabled = isEmpty || isAiTyping;
+    
+    // Update character count
+    if (characterCount) {
+      const count = messageInput.value.length;
+      const maxLength = parseInt(messageInput.getAttribute('maxlength')) || 4000;
+      characterCount.textContent = `${count}/${maxLength}`;
+      
+      characterCount.classList.toggle('near-limit', count > maxLength * 0.8 && count < maxLength);
+      characterCount.classList.toggle('at-limit', count >= maxLength);
+    }
+  }
+  
+  function formatTimestamp() {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  function createMessageElement(sender, text, timestamp = formatTimestamp()) {
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message', sender);
+    
+    // Add reveal animation class
+    messageDiv.classList.add('reveal-message');
+    
+    const messageContentDiv = document.createElement('div');
+    messageContentDiv.classList.add('message-content');
+    
+    // Header with avatar and sender info
+    const messageHeader = document.createElement('div');
+    messageHeader.classList.add('message-header');
+    
+    const avatar = document.createElement('div');
+    avatar.classList.add('avatar', `${sender}-avatar`);
+    
+    if (sender === 'ai') {
+      const icon = document.createElement('i');
+      icon.classList.add('fas', 'fa-brain');
+      avatar.appendChild(icon);
+    } else {
+      // User avatar - use first letter of "User"
+      avatar.textContent = 'U';
+    }
+    
+    const senderInfo = document.createElement('div');
+    senderInfo.classList.add('sender-info');
+    
+    const senderName = document.createElement('span');
+    senderName.classList.add('sender-name');
+    senderName.textContent = sender === 'ai' ? 'NeuroPulse AI' : 'You';
+    
+    const messageTime = document.createElement('span');
+    messageTime.classList.add('message-time');
+    messageTime.textContent = timestamp;
+    
+    senderInfo.appendChild(senderName);
+    senderInfo.appendChild(messageTime);
+    
+    messageHeader.appendChild(avatar);
+    messageHeader.appendChild(senderInfo);
+    
+    // Message bubble with text
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.classList.add('bubble');
+    
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    
+    bubbleDiv.appendChild(paragraph);
+    
+    // Assemble message
+    messageContentDiv.appendChild(messageHeader);
+    messageContentDiv.appendChild(bubbleDiv);
+    messageDiv.appendChild(messageContentDiv);
+    
+    // Add message actions
+    const actionsDiv = document.createElement('div');
+    actionsDiv.classList.add('message-actions');
+    
+    const copyButton = document.createElement('button');
+    copyButton.classList.add('message-action');
+    copyButton.setAttribute('aria-label', 'Copy message');
+    copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+    copyButton.addEventListener('click', () => {
+      navigator.clipboard.writeText(text)
+        .then(() => showToast('Success', 'Message copied to clipboard', 'success'))
+        .catch(() => showToast('Error', 'Failed to copy message', 'error'));
+    });
+    
+    const readButton = document.createElement('button');
+    readButton.classList.add('message-action');
+    readButton.setAttribute('aria-label', 'Read aloud');
+    readButton.innerHTML = '<i class="fas fa-volume-up"></i>';
+    readButton.addEventListener('click', () => {
+      readAloud(text);
+    });
+    
+    // Add thumbs up/down for AI messages (feedback)
+    if (sender === 'ai') {
+      const thumbsUpButton = document.createElement('button');
+      thumbsUpButton.classList.add('message-action');
+      thumbsUpButton.setAttribute('aria-label', 'This was helpful');
+      thumbsUpButton.innerHTML = '<i class="fas fa-thumbs-up"></i>';
+      thumbsUpButton.addEventListener('click', () => {
+        thumbsUpButton.classList.toggle('active');
+        thumbsDownButton.classList.remove('active');
+        showToast('Feedback Recorded', 'Thank you for your positive feedback', 'success');
+      });
+      
+      const thumbsDownButton = document.createElement('button');
+      thumbsDownButton.classList.add('message-action');
+      thumbsDownButton.setAttribute('aria-label', 'This needs improvement');
+      thumbsDownButton.innerHTML = '<i class="fas fa-thumbs-down"></i>';
+      thumbsDownButton.addEventListener('click', () => {
+        thumbsDownButton.classList.toggle('active');
+        thumbsUpButton.classList.remove('active');
+        showToast('Feedback Recorded', 'Thank you for helping us improve', 'info');
+      });
+      
+      actionsDiv.appendChild(thumbsUpButton);
+      actionsDiv.appendChild(thumbsDownButton);
+    }
+    
+    actionsDiv.appendChild(copyButton);
+    actionsDiv.appendChild(readButton);
+    messageDiv.appendChild(actionsDiv);
+    
+    return messageDiv;
+  }
+  
+  function displayMessage(sender, text, useTypingEffect = false) {
+    if (!text || !messagesList) return;
+    
+    const messageElement = createMessageElement(sender, text);
+    
+    messagesList.appendChild(messageElement);
+    
+    // Add typing effect for AI messages if enabled
+    if (sender === 'ai' && useTypingEffect && animationSetting !== 'off') {
+      const paragraph = messageElement.querySelector('p');
+      const originalText = text;
+      paragraph.textContent = '';
+      
+      let charIndex = 0;
+      let typingSpeed = 20; // Base speed
+      
+      // Adjust typing speed based on animation setting
+      if (animationSetting === 'low') typingSpeed = 5;
+      if (animationSetting === 'medium') typingSpeed = 10;
+      
+      function typeCharacter() {
+        if (charIndex < originalText.length) {
+          paragraph.textContent += originalText.charAt(charIndex);
+          charIndex++;
+          scrollToBottom();
+          setTimeout(typeCharacter, typingSpeed + (Math.random() * 10));
+        } else {
+          scrollToBottom();
+        }
+      }
+      
+      setTimeout(typeCharacter, 100);
+    }
+    
+    scrollToBottom();
+    
+    return messageElement;
+  }
+  
+  function scrollToBottom() {
+    if (!messagesList) return;
+    messagesList.scrollTop = messagesList.scrollHeight;
+  }
+  
+  function setAiTypingStatus(isTyping) {
+    isAiTyping = isTyping;
+    
+    if (typingIndicator) {
+      typingIndicator.classList.toggle('visible', isTyping);
+    }
+    
+    if (sendButton) {
+      sendButton.disabled = isTyping || (messageInput && !messageInput.value.trim());
+    }
+    
+    if (messageInput) {
+      messageInput.disabled = isTyping;
+      
+      if (isTyping) {
+        messageInput.placeholder = "AI is thinking...";
+      } else {
+        messageInput.placeholder = "Ask me anything...";
+        messageInput.focus();
+      }
+    }
+  }
+  
+  function getAIResponse(userMessage) {
+    if (aiResponseTimeout) clearTimeout(aiResponseTimeout);
+    
+    setAiTypingStatus(true);
+    
+    // Token usage simulation
+    const tokenUsage = Math.floor(userMessage.length / 3) + Math.floor(Math.random() * 100) + 20;
+    animateTokenUsage(tokenUsage);
+    
+    // Determine response category
+    const lowerCaseMessage = userMessage.toLowerCase().trim();
+    const currentModel = modelSelector ? modelSelector.value : 'pulse-ultra';
+    
+    // Determine which response pool to use
+    let responseCategory = 'general';
+    
+    if (lowerCaseMessage.includes('code') || lowerCaseMessage.includes('program') || 
+        lowerCaseMessage.includes('function') || lowerCaseMessage.includes('class') ||
+        lowerCaseMessage.includes('develop')) {
+      responseCategory = 'technical';
+    } else if (lowerCaseMessage.includes('creative') || lowerCaseMessage.includes('imagine') || 
+              lowerCaseMessage.includes('write') || lowerCaseMessage.includes('story')) {
+      responseCategory = 'creative';
+    }
+    
+    // Check if extended thinking is enabled
+    if (extendedThinking && responseCategory !== 'greeting') {
+      // Show extended thinking message first
+      const extendedResponses = aiResponses[currentModel]?.extended || aiResponses['pulse-standard'].extended;
+      const extendedMessage = extendedResponses[Math.floor(Math.random() * extendedResponses.length)];
+      
+      // Display thinking message
+      setTimeout(() => {
+        displayMessage('ai', extendedMessage, true);
+      }, 500);
+      
+      // Longer delay for the actual response with extended thinking
+      aiResponseTimeout = setTimeout(() => {
+        produceResponse(userMessage, currentModel, responseCategory);
+      }, 4000 + Math.random() * 2000);
+    } else {
+      // Standard response time
+      const baseDelay = currentModel === 'pulse-ultra' ? 1500 : 1000;
+      const lengthFactor = Math.min(userMessage.length / 5, 150);
+      const randomVariation = Math.random() * 500;
+      
+      aiResponseTimeout = setTimeout(() => {
+        produceResponse(userMessage, currentModel, responseCategory);
+      }, baseDelay + lengthFactor + randomVariation);
+    }
+  }
+  
+  function produceResponse(userMessage, model, category) {
+    // Get appropriate response array
+    let responseArray = aiResponses[model]?.[category] || aiResponses['pulse-standard'][category];
+    
+    // If no matching category, use general responses
+    if (!responseArray) {
+      responseArray = aiResponses[model]?.general || aiResponses['pulse-standard'].general;
+    }
+    
+    // If still no responses, use default
+    if (!responseArray || responseArray.length === 0) {
+      responseArray = defaultResponses;
+    }
+    
+    // Select random response
+    const selectedResponse = responseArray[Math.floor(Math.random() * responseArray.length)];
+    
+    // Generate more detailed response based on input
+    let aiResponse = selectedResponse;
+    
+    // For more realistic responses, add some content based on user message
+    if (userMessage.toLowerCase().includes('what is') || userMessage.toLowerCase().includes('how does')) {
+      aiResponse += "\n\nBased on my knowledge, ";
+      
+      if (userMessage.length > 20) {
+        aiResponse += userMessage.charAt(0).toLowerCase() + userMessage.slice(1).replace('?', '') + ' involves several key concepts. ';
+      }
+      
+      // Add length based on response length setting
+      if (responseLengthSetting === 'detailed' || responseLengthSetting === 'comprehensive') {
+        aiResponse += "Let me break this down in detail:\n\n";
+        aiResponse += "1. The primary aspect is understanding the fundamental principles.\n";
+        aiResponse += "2. There are several important factors to consider.\n";
+        
+        if (responseLengthSetting === 'comprehensive') {
+          aiResponse += "3. Historical context provides additional insights.\n";
+          aiResponse += "4. Practical applications demonstrate real-world relevance.\n";
+          aiResponse += "5. Recent developments have expanded our understanding.\n\n";
+          aiResponse += "Would you like me to elaborate on any specific aspect?";
+        }
+      }
+    } else if (userMessage.toLowerCase().includes('can you') || userMessage.toLowerCase().includes('how to')) {
+      aiResponse += "\n\nI'd be happy to help with that. ";
+      
+      if (responseLengthSetting === 'detailed' || responseLengthSetting === 'comprehensive') {
+        aiResponse += "Here's a step-by-step approach:\n\n";
+        aiResponse += "1. First, you'll need to identify your specific requirements.\n";
+        aiResponse += "2. Next, consider the available resources and constraints.\n";
+        
+        if (responseLengthSetting === 'comprehensive') {
+          aiResponse += "3. Develop a structured plan with clear milestones.\n";
+          aiResponse += "4. Implement your solution with attention to detail.\n";
+          aiResponse += "5. Review and iterate to improve results.\n\n";
+          aiResponse += "Would you like more specific guidance on any of these steps?";
+        }
+      }
+    }
+    
+    // Add citations if enabled
+    if (citationsEnabled && (responseLengthSetting === 'detailed' || responseLengthSetting === 'comprehensive')) {
+      aiResponse += "\n\nSources:\n";
+      aiResponse += "[1] Johnson et al. (2023). Advanced Concepts in AI Communication.\n";
+      aiResponse += "[2] NeuroPulse Technical Documentation (2024).\n";
+    }
+    
+    // Display the final response
+    setAiTypingStatus(false);
+    displayMessage('ai', aiResponse, true);
+    
+    aiResponseTimeout = null;
+  }
+  
+  function handleSendMessage() {
+    if (!messageInput) return;
+    
+    const messageText = messageInput.value.trim();
+    
+    if (messageText && !isAiTyping) {
+      displayMessage('user', messageText);
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      updateSendButtonState();
+      getAIResponse(messageText);
+    } else if (!messageText) {
+      // Visual feedback for empty message
+      messageInput.classList.add('shake');
+      setTimeout(() => messageInput.classList.remove('shake'), 500);
+    }
+  }
+  
+  function clearChat() {
+    if (!messagesList) return;
+    
+    // Animate message fadeout
+    const messages = messagesList.querySelectorAll('.message');
+    messages.forEach((message, index) => {
+      setTimeout(() => {
+        message.style.opacity = '0';
+        message.style.transform = 'translateY(-10px)';
+      }, index * 50);
+    });
+    
+    // Clear after animation
+    setTimeout(() => {
+      messagesList.innerHTML = '';
+      displayAIWelcomeMessage();
+      // Return some tokens as a bonus
+      animateTokenSaving(200);
+    }, messages.length * 50 + 300);
+  }
+  
+  // --- Utility Functions ---
+  
+  function showToast(title, message, type = 'info', duration = 4000) {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.querySelector('.toast-container');
+    
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.classList.add('toast-container');
+      document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.classList.add('toast', type);
+    
+    // Set icon based on type
+    let icon = 'info-circle';
+    if (type === 'success') icon = 'check-circle';
+    if (type === 'error') icon = 'exclamation-circle';
+    if (type === 'warning') icon = 'exclamation-triangle';
+    
+    toast.innerHTML = `
+      <div class="toast-icon">
+        <i class="fas fa-${icon}"></i>
+      </div>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-message">${message}</div>
+      </div>
+      <button class="toast-close">
+        <i class="fas fa-times"></i>
+      </button>
+    `;
+    
+    // Add the toast to the container
+    toastContainer.appendChild(toast);
+    
+    // Add close button functionality
+    toast.querySelector('.toast-close').addEventListener('click', () => {
+      closeToast(toast);
+    });
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+      closeToast(toast);
+    }, duration);
+  }
+  
+  function closeToast(toast) {
+    toast.classList.add('closing');
+    
+    // Remove after animation completes
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.parentElement.removeChild(toast);
+      }
+    }, 300);
+  }
+  
+  function animateTokenUsage(amount) {
+    if (!tokenCount) return;
+    
+    // Cap at remaining tokens
+    const usageAmount = Math.min(amount, userTokens);
+    
+    if (usageAmount <= 0) {
+      showToast('Out of Tokens', 'You have used all your tokens. Consider upgrading your plan.', 'warning');
+      return;
+    }
+    
+    // Update tokens with animation
+    const startValue = userTokens;
+    const endValue = userTokens - usageAmount;
+    const duration = 1000;
+    const startTime = performance.now();
+    
+    function updateTokenAnimation(currentTime) {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / duration, 1);
+      
+      // Easing function (ease-out cubic)
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      
+      const currentValue = Math.floor(startValue - (usageAmount * easedProgress));
+      userTokens = currentValue;
+      
+      // Update display
+      tokenCount.textContent = userTokens.toLocaleString();
+      
+      if (progress < 1) {
+        requestAnimationFrame(updateTokenAnimation);
+      }
+    }
+    
+    requestAnimationFrame(updateTokenAnimation);
+    
+    // Show warning if tokens are low
+    if (endValue < 1000) {
+      showToast('Low Tokens', 'You are running low on tokens. Consider upgrading your plan.', 'warning');
+    }
+  }
+  
+  function animateTokenSaving(amount) {
+    if (!tokenCount) return;
+    
+    const startValue = userTokens;
+    const endValue = userTokens + amount;
+    const duration = 1000;
+    const startTime = performance.now();
+    
+    function updateTokenAnimation(currentTime) {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / duration, 1);
+      
+      // Easing function (ease-out cubic)
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      
+      const currentValue = Math.floor(startValue + (amount * easedProgress));
+      userTokens = currentValue;
+      
+      // Update display
+      tokenCount.textContent = userTokens.toLocaleString();
+      
+      if (progress < 1) {
+        requestAnimationFrame(updateTokenAnimation);
+      }
+    }
+    
+    requestAnimationFrame(updateTokenAnimation);
+    
+    showToast('Tokens Added', `${amount} tokens have been added to your account`, 'success');
+  }
+  
+  function updateTokenDisplay() {
+    if (!tokenCount) return;
+    tokenCount.textContent = userTokens.toLocaleString();
+  }
+  
+  function readAloud(text) {
+    if (!text || !window.speechSynthesis) return;
+    
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    
+    window.speechSynthesis.speak(utterance);
+    
+    showToast('Text-to-Speech', 'Reading message aloud', 'info');
+  }
+  
+  function hexToRgb(hex) {
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Parse hex
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    return { r, g, b };
+  }
+  
+  function lightenColor(color, amount) {
+    return {
+      r: Math.min(255, color.r + amount),
+      g: Math.min(255, color.g + amount),
+      b: Math.min(255, color.b + amount)
+    };
+  }
+  
+  function darkenColor(color, amount) {
+    return {
+      r: Math.max(0, color.r - amount),
+      g: Math.max(0, color.g - amount),
+      b: Math.max(0, color.b - amount)
+    };
+  }
+  
+  // --- Event Listeners ---
+  
+  function setupEventListeners() {
+    // Custom cursor movement
+    if (neoCursor) {
+      document.addEventListener('mousemove', (e) => {
+        if (!customCursor) return;
+        
+        // Smooth cursor following
+        neoCursor.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+      });
+      
+      // Cursor interactions
+      document.addEventListener('mousedown', () => {
+        if (!customCursor) return;
+        cursorRing.style.transform = 'scale(0.9)';
+      });
+      
+      document.addEventListener('mouseup', () => {
+        if (!customCursor) return;
+        cursorRing.style.transform = 'scale(1)';
+      });
+      
+      // Detect interactive elements
+      document.querySelectorAll('button, a, input, textarea, select').forEach(el => {
+        el.addEventListener('mouseenter', () => {
+          if (!customCursor) return;
+          cursorRing.style.width = '50px';
+          cursorRing.style.height = '50px';
+          cursorRing.style.borderColor = `rgba(var(--accent), 0.8)`;
+        });
+        
+        el.addEventListener('mouseleave', () => {
+          if (!customCursor) return;
+          cursorRing.style.width = '40px';
+          cursorRing.style.height = '40px';
+          cursorRing.style.borderColor = `rgba(var(--primary), 0.8)`;
+        });
+      });
+    }
+    
+    // Chat functionality
+    if (sendButton) {
+      sendButton.addEventListener('click', handleSendMessage);
+    }
+    
+    if (messageInput) {
+      messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSendMessage();
+        }
+      });
+      
+      messageInput.addEventListener('input', updateSendButtonState);
+    }
+    
+    // Suggestion chips
+    if (suggestionChips) {
+      suggestionChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          if (!messageInput) return;
+          messageInput.value = chip.textContent || chip.querySelector('span:last-child').textContent;
+          messageInput.style.height = 'auto';
+          messageInput.style.height = messageInput.scrollHeight + 'px';
+          updateSendButtonState();
+          messageInput.focus();
+        });
+      });
+    }
+    
+    // File upload
+    if (uploadButton && fileUpload) {
+      uploadButton.addEventListener('click', () => {
+        fileUpload.click();
+      });
+      
+      fileUpload.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          const fileNames = Array.from(e.target.files).map(file => file.name).join(', ');
+          showToast('Files Uploaded', `${e.target.files.length} file(s) ready to analyze`, 'success');
+          
+          if (messageInput) {
+            messageInput.value += (messageInput.value ? '\n' : '') + `[Attached files: ${fileNames}]`;
+            messageInput.style.height = 'auto';
+            messageInput.style.height = messageInput.scrollHeight + 'px';
+            updateSendButtonState();
+          }
+        }
+      });
+    }
+    
+    // New chat button
+    if (newChatButton) {
+      newChatButton.addEventListener('click', clearChat);
+    }
+    
+    // Model selector
+    if (modelSelector) {
+      modelSelector.addEventListener('change', (e) => {
+        selectedModel = e.target.value;
+        showToast('Model Changed', `Now using ${e.target.options[e.target.selectedIndex].text}`, 'info');
+      });
+    }
+    
+    // Theme toggle
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        themePanel.classList.toggle('visible');
+        overlay.classList.toggle('visible');
+      });
+    }
+    
+    if (themePanelClose) {
+      themePanelClose.addEventListener('click', () => {
+        themePanel.classList.remove('visible');
+        overlay.classList.remove('visible');
+      });
+    }
+    
+    // Theme selection
+    if (themeItems) {
+      themeItems.forEach(item => {
+        item.addEventListener('click', () => {
+          setTheme(item.dataset.theme);
+        });
+      });
+    }
+    
+    // Settings panel
+    if (settingsToggle) {
+      settingsToggle.addEventListener('click', () => {
+        settingsPanel.classList.add('visible');
+        overlay.classList.add('visible');
+      });
+    }
+    
+    if (settingsClose) {
+      settingsClose.addEventListener('click', () => {
+        settingsPanel.classList.remove('visible');
+        overlay.classList.remove('visible');
+      });
+    }
+    
+    // Overlay click to close panels
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        settingsPanel.classList.remove('visible');
+        themePanel.classList.remove('visible');
+        overlay.classList.remove('visible');
+      });
+    }
+    
+    // Tab navigation in settings
+    if (tabButtons) {
+      tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const tabName = button.dataset.tab;
+          
+          // Update active tab button
+          tabButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          
+          // Show selected tab content
+          tabContents.forEach(content => {
+            content.classList.toggle('active', content.dataset.tab === tabName);
+          });
+          
+          currentTab = tabName;
+        });
+      });
+    }
+    
+    // Theme options in settings
+    if (themeOptions) {
+      themeOptions.forEach(option => {
+        option.addEventListener('click', () => {
+          setTheme(option.dataset.theme);
+        });
+      });
+    }
+    
+    // Custom theme application
+    if (applyCustomThemeBtn) {
+      applyCustomThemeBtn.addEventListener('click', applyCustomTheme);
+    }
+    
+    // Toggle switches
+    if (extendedThinkingToggle) {
+      extendedThinkingToggle.addEventListener('click', () => {
+        extendedThinking = !extendedThinking;
+        extendedThinkingToggle.setAttribute('aria-pressed', extendedThinking.toString());
+        showToast('Extended Thinking', extendedThinking ? 'Extended thinking mode enabled' : 'Extended thinking mode disabled', 'info');
+      });
+    }
+    
+    if (memoryToggle) {
+      memoryToggle.addEventListener('click', () => {
+        memoryEnabled = !memoryEnabled;
+        memoryToggle.setAttribute('aria-pressed', memoryEnabled.toString());
+        showToast('Memory', memoryEnabled ? 'Conversation memory enabled' : 'Conversation memory disabled', 'info');
+      });
+    }
+    
+    if (citationsToggle) {
+      citationsToggle.addEventListener('click', () => {
+        citationsEnabled = !citationsEnabled;
+        citationsToggle.setAttribute('aria-pressed', citationsEnabled.toString());
+        showToast('Citations', citationsEnabled ? 'Citations enabled' : 'Citations disabled', 'info');
+      });
+    }
+    
+    if (perspectiveToggle) {
+      perspectiveToggle.addEventListener('click', () => {
+        perspective3d = !perspective3d;
+        perspectiveToggle.setAttribute('aria-pressed', perspective3d.toString());
+        updatePerspectiveMode();
+        showToast('3D Effects', perspective3d ? '3D perspective effects enabled' : '3D perspective effects disabled', 'info');
+      });
+    }
+    
+    if (cursorToggle) {
+      cursorToggle.addEventListener('click', () => {
+        customCursor = !customCursor;
+        cursorToggle.setAttribute('aria-pressed', customCursor.toString());
+        updateCursorSettings();
+        showToast('Custom Cursor', customCursor ? 'Custom cursor enabled' : 'Custom cursor disabled', 'info');
+      });
+    }
+    
+    if (bgEffectsToggle) {
+      bgEffectsToggle.addEventListener('click', () => {
+        backgroundEffects = !backgroundEffects;
+        bgEffectsToggle.setAttribute('aria-pressed', backgroundEffects.toString());
+        bgElements.style.opacity = backgroundEffects ? '1' : '0';
+        showToast('Background Effects', backgroundEffects ? 'Background effects enabled' : 'Background effects disabled', 'info');
+      });
+    }
+    
+    // Animation level selector
+    if (animationLevel) {
+      animationLevel.addEventListener('change', (e) => {
+        animationSetting = e.target.value;
+        showToast('Animation', `Animation level set to ${animationSetting}`, 'info');
+      });
+    }
+    
+    // Text size buttons
+    if (sizeButtons) {
+      sizeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          updateTextSize(button.dataset.size);
+          showToast('Text Size', `Text size set to ${button.dataset.size}`, 'info');
+        });
+      });
+    }
+    
+    // Font family selector
+    if (fontFamily) {
+      fontFamily.addEventListener('change', (e) => {
+        updateFontFamily(e.target.value);
+        showToast('Font', `Font changed to ${e.target.value}`, 'info');
+      });
+    }
+    
+    // Response length selector
+    if (responseLength) {
+      responseLength.addEventListener('change', (e) => {
+        responseLengthSetting = e.target.value;
+        showToast('Response Length', `AI responses will now be ${e.target.value}`, 'info');
+      });
+    }
+    
+    // Creativity slider
+    if (creativitySlider) {
+      creativitySlider.addEventListener('input', (e) => {
+        creativityLevel = parseInt(e.target.value);
+      });
+      
+      creativitySlider.addEventListener('change', (e) => {
+        showToast('Creativity', `AI creativity level set to ${creativityLevel}%`, 'info');
+      });
+    }
+    
+    // Model cards
+    if (modelCards) {
+      modelCards.forEach(card => {
+        card.addEventListener('click', () => {
+          // Remove active from all cards
+          modelCards.forEach(c => c.classList.remove('active'));
+          
+          // Add active to selected card
+          card.classList.add('active');
+          
+          // Get model name
+          const modelName = card.querySelector('h4').textContent.toLowerCase().replace(' ', '-');
+          
+          // Update model selector if it exists
+          if (modelSelector) {
+            for (let i = 0; i < modelSelector.options.length; i++) {
+              if (modelSelector.options[i].value === modelName) {
+                modelSelector.selectedIndex = i;
+                selectedModel = modelName;
+                break;
+              }
+            }
+          } else {
+            selectedModel = modelName;
+          }
+          
+          showToast('Model Changed', `Now using ${card.querySelector('h4').textContent}`, 'info');
+        });
+      });
+    }
+  }
+  
+  // Initialize the application
+  initializeUI();
+  setupEventListeners();
+});
+       </script>
+</body>
+</html>

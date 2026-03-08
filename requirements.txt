@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+python-multipart
 python-dotenv
 requests
 groq
@@ -13,7 +14,7 @@ beautifulsoup4
 lxml
 rake-nltk
 nltk
-serpapi-python
+google-search-results
 python-docx
 tldextract
 python-dateutil
@@ -24,3 +25,9 @@ apscheduler
 stable-baselines3
 gym
 markdown2
+neo4j>=6.1.0
+langsmith
+numpy>=1.23.5,<2.3.0
+scipy
+chromadb
+sentence-transformers

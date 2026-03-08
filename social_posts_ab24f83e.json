@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Get ready to glow! Shop our wide range of beauty & cosmetics online @Sephora #Sephora #BeautyOnline #Ecommerce",
+      "length": 280,
+      "call_to_action": "Shop Now",
+      "hashtags": [
+        "#Sephora",
+        "#Beauty",
+        "#Cosmetics"
+      ]
+    },
+    "instagram": {
+      "copy": "Discover your new favorite beauty products at Sephora! With a wide range of cosmetics and skincare products from top brands, you'll find everything you need to enhance your beauty routine. From makeup must-haves to skincare solutions, shop our online platform now and get ready to glow! #Sephora #BeautyLovers #SkincareEnthusiasts #EcommerceBeauty",
+      "length": 300,
+      "call_to_action": "Shop Our Online Store",
+      "hashtags": [
+        "#Sephora",
+        "#Beauty",
+        "#Skincare",
+        "#EcommerceBeauty"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a beautifully arranged Sephora store with various cosmetics and skincare products on display",
+    "A close-up photorealistic image of a happy customer trying out a new lipstick shade at Sephora"
+  ],
+  "meta": {
+    "brand_name": "Sephora",
+    "location": "N/A",
+    "industry": "E-commerce Beauty and Cosmetics Retailer",
+    "generated_at": "2026-03-04T14:27:47.927859Z"
+  }
+}

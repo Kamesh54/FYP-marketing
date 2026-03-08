@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Ready to glow? We can definitely use that image in post generation! High-quality, simple, and affordable skincare solutions from The Ordinary #TheOrdinary #EcommerceSkincare #SkincareLovers",
+      "length": 280,
+      "call_to_action": "Shop Now",
+      "hashtags": [
+        "#TheOrdinary",
+        "#EcommerceSkincare",
+        "#SkincareSolutions"
+      ]
+    },
+    "instagram": {
+      "copy": "Hey, beauty lovers! We'd love to use that image in post generation! The Ordinary offers simple and effective skincare solutions at affordable prices. What are your favorite products from our range? #TheOrdinary #EcommerceSkincare #SkincareRoutine",
+      "length": 300,
+      "call_to_action": "Explore Our Range",
+      "hashtags": [
+        "#TheOrdinary",
+        "#EcommerceSkincare",
+        "#SkincareLovers",
+        "#BeautyOnABudget"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person with glowing skin holding a skincare product from The Ordinary",
+    "A photorealistic image of a skincare routine setup with products from The Ordinary and a cityscape in the background"
+  ],
+  "meta": {
+    "brand_name": "The Ordinary",
+    "location": "N/A",
+    "industry": "E-commerce Skincare and Beauty",
+    "generated_at": "2026-03-04T16:27:17.108647Z"
+  }
+}

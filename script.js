@@ -40,6 +40,88 @@ document.addEventListener("DOMContentLoaded", () => {
     chatWindow.scrollTop = chatWindow.scrollHeight // Auto-scroll to bottom
   }
 
+  function renderResponseOptions(options) {
+    if (!options || !options.length) return
+    const container = document.createElement("div")
+    container.classList.add("option-card-container")
+
+    options.forEach((option) => {
+      const card = document.createElement("div")
+      card.classList.add("option-card")
+
+      const header = document.createElement("div")
+      header.classList.add("option-header")
+      header.textContent = option.label
+
+      const meta = document.createElement("div")
+      meta.classList.add("option-meta")
+      meta.textContent = `${option.tone || "Custom"} · ${option.cost_display || ""} · ${option.workflow_name || ""}`
+
+      const preview = document.createElement("div")
+      preview.classList.add("option-preview")
+      preview.textContent = option.preview_text || "Toggle the preview link below to inspect the draft."
+
+      card.appendChild(header)
+      card.appendChild(meta)
+      card.appendChild(preview)
+
+      if (option.preview_url) {
+        const link = document.createElement("a")
+        link.href = `${API_BASE_URL}${option.preview_url}`
+        link.target = "_blank"
+        link.rel = "noreferrer"
+        link.textContent = "Open preview"
+        link.classList.add("option-link")
+        card.appendChild(link)
+      }
+
+      const button = document.createElement("button")
+      button.classList.add("select-option-btn")
+      button.textContent = "Use this option"
+      button.addEventListener("click", () => selectWorkflowOption(option.option_id, container, button))
+      card.appendChild(button)
+
+      container.appendChild(card)
+    })
+
+    chatWindow.appendChild(container)
+    chatWindow.scrollTop = chatWindow.scrollHeight
+  }
+
+  async function selectWorkflowOption(optionId, container, button) {
+    if (!optionId || button.disabled) return
+    const initialLabel = button.textContent
+    button.disabled = true
+    button.textContent = "Selecting..."
+    try {
+      const response = await fetch(`${API_BASE_URL}/workflow/select`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ option_id: optionId, session_id: sessionId }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      appendMessage("assistant", data.message || "Selection recorded.")
+
+      container.querySelectorAll("button").forEach((btn) => {
+        btn.disabled = true
+        btn.classList.add("option-btn-disabled")
+      })
+      container.classList.add("option-card-container--selected")
+    } catch (error) {
+      console.error("Error selecting option:", error)
+      button.disabled = false
+      button.textContent = initialLabel
+      appendMessage("assistant", "Couldn't record that selection. Please try again.")
+    }
+  }
+
   async function sendMessage() {
     const message = chatInput.value.trim()
     if (!message) return
@@ -62,6 +144,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const data = await response.json()
       appendMessage("assistant", data.response)
+      if (data.response_options && data.response_options.length) {
+        renderResponseOptions(data.response_options)
+      }
 
       if (data.html_report_url) {
         const reportLink = `<a href="${API_BASE_URL}${data.html_report_url}" target="_blank">View Report</a>`

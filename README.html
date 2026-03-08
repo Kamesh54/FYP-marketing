@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Multi-Agent Content Marketing Platform - AI-powered content generation, SEO analysis, and marketing automation">
+    <title>Multi-Agent Content Marketing Platform - Documentation</title>
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary-color: #8b5cf6;
+            --accent-color: #ec4899;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1e293b;
+            --dark-surface: #334155;
+            --light-bg: #f8fafc;
+            --light-surface: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--light-bg);
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        body.dark-mode {
+            background: var(--dark-bg);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .card {
+            background: var(--dark-surface);
+            border-color: #475569;
+        }
+
+        body.dark-mode code {
+            background: #1e293b;
+            color: #f1f5f9;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            z-index: 10000;
+            transition: width 0.1s ease;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 2rem 0;
+            box-shadow: var(--shadow-lg);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 1rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.6rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        /* Navigation */
+        nav {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 0;
+            margin-top: 1rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--light-surface);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card h2 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card h3 {
+            color: var(--secondary-color);
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            font-size: 1.4rem;
+        }
+
+        .card h4 {
+            color: var(--text-primary);
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        body.dark-mode .card h2 {
+            color: #818cf8;
+        }
+
+        body.dark-mode .card h3 {
+            color: #a78bfa;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+
+        .badge-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .badge-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .badge-warning {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .badge-info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* Code Blocks */
+        code {
+            background: #f1f5f9;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: var(--danger-color);
+        }
+
+        pre {
+            background: #1e293b;
+            color: #f1f5f9;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            box-shadow: var(--shadow);
+        }
+
+        pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: var(--light-surface);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        body.dark-mode table {
+            background: var(--dark-surface);
+        }
+
+        th {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tr:hover {
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        /* Architecture Diagram */
+        .architecture {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+            border-radius: 1rem;
+            color: white;
+            margin: 2rem 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+
+        .architecture pre {
+            background: transparent;
+            color: white;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            border: 2px solid rgba(99, 102, 241, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .feature-card h4 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Back to Top */
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-4px);
+            background: var(--primary-dark);
+        }
+
+        .back-to-top.visible {
+            display: flex;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--dark-bg);
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 4rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .nav-links {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        /* TOC */
+        .toc {
+            background: rgba(99, 102, 241, 0.1);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .toc ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .toc a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .toc a:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+
+    <header>
+        <div class="header-content">
+            <h1>🚀 Multi-Agent Content Marketing Platform</h1>
+            <p class="subtitle">AI-Powered Content Generation, SEO Analysis & Marketing Automation</p>
+            <div class="header-actions">
+                <a href="#quick-start" class="btn btn-primary">Quick Start</a>
+                <a href="#installation" class="btn btn-secondary">Installation</a>
+                <button class="theme-toggle" id="themeToggle" title="Toggle Dark Mode">🌙</button>
+            </div>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#architecture">Architecture</a></li>
+                    <li><a href="#installation">Installation</a></li>
+                    <li><a href="#configuration">Configuration</a></li>
+                    <li><a href="#usage">Usage</a></li>
+                    <li><a href="#api">API Reference</a></li>
+                    <li><a href="#agents">Agents</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Overview -->
+        <section id="overview" class="card fade-in">
+            <h2>📋 Overview</h2>
+            <p>
+                The <strong>Multi-Agent Content Marketing Platform</strong> is an advanced, AI-powered system that automates 
+                content creation, SEO analysis, competitor research, and social media marketing. Built with a microservices 
+                architecture, it uses multiple specialized agents working together to deliver comprehensive marketing solutions.
+            </p>
+            <p>
+                The platform leverages cutting-edge technologies including Large Language Models (LLMs), Multi-Agent Bayesian 
+                Optimization (MABO), reinforcement learning, and intelligent routing to optimize content generation workflows 
+                and maximize marketing ROI.
+            </p>
+
+            <h3>Key Highlights</h3>
+            <ul>
+                <li>🤖 <strong>Multi-Agent System:</strong> Specialized agents for different marketing tasks</li>
+                <li>🧠 <strong>AI-Powered:</strong> Uses Groq LLM (Moonshot AI) for intelligent content generation</li>
+                <li>📊 <strong>MABO Framework:</strong> Multi-Agent Bayesian Optimization for workflow optimization</li>
+                <li>🔍 <strong>SEO Analysis:</strong> Comprehensive SEO auditing and keyword research</li>
+                <li>📱 <strong>Social Media:</strong> Automated content creation for multiple platforms</li>
+                <li>📈 <strong>Analytics:</strong> Real-time metrics collection and performance monitoring</li>
+                <li>🔐 <strong>Secure:</strong> JWT-based authentication and session management</li>
+            </ul>
+        </section>
+
+        <!-- Features -->
+        <section id="features" class="card fade-in">
+            <h2>✨ Features</h2>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>📝 Blog Generation</h4>
+                    <p>Generate SEO-optimized blog posts with premium HTML design, including reading progress bars, table of contents, dark mode, and advanced animations.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔍 SEO Analysis</h4>
+                    <p>Comprehensive SEO auditing with keyword analysis, competitor research, and actionable recommendations.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📱 Social Media</h4>
+                    <p>Create engaging social media content for Twitter, Instagram, Reddit, and more with platform-specific optimization.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🎯 Competitor Analysis</h4>
+                    <p>Identify content gaps, analyze competitor strategies, and discover new opportunities.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🧠 Intelligent Routing</h4>
+                    <p>AI-powered intent recognition routes user queries to the appropriate agents automatically.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📊 Performance Metrics</h4>
+                    <p>Track content performance, engagement rates, and ROI with comprehensive analytics.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>💰 Budget Optimization</h4>
+                    <p>MABO framework optimizes budget allocation across campaigns using Bayesian optimization.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔄 Workflow Automation</h4>
+                    <p>Automated workflows for content creation, approval, and publishing with background job processing.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture -->
+        <section id="architecture" class="card fade-in">
+            <h2>🏗️ System Architecture</h2>
+            
+            <h3>Layered Architecture</h3>
+            <div class="architecture">
+                <pre>
+┌─────────────────────────────────────────────────────────────┐
+│              PRESENTATION LAYER                              │
+│  • Frontend (Next.js)  • HTML Dashboards  • API Endpoints   │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│              ORCHESTRATION LAYER                             │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │         Orchestrator (FastAPI :8004)                │    │
+│  │  • JWT Auth  • Session Mgmt  • Intent Routing     │    │
+│  │  • MABO Agent  • Workflow Orchestration            │    │
+│  └──────┬──────────┬──────────┬──────────┬────────────┘    │
+└─────────┼──────────┼──────────┼──────────┼─────────────────┘
+          │          │          │          │
+┌─────────▼──────────▼──────────▼──────────▼─────────────────┐
+│                    AGENT LAYER                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  Web     │  │ Keyword │  │Competitor│  │ Content  │   │
+│  │ Crawler  │  │Extractor│  │   Gap    │  │  Agent   │   │
+│  │  :8000   │  │  :8001  │  │  :8002  │  │  :8003  │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   SEO    │  │  Reddit  │  │ Metrics  │  │  MABO    │   │
+│  │  Agent   │  │  Agent   │  │Collector │  │ Framework│   │
+│  │  :5000   │  │  :8010  │  │(Internal)│  │(Internal)│   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    DATA LAYER                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   SQLite DB  │  │  Cache Layer │  │  File System │      │
+│  │  • Users     │  │  • API Cache │  │  • Images    │      │
+│  │  • Sessions  │  │  • Responses │  │  • Previews │      │
+│  │  • Content   │  │              │  │  • Reports   │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+            </div>
+
+            <h3>Communication Patterns</h3>
+            <ul>
+                <li><strong>Job-Based:</strong> Agents communicate via job IDs for async operations</li>
+                <li><strong>Direct API Calls:</strong> Synchronous requests for immediate responses</li>
+                <li><strong>Event-Driven:</strong> Background tasks and scheduled jobs</li>
+            </ul>
+        </section>
+
+        <!-- Installation -->
+        <section id="installation" class="card fade-in">
+            <h2>⚙️ Installation</h2>
+
+            <h3>Prerequisites</h3>
+            <ul>
+                <li>Python 3.8+</li>
+                <li>Node.js 18+ (for frontend)</li>
+                <li>SQLite (included with Python)</li>
+                <li>API Keys (see Configuration section)</li>
+            </ul>
+
+            <h3>Step 1: Clone Repository</h3>
+            <pre><code>git clone &lt;repository-url&gt;
+cd FYP</code></pre>
+
+            <h3>Step 2: Install Python Dependencies</h3>
+            <pre><code>pip install -r requirements.txt</code></pre>
+
+            <p>Or use the automated installer:</p>
+            <pre><code>python install_dependencies.py</code></pre>
+
+            <h3>Step 3: Install Frontend Dependencies</h3>
+            <pre><code>cd frontend
+npm install
+# or
+pnpm install</code></pre>
+
+            <h3>Step 4: Configure Environment</h3>
+            <p>Create a <code>.env</code> file in the root directory (see Configuration section).</p>
+
+            <h3>Step 5: Initialize Database</h3>
+            <pre><code>python -c "import database; database.initialize_database()"</code></pre>
+        </section>
+
+        <!-- Configuration -->
+        <section id="configuration" class="card fade-in">
+            <h2>🔧 Configuration</h2>
+
+            <h3>Environment Variables</h3>
+            <p>Create a <code>.env</code> file with the following variables:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Description</th>
+                        <th>Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>GROQ_API_KEY</code></td>
+                        <td>Groq API key for LLM (Moonshot AI)</td>
+                        <td><span class="badge badge-success">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>SERPAPI_API_KEY</code></td>
+                        <td>SerpAPI key for search results</td>
+                        <td><span class="badge badge-success">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>RUNWAY_API_KEY</code></td>
+                        <td>Runway API for image generation</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>TWITTER_API_KEY</code></td>
+                        <td>Twitter API credentials</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>INSTAGRAM_USERNAME</code></td>
+                        <td>Instagram account username</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>INSTAGRAM_PASSWORD</code></td>
+                        <td>Instagram account password</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS_ACCESS_KEY_ID</code></td>
+                        <td>AWS S3 access key</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS_SECRET_ACCESS_KEY</code></td>
+                        <td>AWS S3 secret key</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS_S3_BUCKET_NAME</code></td>
+                        <td>S3 bucket name</td>
+                        <td><span class="badge badge-warning">Optional</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>JWT_SECRET</code></td>
+                        <td>Secret key for JWT tokens</td>
+                        <td><span class="badge badge-success">Yes</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Example .env File</h3>
+            <pre><code># Required
+GROQ_API_KEY=your_groq_api_key_here
+SERPAPI_API_KEY=your_serpapi_key_here
+JWT_SECRET=your_jwt_secret_here
+
+# Optional
+RUNWAY_API_KEY=your_runway_key_here
+TWITTER_API_KEY=your_twitter_key_here
+TWITTER_API_SECRET=your_twitter_secret_here
+INSTAGRAM_USERNAME=your_instagram_username
+INSTAGRAM_PASSWORD=your_instagram_password
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_S3_BUCKET_NAME=your_bucket_name</code></pre>
+        </section>
+
+        <!-- Quick Start -->
+        <section id="quick-start" class="card fade-in">
+            <h2>🚀 Quick Start</h2>
+
+            <h3>Starting All Services</h3>
+            <p>Use the automated startup script:</p>
+            <pre><code># Windows
+start_all_services.bat
+
+# Linux/Mac
+python start_all_services.py</code></pre>
+
+            <p>Or start services individually:</p>
+            <pre><code># Terminal 1: Web Crawler
+python webcrawler.py
+
+# Terminal 2: Keyword Extractor
+python keywordExtraction.py
+
+# Terminal 3: Gap Analyzer
+python CompetitorGapAnalyzerAgent.py
+
+# Terminal 4: Content Agent
+python content_agent.py
+
+# Terminal 5: SEO Agent
+python seo_agent.py
+
+# Terminal 6: Reddit Agent
+python reddit_agent.py
+
+# Terminal 7: Orchestrator
+python orchestrator.py</code></pre>
+
+            <h3>Accessing the Platform</h3>
+            <ul>
+                <li><strong>Orchestrator API:</strong> <code>http://localhost:8004</code></li>
+                <li><strong>Frontend:</strong> <code>http://localhost:3000</code> (if running Next.js)</li>
+                <li><strong>API Docs:</strong> <code>http://localhost:8004/docs</code> (Swagger UI)</li>
+            </ul>
+
+            <h3>First Steps</h3>
+            <ol>
+                <li>Sign up for an account via <code>POST /auth/signup</code></li>
+                <li>Login to get JWT token via <code>POST /auth/login</code></li>
+                <li>Start a chat session via <code>POST /chat</code></li>
+                <li>Try: "Generate a blog post about AI trends"</li>
+            </ol>
+        </section>
+
+        <!-- Usage -->
+        <section id="usage" class="card fade-in">
+            <h2>📖 Usage Guide</h2>
+
+            <h3>1. Authentication</h3>
+            <pre><code># Sign Up
+curl -X POST http://localhost:8004/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "SecurePass123"}'
+
+# Login
+curl -X POST http://localhost:8004/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "SecurePass123"}'
+
+# Response includes JWT token
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user_id": 1,
+  "email": "user@example.com",
+  "expires_at": "2024-12-20T12:00:00"
+}</code></pre>
+
+            <h3>2. Chat Interface</h3>
+            <pre><code># Start a conversation
+curl -X POST http://localhost:8004/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "message": "Generate a blog post about sustainable technology",
+    "session_id": null
+  }'</code></pre>
+
+            <h3>3. Content Approval</h3>
+            <pre><code># Approve generated content
+curl -X POST http://localhost:8004/content/{content_id}/approve \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"approved": true}'</code></pre>
+        </section>
+
+        <!-- API Reference -->
+        <section id="api" class="card fade-in">
+            <h2>📡 API Reference</h2>
+
+            <h3>Authentication Endpoints</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>POST</code></td>
+                        <td><code>/auth/signup</code></td>
+                        <td>Register new user</td>
+                    </tr>
+                    <tr>
+                        <td><code>POST</code></td>
+                        <td><code>/auth/login</code></td>
+                        <td>User login</td>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/auth/me</code></td>
+                        <td>Get current user info</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Chat & Content Endpoints</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>POST</code></td>
+                        <td><code>/chat</code></td>
+                        <td>Main chat interface</td>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/sessions</code></td>
+                        <td>List user sessions</td>
+                    </tr>
+                    <tr>
+                        <td><code>POST</code></td>
+                        <td><code>/content/{id}/approve</code></td>
+                        <td>Approve content</td>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/content/{id}/preview</code></td>
+                        <td>Preview content</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Metrics & Analytics</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/metrics/dashboard</code></td>
+                        <td>Get analytics dashboard</td>
+                    </tr>
+                    <tr>
+                        <td><code>GET</code></td>
+                        <td><code>/mabo/stats</code></td>
+                        <td>Get MABO optimization stats</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Full API Documentation:</strong> Visit <code>http://localhost:8004/docs</code> for interactive Swagger UI.</p>
+        </section>
+
+        <!-- Agents -->
+        <section id="agents" class="card fade-in">
+            <h2>🤖 Agent Documentation</h2>
+
+            <h3>Agent Ports & Services</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Port</th>
+                        <th>File</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Web Crawler</strong></td>
+                        <td><code>8000</code></td>
+                        <td><code>webcrawler.py</code></td>
+                        <td>Website content extraction</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Keyword Extractor</strong></td>
+                        <td><code>8001</code></td>
+                        <td><code>keywordExtraction.py</code></td>
+                        <td>SEO keyword extraction</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Gap Analyzer</strong></td>
+                        <td><code>8002</code></td>
+                        <td><code>CompetitorGapAnalyzerAgent.py</code></td>
+                        <td>Competitor analysis</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Content Agent</strong></td>
+                        <td><code>8003</code></td>
+                        <td><code>content_agent.py</code></td>
+                        <td>Blog & social content generation</td>
+                    </tr>
+                    <tr>
+                        <td><strong>SEO Agent</strong></td>
+                        <td><code>5000</code></td>
+                        <td><code>seo_agent.py</code></td>
+                        <td>SEO analysis & reporting</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Reddit Agent</strong></td>
+                        <td><code>8010</code></td>
+                        <td><code>reddit_agent.py</code></td>
+                        <td>Reddit content & engagement</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Orchestrator</strong></td>
+                        <td><code>8004</code></td>
+                        <td><code>orchestrator.py</code></td>
+                        <td>Main coordination service</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Key Components</h3>
+            <ul>
+                <li><strong>MABO Framework:</strong> Multi-Agent Bayesian Optimization for workflow optimization</li>
+                <li><strong>Intelligent Router:</strong> AI-powered intent recognition and routing</li>
+                <li><strong>Performance Monitor:</strong> Real-time metrics collection and analysis</li>
+                <li><strong>Budget Allocator:</strong> Optimized budget distribution across campaigns</li>
+                <li><strong>Feedback Analyzer:</strong> Learning from content performance</li>
+            </ul>
+
+            <p>For detailed agent documentation, see the <code>docs/</code> directory.</p>
+        </section>
+
+        <!-- Project Structure -->
+        <section id="structure" class="card fade-in">
+            <h2>📁 Project Structure</h2>
+            <pre><code>FYP/
+├── agents/                    # Agent microservices
+│   ├── webcrawler.py         # Web crawling service
+│   ├── keywordExtraction.py  # Keyword extraction
+│   ├── CompetitorGapAnalyzerAgent.py  # Competitor analysis
+│   ├── content_agent.py      # Content generation
+│   ├── seo_agent.py          # SEO analysis
+│   └── reddit_agent.py       # Reddit integration
+│
+├── core/                      # Core framework
+│   ├── orchestrator.py       # Main orchestrator
+│   ├── mabo_framework.py     # MABO optimization
+│   ├── mabo_agent.py         # MABO agent
+│   ├── intelligent_router.py # Intent routing
+│   └── database.py           # Database layer
+│
+├── frontend/                  # Next.js frontend
+│   ├── app/                  # App router pages
+│   ├── components/           # React components
+│   └── lib/                  # Utilities
+│
+├── docs/                     # Documentation
+│   ├── README.md            # Main docs index
+│   ├── AGENT_ARCHITECTURE.md # Architecture guide
+│   └── [agent]_README.md    # Individual agent docs
+│
+├── database/                 # SQLite database
+├── cache/                    # API response cache
+├── generated_images/         # Generated images
+├── previews/                 # Content previews
+├── reports/                  # SEO reports
+│
+├── requirements.txt          # Python dependencies
+├── .env                      # Environment variables
+└── README.html              # This file</code></pre>
+        </section>
+
+        <!-- Technologies -->
+        <section id="technologies" class="card fade-in">
+            <h2>🛠️ Technologies</h2>
+
+            <h3>Backend</h3>
+            <ul>
+                <li><strong>FastAPI:</strong> Modern Python web framework</li>
+                <li><strong>Groq:</strong> LLM API (Moonshot AI - Kimi K2)</li>
+                <li><strong>SQLite:</strong> Lightweight database</li>
+                <li><strong>JWT:</strong> Authentication tokens</li>
+                <li><strong>APScheduler:</strong> Background job scheduling</li>
+            </ul>
+
+            <h3>AI & ML</h3>
+            <ul>
+                <li><strong>MABO Framework:</strong> Multi-Agent Bayesian Optimization</li>
+                <li><strong>Reinforcement Learning:</strong> Workflow optimization</li>
+                <li><strong>LLM:</strong> Moonshot AI (Kimi K2) for content generation</li>
+            </ul>
+
+            <h3>Frontend</h3>
+            <ul>
+                <li><strong>Next.js:</strong> React framework</li>
+                <li><strong>TypeScript:</strong> Type-safe JavaScript</li>
+                <li><strong>Tailwind CSS:</strong> Utility-first CSS</li>
+            </ul>
+
+            <h3>External Services</h3>
+            <ul>
+                <li><strong>SerpAPI:</strong> Search engine results</li>
+                <li><strong>Runway:</strong> Image generation</li>
+                <li><strong>AWS S3:</strong> Cloud storage</li>
+                <li><strong>Twitter API:</strong> Social media posting</li>
+                <li><strong>Instagram API:</strong> Social media posting</li>
+            </ul>
+        </section>
+
+        <!-- Contributing -->
+        <section id="contributing" class="card fade-in">
+            <h2>🤝 Contributing</h2>
+            <p>Contributions are welcome! Please follow these guidelines:</p>
+            <ol>
+                <li>Fork the repository</li>
+                <li>Create a feature branch (<code>git checkout -b feature/amazing-feature</code>)</li>
+                <li>Commit your changes (<code>git commit -m 'Add amazing feature'</code>)</li>
+                <li>Push to the branch (<code>git push origin feature/amazing-feature</code>)</li>
+                <li>Open a Pull Request</li>
+            </ol>
+
+            <h3>Code Style</h3>
+            <ul>
+                <li>Follow PEP 8 for Python code</li>
+                <li>Use type hints where possible</li>
+                <li>Write docstrings for functions and classes</li>
+                <li>Add comments for complex logic</li>
+            </ul>
+        </section>
+
+        <!-- License -->
+        <section id="license" class="card fade-in">
+            <h2>📄 License</h2>
+            <p>This project is part of a Final Year Project (FYP). Please refer to your institution's guidelines for usage and distribution.</p>
+        </section>
+
+        <!-- Support -->
+        <section id="support" class="card fade-in">
+            <h2>💬 Support</h2>
+            <p>For issues, questions, or contributions:</p>
+            <ul>
+                <li>Check the <code>docs/</code> directory for detailed documentation</li>
+                <li>Review agent-specific README files</li>
+                <li>Check API documentation at <code>/docs</code> endpoint</li>
+            </ul>
+        </section>
+    </div>
+
+    <button class="back-to-top" id="backToTop" title="Back to Top">↑</button>
+
+    <footer>
+        <p>&copy; 2024 Multi-Agent Content Marketing Platform. Built with ❤️ for FYP.</p>
+        <p>Powered by FastAPI, Next.js, and AI</p>
+    </footer>
+
+    <script>
+        // Progress Bar
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('progressBar').style.width = scrolled + '%';
+        });
+
+        // Back to Top
+        const backToTop = document.getElementById('backToTop');
+        window.addEventListener('scroll', () => {
+            if (window.pageYOffset > 300) {
+                backToTop.classList.add('visible');
+            } else {
+                backToTop.classList.remove('visible');
+            }
+        });
+
+        backToTop.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // Dark Mode Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const savedTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            themeToggle.textContent = '☀️';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+
+        // Smooth Scroll for Anchor Links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Intersection Observer for Fade-in Animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>
+

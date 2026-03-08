@@ -1,0 +1,174 @@
+{
+    "company_info": {
+        "name": "The Ordinary",
+        "url": "",
+        "product_description": "E-commerce Skincare and Beauty in None. The Ordinary is an e-commerce skincare and beauty company that offers a wide range of high-quality products. They focus on providing simple, effective, and affordable skincare solutions. The company prioritizes creating engaging content and optimizing their website for a seamless user experience."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "and",
+            "skincare",
+            "commerce skincare",
+            "skincare and",
+            "and beauty",
+            "commerce",
+            "beauty",
+            "the",
+            "company",
+            "beauty in",
+            "in none",
+            "none the",
+            "the ordinary",
+            "ordinary is",
+            "is an",
+            "an commerce",
+            "beauty company",
+            "company that",
+            "that offers",
+            "offers wide",
+            "wide range",
+            "range of",
+            "of high",
+            "high quality",
+            "quality products"
+        ],
+        "long_tail_keywords": [
+            "commerce skincare and beauty",
+            "commerce skincare and",
+            "skincare and beauty",
+            "skincare and beauty in",
+            "and beauty in none",
+            "beauty in none the",
+            "in none the ordinary",
+            "none the ordinary is",
+            "the ordinary is an",
+            "ordinary is an commerce",
+            "is an commerce skincare",
+            "an commerce skincare and",
+            "skincare and beauty company",
+            "and beauty company that",
+            "beauty company that offers",
+            "company that offers wide",
+            "that offers wide range",
+            "offers wide range of",
+            "wide range of high",
+            "range of high quality",
+            "of high quality products",
+            "high quality products they",
+            "quality products they focus",
+            "products they focus on",
+            "they focus on providing"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 3,
+        "competitor_details": [
+            {
+                "name": "MyRoutine AI Skin Analysis Tool | Skincare Quiz",
+                "url": "https://www.laroche-posay.us/find-your-routine/myroutine-ai-analysis.html?srsltid=AfmBOoq9F8g9Vjd94I70_8kFQkmHza3J3ZusDIb0EX_YgRmjphMQNEnL",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "SkinSort: Discover Skincare Products & Routines",
+                "url": "https://skinsort.com/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "KosmetikOn: Free cosmetic formulation software",
+                "url": "https://kosmetikon.io/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 10
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "allows laboratories",
+                "labify kosmetikon",
+                "vertical integration",
+                "kosmetikon",
+                "rate quality",
+                "sustainable way",
+                "automates processes",
+                "cosmetic laboratories",
+                "single pack",
+                "specific needs"
+            ],
+            "long_tail": [
+                "manufacture safer cosmetics",
+                "software company oriented",
+                "cosmetic industry formulation",
+                "made collaboration easier",
+                "necessary documentation automatically",
+                "higher level !\"",
+                "makes us different",
+                "revolutionizing cosmetics analytics",
+                "help companies develop",
+                "business management software"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "and",
+                "skincare",
+                "commerce skincare",
+                "skincare and",
+                "and beauty",
+                "commerce",
+                "beauty",
+                "the",
+                "company",
+                "beauty in"
+            ],
+            "long_tail": [
+                "commerce skincare and beauty",
+                "commerce skincare and",
+                "skincare and beauty",
+                "skincare and beauty in",
+                "and beauty in none",
+                "beauty in none the",
+                "in none the ordinary",
+                "none the ordinary is",
+                "the ordinary is an",
+                "ordinary is an commerce"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "allows laboratories",
+                "labify kosmetikon",
+                "vertical integration",
+                "kosmetikon",
+                "rate quality"
+            ],
+            "long_tail": [
+                "manufacture safer cosmetics",
+                "software company oriented",
+                "cosmetic industry formulation",
+                "made collaboration easier",
+                "necessary documentation automatically"
+            ]
+        },
+        "recommendations": [
+            "Optimize website content to include missing short and long-tail keywords",
+            "Create engaging content around unique company keywords",
+            "Utilize long-tail keywords in product descriptions and blog posts",
+            "Develop a content strategy focused on 'sustainable way' and 'cosmetic laboratories'",
+            "Leverage 'allows laboratories' and 'labify kosmetikon' in meta tags and titles"
+        ],
+        "competitive_insights": [
+            "Competitors are focusing on 'vertical integration' and 'automates processes', indicating a trend towards streamlining operations",
+            "The presence of 'software company oriented' and 'business management software' suggests a shift towards technology-driven solutions in the cosmetics industry",
+            "The company's unique keywords, such as 'skincare and beauty in none', can be leveraged to create a distinct brand identity"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

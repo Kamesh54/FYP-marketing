@@ -1,0 +1,186 @@
+{
+    "company_info": {
+        "name": "Sephora",
+        "url": "",
+        "product_description": "E-commerce Beauty and Cosmetics Retailer in None. Sephora is an e-commerce beauty and cosmetics retailer that offers a wide range of products from various brands. They provide an online platform for customers to purchase beauty and cosmetic products. Sephora aims to provide a seamless shopping experience for its customers."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "beauty and",
+            "beauty",
+            "and",
+            "commerce beauty",
+            "and cosmetics",
+            "cosmetics retailer",
+            "commerce",
+            "cosmetics",
+            "retailer",
+            "sephora",
+            "an",
+            "products",
+            "provide",
+            "for",
+            "customers",
+            "to",
+            "retailer in",
+            "in none",
+            "none sephora",
+            "sephora is",
+            "is an",
+            "an commerce",
+            "retailer that",
+            "that offers",
+            "offers wide"
+        ],
+        "long_tail_keywords": [
+            "commerce beauty and cosmetics",
+            "beauty and cosmetics retailer",
+            "commerce beauty and",
+            "beauty and cosmetics",
+            "and cosmetics retailer",
+            "and cosmetics retailer in",
+            "cosmetics retailer in none",
+            "retailer in none sephora",
+            "in none sephora is",
+            "none sephora is an",
+            "sephora is an commerce",
+            "is an commerce beauty",
+            "an commerce beauty and",
+            "and cosmetics retailer that",
+            "cosmetics retailer that offers",
+            "retailer that offers wide",
+            "that offers wide range",
+            "offers wide range of",
+            "wide range of products",
+            "range of products from",
+            "of products from various",
+            "products from various brands",
+            "from various brands they",
+            "various brands they provide",
+            "brands they provide an"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "Integrated eCommerce solution for beauty brands",
+                "url": "https://www.shopline.com/solutions/beauty",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "Start a Health and Beauty Online Marketplace with ...",
+                "url": "https://www.cs-cart.com/solution-for-beauty",
+                "short_keywords_count": 4,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "Haut.AI: Science-Backed AI Skin Analysis Solutions for Beauty",
+                "url": "https://haut.ai/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 11
+            },
+            {
+                "name": "Ecommerce Platforms 2025: Top Fragrance Sites Reviewed",
+                "url": "https://freeyourself.com/blogs/news/top-fragrance-ecommerce-platforms?srsltid=AfmBOorsDzzgCfwCYQU18K0voyNFWM_ajeDF2BDtUF6JBaiCZOaGZjnE",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Birchbox: Beauty Subscriptions and More",
+                "url": "https://www.birchbox.com/?srsltid=AfmBOopc1n1w9wfbowBN73WIxUuOPue7Lzawe7xpuUDExax7-M4usHU9",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 7
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "growth",
+                "breakout brands",
+                "amazon haut",
+                "flexible pricing",
+                "right products",
+                "undecided shoppers",
+                "reliable delivery",
+                "ais clinically",
+                "medium businesses",
+                "viral moments"
+            ],
+            "long_tail": [
+                "let us build",
+                "authenticity remain key drivers",
+                "products company legal stay",
+                "first purchase unisex fragrance",
+                "driven fragrance sales rose",
+                "rigorous training practices",
+                "help ulta stay relevant",
+                "players enter international markets",
+                "model effectively beyond europe",
+                "sites revamped mobile ux"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "beauty and",
+                "and",
+                "commerce beauty",
+                "and cosmetics",
+                "cosmetics retailer",
+                "commerce",
+                "cosmetics",
+                "retailer",
+                "sephora",
+                "an"
+            ],
+            "long_tail": [
+                "commerce beauty and cosmetics",
+                "beauty and cosmetics retailer",
+                "commerce beauty and",
+                "beauty and cosmetics",
+                "and cosmetics retailer",
+                "and cosmetics retailer in",
+                "cosmetics retailer in none",
+                "retailer in none sephora",
+                "in none sephora is",
+                "none sephora is an"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "growth",
+                "breakout brands",
+                "amazon haut",
+                "flexible pricing",
+                "right products"
+            ],
+            "long_tail": [
+                "let us build",
+                "authenticity remain key drivers",
+                "products company legal stay",
+                "first purchase unisex fragrance",
+                "driven fragrance sales rose"
+            ]
+        },
+        "recommendations": [
+            "Optimize product pages for 'breakout brands' and 'viral moments' to attract new customers",
+            "Utilize 'flexible pricing' and 'reliable delivery' in marketing campaigns to increase conversions",
+            "Create content targeted at 'undecided shoppers' to improve brand awareness",
+            "Leverage 'growth' and 'medium businesses' keywords to attract B2B partnerships",
+            "Develop a mobile-friendly website with a revamped UX to cater to changing consumer behavior"
+        ],
+        "competitive_insights": [
+            "Competitors are leveraging 'growth' and 'breakout brands' keywords to attract new customers",
+            "Sephora can capitalize on 'authenticity' and 'rigorous training practices' to establish trust with customers",
+            "The use of 'ais clinically' and 'amazon haut' suggests a focus on clinical and Amazon-related keywords by competitors"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

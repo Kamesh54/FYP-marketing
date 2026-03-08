@@ -14,6 +14,15 @@ from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from groq import Groq
 
+# Knowledge graph context (optional — gracefully disabled if Neo4j is unavailable)
+try:
+    from graph.graph_context import get_brand_knowledge_context, format_kg_context_for_prompt
+    KG_AVAILABLE = True
+except Exception:
+    KG_AVAILABLE = False
+    def get_brand_knowledge_context(brand_name): return {"available": False}  # noqa
+    def format_kg_context_for_prompt(ctx): return ""  # noqa
+
 from fastapi.responses import FileResponse
 # Load env
 load_dotenv()
@@ -75,6 +84,7 @@ class GenerateSocialResponse(BaseModel):
 class GenerateBlogRequest(BaseModel):
     business_details: str
     keywords: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
+    variant_label: Optional[str] = None
     keywords_job_id: Optional[str] = None
     crawled_content: Optional[Dict[str, Any]] = None # For existing websites
     gap_analysis: Optional[Dict[str, Any]] = None
@@ -129,13 +139,18 @@ def normalize_keywords_input(keywords: Optional[Dict[str, Any]], keywords_job_id
         return {"source": "extractor_job", "data": data}
     raise ValueError("Either 'keywords' or 'keywords_job_id' must be provided.")
 
-def safe_groq_chat(prompt: str, model: str = "llama-3.3-70b-versatile", timeout: int = 120) -> Dict[str, Any]:
+def safe_groq_chat(prompt: str, model: str = "llama-3.3-70b-versatile", timeout: int = 120,
+                   system_instruction: Optional[str] = None) -> Dict[str, Any]:
     """Call Groq aiming for strict JSON. If that fails, retry without response_format and sanitize output."""
     logger.info("Calling Groq (strict JSON)...")
+    messages: List[Dict[str, str]] = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    messages.append({"role": "user", "content": prompt})
     try:
         resp = groq_client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             response_format={"type": "json_object"}
         )
         try:
@@ -156,9 +171,13 @@ def safe_groq_chat(prompt: str, model: str = "llama-3.3-70b-versatile", timeout:
         # Retry without response_format if server rejected strict JSON (e.g., json_validate_failed)
         logger.warning(f"Groq strict JSON request failed: {e}. Retrying without response_format...")
         relaxed_prompt = prompt + "\n\nReturn ONLY a valid JSON object. No prose, no code fences."
+        _retry_messages: List[Dict[str, str]] = []
+        if system_instruction:
+            _retry_messages.append({"role": "system", "content": system_instruction})
+        _retry_messages.append({"role": "user", "content": relaxed_prompt})
         resp2 = groq_client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": relaxed_prompt}],
+            messages=_retry_messages,
         )
         text = resp2.choices[0].message.content or ""
         # Sanitize to JSON
@@ -234,7 +253,8 @@ def build_social_prompt(
     target_audience: Optional[str] = None,
     unique_selling_points: Optional[List[str]] = None,
     competitor_insights: Optional[str] = None,
-    user_request: Optional[str] = None
+    user_request: Optional[str] = None,
+    kg_context: Optional[str] = None
 ) -> str:
     keywords_str = json.dumps(keywords_obj, ensure_ascii=False)[:15000]
     brand = brand_name or "My Business"
@@ -253,7 +273,8 @@ Unique Selling Points: {', '.join(unique_selling_points) if unique_selling_point
 
 === COMPETITOR INSIGHTS ===
 {competitor_insights or 'Stand out with unique value proposition'}
-"""
+
+{kg_context or ''}"""
     
     prompt = f"""
 You are an expert social media content creator for brand marketing.
@@ -309,13 +330,51 @@ IMPORTANT: Return ONLY valid JSON. No extra text, explanations, or markdown form
 """
     return prompt
 
-def build_blog_prompt(business_details: str, keywords_obj: Dict[str, Any], crawled_content: Optional[Dict[str, Any]], gap_analysis: Optional[Dict[str, Any]], target_tone: str, blog_length: str) -> str:
+def build_blog_prompt(business_details: str, keywords_obj: Dict[str, Any], crawled_content: Optional[Dict[str, Any]], gap_analysis: Optional[Dict[str, Any]], target_tone: str, blog_length: str, variant_label: Optional[str] = None, kg_context: Optional[str] = None) -> str:
     keywords_str = json.dumps(keywords_obj, ensure_ascii=False)[:15000]
     gap_str = json.dumps(gap_analysis, ensure_ascii=False)[:15000] if gap_analysis else "N/A"
     crawled_str = json.dumps(crawled_content, ensure_ascii=False)[:20000] if crawled_content else "N/A"
+    kg_str = kg_context or ""
+
+    # Determine CSS style based on variant - ENHANCED with next-level design
+    if variant_label and "Option A" in variant_label:
+        css_style_instruction = """
+   - Use a sophisticated, research-focused design with NEXT-LEVEL features:
+     * Deep, professional color scheme (navy blues, charcoal grays, accent with gold/amber)
+     * Elegant serif fonts for headings (Georgia, 'Times New Roman', or similar) with variable font weights
+     * Generous white space and wide margins with CSS Grid/Flexbox layouts
+     * Glassmorphism effects on cards (backdrop-filter: blur, semi-transparent backgrounds)
+     * Subtle gradients, multi-layered shadows, and depth with CSS transforms
+     * Academic/research paper aesthetic with refined typography and reading-friendly line heights
+     * Premium feel with sophisticated hover effects, scale transforms, and smooth transitions
+     * Data visualization-friendly color palette with gradient overlays
+     * Parallax scrolling effects for hero sections
+     * Advanced CSS animations using @keyframes for micro-interactions"""
+    elif variant_label and "Option B" in variant_label:
+        css_style_instruction = """
+   - Use a vibrant, conversion-focused design with NEXT-LEVEL features:
+     * Bold, energetic color scheme (bright blues, vibrant oranges, energetic greens) with gradient overlays
+     * Modern sans-serif fonts (Inter, 'Segoe UI', system fonts) with variable font weights
+     * Dynamic layouts with CSS Grid cards, masonry-style sections, and asymmetric designs
+     * Eye-catching call-to-action buttons with pulse animations, gradient backgrounds, and 3D hover effects
+     * Modern gradient backgrounds, animated gradients, and bold typography with text shadows
+     * Social media-friendly, shareable aesthetic with floating action buttons
+     * Conversion-optimized with prominent CTAs, sticky headers, and scroll-triggered animations
+     * Glassmorphism on navigation and cards
+     * Advanced hover states with transform and filter effects"""
+    else:
+        css_style_instruction = """
+   - Use a PREMIUM, next-level modern design with:
+     * Advanced CSS Grid and Flexbox for sophisticated layouts
+     * Modern color palette with CSS custom properties (variables) for theming
+     * Glassmorphism effects, gradient overlays, and backdrop filters
+     * Smooth animations, micro-interactions, and scroll-triggered effects
+     * Professional typography with optimal line heights and letter spacing
+     * Advanced shadows, borders, and depth effects
+     * Responsive design with mobile-first approach and breakpoint optimization"""
 
     prompt = f"""
-You are an expert blog post writer for SEO and content marketing, with advanced knowledge of HTML, CSS, and JavaScript for responsive design.
+You are an expert blog post writer for SEO and content marketing, with ADVANCED knowledge of modern HTML5, CSS3, and JavaScript (ES6+) for creating PREMIUM, next-level blog websites.
 
 Given the following information:
 - Business Details: {business_details}
@@ -323,37 +382,84 @@ Given the following information:
 - Competitor Gap Analysis (JSON): {gap_str}
 - Existing Website Content (JSON, if applicable): {crawled_str}
 
+{kg_str}
+
 Task:
-Generate a comprehensive blog post in **HTML format** enhanced with **CSS and JavaScript**.
-The blog post should:
-1. Content:
-   - Have an engaging and SEO-friendly title.
+Generate a COMPREHENSIVE, NEXT-LEVEL blog post in **HTML format** with PREMIUM design and advanced interactivity.
+
+1. CONTENT STRUCTURE:
+   - Create an engaging, SEO-friendly title with proper H1 tag.
+   - Include a compelling hero section with the title and a brief intro.
+   - Add a dynamic Table of Contents (TOC) that auto-generates from H2/H3 headings with smooth scroll navigation.
    - Include an introduction, several body paragraphs with relevant subheadings (H2, H3).
    - Incorporate the provided keywords naturally throughout the content.
    - Address insights from the competitor gap analysis to provide unique value.
-   - Conclude with a strong call to action.
-   - Use semantic HTML5 structure (<header>, <main>, <section>, <article>, <footer>).
+   - Add visually appealing blockquotes, lists, and code blocks (if applicable).
+   - Include a conclusion section with a strong, animated call-to-action button.
+   - Use semantic HTML5 structure (<header>, <nav>, <main>, <article>, <section>, <aside>, <footer>).
+   - Add proper meta tags for SEO (title, description, Open Graph tags).
 
-2. Design (CSS):
+2. PREMIUM DESIGN (CSS) - NEXT LEVEL:
    - Provide fully responsive CSS (mobile-first, scaling up to tablets and desktops).
-   - Use a clean, modern, and professional design with proper typography and spacing.
-   - Include a responsive navigation bar (collapsible into a hamburger menu on mobile).
-   - Style headings, paragraphs, call-to-action buttons, and blockquotes.
-   - Add hover effects and smooth transitions for interactive elements.
-   - Ensure accessibility (contrast, readable font sizes, ARIA roles if needed).
+{css_style_instruction}
+   - Include a STICKY, responsive navigation bar with glassmorphism effect (backdrop-filter: blur).
+   - Add a READING PROGRESS BAR at the top that fills as user scrolls (use CSS linear-gradient).
+   - Create a floating Table of Contents sidebar (desktop) or collapsible section (mobile).
+   - Style headings with gradient text effects, shadows, and smooth animations.
+   - Design premium call-to-action buttons with gradient backgrounds, hover animations, and 3D effects.
+   - Add glassmorphism cards for sections with backdrop-filter and semi-transparent backgrounds.
+   - Include smooth scroll behavior and parallax effects for hero sections.
+   - Add advanced hover effects: scale transforms, color transitions, shadow elevations.
+   - Create a dark mode toggle button with smooth theme transition.
+   - Style blockquotes with left border accent, italic text, and background highlights.
+   - Add social sharing buttons (Twitter, Facebook, LinkedIn) with hover animations.
+   - Include a "Back to Top" floating button with smooth fade-in/out and scroll animation.
+   - Add reading time calculator display near the title.
+   - Use CSS custom properties (variables) for theming and easy color changes.
+   - Implement advanced animations: fade-in, slide-up, scale-in using @keyframes.
+   - Add micro-interactions: button ripples, card lift effects, text highlight on scroll.
+   - Ensure accessibility: proper contrast ratios, ARIA labels, focus states, skip links.
 
-3. Interactivity (JavaScript):
-   - Include a working mobile navigation toggle (hamburger menu).
-   - Add smooth scroll functionality for internal links.
-   - Include a "Back to Top" button that appears on scroll.
-   - Add simple entrance animations (fade-in, slide-up) for sections when they enter the viewport.
+3. ADVANCED INTERACTIVITY (JavaScript):
+   - Implement a working mobile navigation toggle (hamburger menu with smooth animation).
+   - Add smooth scroll functionality for internal links and TOC navigation.
+   - Create a READING PROGRESS BAR that updates dynamically on scroll.
+   - Implement Intersection Observer API for scroll-triggered animations (fade-in sections).
+   - Add a "Back to Top" button that appears after scrolling 300px with smooth animation.
+   - Calculate and display READING TIME based on word count (average 200 words/minute).
+   - Generate Table of Contents automatically from H2/H3 headings with click-to-scroll.
+   - Implement DARK MODE toggle with localStorage persistence.
+   - Add social sharing functionality (Twitter, Facebook, LinkedIn) with proper URL encoding.
+   - Create smooth scroll behavior for all anchor links.
+   - Add scroll spy to highlight current section in TOC.
+   - Implement lazy loading for images (if any) using Intersection Observer.
+   - Add copy-to-clipboard functionality for code blocks (if present).
+   - Create smooth page transitions and entrance animations.
 
-4. Output:
-   - The final result must be valid HTML with embedded CSS (<style>) and JavaScript (<script>).
-   - Do NOT use external libraries (e.g., Bootstrap, jQuery). Use only vanilla CSS and JavaScript.
-   - Ensure the code is production-ready and optimized for performance.
+4. PREMIUM FEATURES TO INCLUDE:
+   - Hero section with gradient background and animated text.
+   - Sticky header that changes appearance on scroll.
+   - Floating action buttons for social sharing.
+   - Reading progress indicator at top of page.
+   - Table of contents with active section highlighting.
+   - Reading time display.
+   - Dark mode toggle with smooth transition.
+   - Smooth scroll behavior throughout.
+   - Advanced animations and micro-interactions.
+   - Responsive image handling (if images are included).
+   - Print-friendly styles using @media print.
+
+5. OUTPUT REQUIREMENTS:
+   - The final result must be valid HTML5 with embedded CSS (<style>) and JavaScript (<script>).
+   - Do NOT use external libraries (e.g., Bootstrap, jQuery, React). Use only vanilla CSS and JavaScript.
+   - Use modern JavaScript (ES6+): arrow functions, const/let, template literals, async/await if needed.
+   - Ensure the code is production-ready, optimized for performance, and follows best practices.
    - Target Tone: {target_tone}
    - Desired Length: {blog_length} (e.g., short: ~500 words, medium: ~1000 words, long: ~1500+ words)
+   - Include proper error handling in JavaScript.
+   - Optimize CSS with efficient selectors and avoid unnecessary specificity.
+
+CRITICAL: Create a STUNNING, PREMIUM, next-level blog design that rivals top-tier modern websites. Use advanced CSS techniques (Grid, Flexbox, Custom Properties, Animations, Transforms, Filters, Backdrop Filters). Make it visually impressive, highly interactive, and professional. The design should feel modern, polished, and engaging.
 
 Return ONLY a JSON object with a single key "html_content" containing the full HTML, CSS, and JS of the blog post.
 Example: {{"html_content": "<!DOCTYPE html><html>...</html>"}}
@@ -399,6 +505,17 @@ async def generate_social_background(
     jobs[job_id] = {"status": "running", "start_time": datetime.now()}
     save_path = None
     try:
+        # Pull brand memory from knowledge graph before generating
+        kg_context = ""
+        if brand_name:
+            try:
+                raw_ctx = get_brand_knowledge_context(brand_name)
+                kg_context = format_kg_context_for_prompt(raw_ctx)
+                if raw_ctx.get("available"):
+                    logger.info(f"KG context loaded for '{brand_name}': {raw_ctx.get('total_content_count', 0)} past pieces")
+            except Exception as kg_err:
+                logger.warning(f"KG context fetch failed (non-fatal): {kg_err}")
+
         prompt = build_social_prompt(
             keywords_obj, 
             platforms, 
@@ -411,26 +528,78 @@ async def generate_social_background(
             target_audience=target_audience,
             unique_selling_points=unique_selling_points,
             competitor_insights=competitor_insights,
-            user_request=user_request
+            user_request=user_request,
+            kg_context=kg_context
         )
-        generated = safe_groq_chat(prompt)
+
+        # ── Prompt Optimizer wiring ──────────────────────────────────────
+        _sys_instruction: Optional[str] = None
+        _prompt_version_id: Optional[str] = None
+        try:
+            from prompt_optimizer import register_prompt
+            from database import get_best_prompt as _db_best_prompt
+            # Only use an evolved (scored) prompt as system instruction — never seed templates
+            _best_row = _db_best_prompt("content_agent", "social_post")
+            if _best_row:
+                _sys_instruction = _best_row["prompt_text"]
+                logger.info("[PromptOptimizer] Using evolved system instruction for social_post")
+            _prompt_version_id = register_prompt("content_agent", "social_post", prompt)
+            logger.info(f"[PromptOptimizer] Registered social_post prompt version {_prompt_version_id}")
+        except Exception as _po_err:
+            logger.warning(f"[PromptOptimizer] Social wiring skipped: {_po_err}")
+        # ────────────────────────────────────────────────────────────────
+
+        generated = safe_groq_chat(prompt, system_instruction=_sys_instruction)
         if not isinstance(generated, dict) or "posts" not in generated:
             # fallback wrapper
             generated = {"posts": {}, "image_prompts": [], "meta": {"brand_name": brand_name, "generated_at": datetime.utcnow().isoformat()}, "raw": generated}
         save_path = f"social_posts_{job_id[:8]}.json"
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(generated, f, indent=2, ensure_ascii=False)
-        jobs[job_id].update({"status": "completed", "results_file": save_path, "posts": generated, "end_time": datetime.now()})
+        jobs[job_id].update({"status": "completed", "results_file": save_path, "posts": generated,
+                              "prompt_version_id": _prompt_version_id, "end_time": datetime.now()})
     except Exception as e:
         logger.error(f"Social generation job {job_id} failed: {e}")
         jobs[job_id].update({"status": "failed", "message": str(e), "end_time": datetime.now()})
 
-async def generate_blog_background(business_details: str, keywords_obj: Dict[str, Any], crawled_content: Optional[Dict[str, Any]], gap_analysis: Optional[Dict[str, Any]], target_tone: str, blog_length: str, job_id: str):
+async def generate_blog_background(business_details: str, keywords_obj: Dict[str, Any], crawled_content: Optional[Dict[str, Any]], gap_analysis: Optional[Dict[str, Any]], target_tone: str, blog_length: str, job_id: str, variant_label: Optional[str] = None):
     jobs[job_id] = {"status": "running", "start_time": datetime.now()}
     save_path = None
     try:
-        prompt = build_blog_prompt(business_details, keywords_obj, crawled_content, gap_analysis, target_tone, blog_length)
-        blog_response = safe_groq_chat(prompt)
+        # Pull brand memory from knowledge graph before generating
+        kg_context = ""
+        try:
+            import re
+            brand_match = re.search(r'(?:brand[_\s]*name|business[_\s]*name|company)[:\s]+([\w\s&\'\-\.]+)', business_details, re.IGNORECASE)
+            brand_name_hint = brand_match.group(1).strip()[:60] if brand_match else ""
+            if brand_name_hint:
+                raw_ctx = get_brand_knowledge_context(brand_name_hint)
+                kg_context = format_kg_context_for_prompt(raw_ctx)
+                if raw_ctx.get("available"):
+                    logger.info(f"KG context loaded for blog '{brand_name_hint}': {raw_ctx.get('total_content_count', 0)} past pieces")
+        except Exception as kg_err:
+            logger.warning(f"KG context fetch failed for blog (non-fatal): {kg_err}")
+
+        prompt = build_blog_prompt(business_details, keywords_obj, crawled_content, gap_analysis, target_tone, blog_length, variant_label, kg_context=kg_context)
+
+        # ── Prompt Optimizer wiring ──────────────────────────────────────
+        _sys_instruction_blog: Optional[str] = None
+        _prompt_version_id_blog: Optional[str] = None
+        try:
+            from prompt_optimizer import register_prompt
+            from database import get_best_prompt as _db_best_prompt_blog
+            # Only use an evolved (scored) prompt as system instruction — never seed templates
+            _best_blog_row = _db_best_prompt_blog("content_agent", "blog")
+            if _best_blog_row:
+                _sys_instruction_blog = _best_blog_row["prompt_text"]
+                logger.info("[PromptOptimizer] Using evolved system instruction for blog")
+            _prompt_version_id_blog = register_prompt("content_agent", "blog", prompt)
+            logger.info(f"[PromptOptimizer] Registered blog prompt version {_prompt_version_id_blog}")
+        except Exception as _po_err:
+            logger.warning(f"[PromptOptimizer] Blog wiring skipped: {_po_err}")
+        # ────────────────────────────────────────────────────────────────
+
+        blog_response = safe_groq_chat(prompt, system_instruction=_sys_instruction_blog)
         
         blog_html = blog_response.get("html_content", "")
         if not blog_html:
@@ -441,7 +610,8 @@ async def generate_blog_background(business_details: str, keywords_obj: Dict[str
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(blog_html)
         
-        jobs[job_id].update({"status": "completed", "results_file": save_path, "blog_html": blog_html, "end_time": datetime.now()})
+        jobs[job_id].update({"status": "completed", "results_file": save_path, "blog_html": blog_html,
+                              "prompt_version_id": _prompt_version_id_blog, "end_time": datetime.now()})
     except Exception as e:
         logger.error(f"Blog generation job {job_id} failed: {e}")
         jobs[job_id].update({"status": "failed", "message": str(e), "end_time": datetime.now()})
@@ -511,7 +681,8 @@ async def generate_blog(req: GenerateBlogRequest, background_tasks: BackgroundTa
         req.gap_analysis,
         req.target_tone,
         req.blog_length,
-        job_id
+        job_id,
+        req.variant_label
     )
     return GenerateBlogResponse(job_id=job_id, status="started", message="Blog generation started")
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Orchestrator Agent v5.0 - Multi-Agent ChatGPT-like Platform
 Intelligent routing, authentication, session management, RL optimization
 """
@@ -9,6 +9,7 @@ import time
 import logging
 import re
 import subprocess
+import math
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from urllib.parse import urlparse
@@ -16,7 +17,7 @@ from urllib.parse import urlparse
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, BackgroundTasks, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -26,16 +27,45 @@ from contextlib import asynccontextmanager
 import tweepy
 from instagrapi import Client as InstaClient
 from fastapi.middleware.cors import CORSMiddleware
-from langsmith import traceable
+
+# Optional: LangSmith tracing
+try:
+    from langsmith import traceable
+except ImportError:
+    # If langsmith not installed, create a no-op decorator
+    def traceable(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+from langsmith_tracer import (
+    trace_workflow, trace_llm, trace_agent,
+    get_current_run_id, record_feedback, record_critic_feedback,
+    tracer_status,
+)
 
 # Import new modules
 import auth
 import database as db
 import intelligent_router as router
 import cost_model
-import rl_agent
+import memory  # Added for memory persistence
+# import rl_agent  # Deprecated - replaced with MABO
+import mabo_agent
+import mabo_agent
 from scheduler import start_scheduler, get_scheduler_status
+
+# Import graph modules for knowledge graph integration
+try:
+    from graph import initialize_graph_db, close_graph_db, get_graph_queries, is_graph_db_available
+    from graph_routes import create_graph_routes
+    GRAPH_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"Graph database module not available: {e}")
+    GRAPH_AVAILABLE = False
+    create_graph_routes = None
 from metrics_collector import get_aggregated_metrics, collect_metrics_for_post, MetricsCollector
+from campaign_planner import CampaignPlannerAgent
 
 # --- Configuration & Setup ---
 load_dotenv()
@@ -56,15 +86,82 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 
 # --- Microservice Base URLs ---
-CRAWLER_BASE = "http://127.0.0.1:8000"
+CRAWLER_BASE           = "http://127.0.0.1:8000"
 KEYWORD_EXTRACTOR_BASE = "http://127.0.0.1:8001"
-GAP_ANALYZER_BASE = "http://127.0.0.1:8002"
-CONTENT_AGENT_BASE = "http://127.0.0.1:8003"
+GAP_ANALYZER_BASE      = "http://127.0.0.1:8002"
+CONTENT_AGENT_BASE     = "http://127.0.0.1:8003"
+IMAGE_AGENT_BASE       = "http://127.0.0.1:8005"
+BRAND_AGENT_BASE       = "http://127.0.0.1:8006"
+CRITIC_AGENT_BASE      = "http://127.0.0.1:8007"
+CAMPAIGN_AGENT_BASE    = "http://127.0.0.1:8008"
+REDDIT_AGENT_BASE      = "http://127.0.0.1:8010"
+
+
+def _call_reddit_research(keywords: list, brand_name: str, max_subreddits: int = 3) -> dict:
+    """Call Reddit research agent synchronously; returns insights dict or {} on failure."""
+    try:
+        r = requests.post(
+            f"{REDDIT_AGENT_BASE}/research",
+            json={
+                "keywords": keywords[:8],
+                "brand_name": brand_name,
+                "max_subreddits": max_subreddits,
+                "posts_per_sub": 6
+            },
+            timeout=45,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("available"):
+                insights = data.get("insights", {})
+                logger.info(
+                    f"Reddit research: {len(insights.get('trending_topics', []))} trends, "
+                    f"{len(insights.get('competitor_mentions', []))} competitors, "
+                    f"{data.get('post_count', 0)} posts analysed"
+                )
+                return insights
+    except Exception as e:
+        logger.warning(f"Reddit research failed (non-fatal): {e}")
+    return {}
+
+
+def _call_critic_sync(content_id: str, content_text: str, content_type: str,
+                     brand_name: str, original_intent: str) -> dict:
+    """Call the critic agent and return a score dict; returns {} silently on failure."""
+    import requests as _req
+    try:
+        resp = _req.post(
+            f"{CRITIC_AGENT_BASE}/critique",
+            json={
+                "content_id": content_id,
+                "content_text": content_text[:1000],
+                "content_type": content_type,
+                "brand_name": brand_name,
+                "original_intent": original_intent,
+                "session_id": "orchestrator-auto",
+            },
+            timeout=25,
+        )
+        if resp.status_code == 200:
+            d = resp.json()
+            return {
+                "overall": round(d.get("overall_score", 0), 3),
+                "intent": round(d.get("intent_score", 0), 2),
+                "brand": round(d.get("brand_score", 0), 2),
+                "quality": round(d.get("quality_score", 0), 2),
+                "passed": bool(d.get("passed", False)),
+                "text": d.get("critique_text", "")[:200],
+            }
+    except Exception as _critic_err:
+        logger.warning(f"Critic auto-call failed for {content_id}: {_critic_err}")
+    return {}
+RESEARCH_AGENT_BASE    = "http://127.0.0.1:8009"
 
 # --- Initialize Clients ---
 groq_client = Groq(api_key=GROQ_API_KEY)
 s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY) if AWS_ACCESS_KEY_ID else None
 insta_client = InstaClient()
+planner_agent = CampaignPlannerAgent()
 
 # --- Lifespan Context Manager ---
 @asynccontextmanager
@@ -75,14 +172,29 @@ async def lifespan(app: FastAPI):
     try:
         db.initialize_database()
         start_scheduler()
+        
+        # Initialize graph database
+        if GRAPH_AVAILABLE:
+            try:
+                initialize_graph_db()
+                logger.info("Graph database initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize graph database: {e}")
+        
         logger.info("Orchestrator started successfully")
     except Exception as e:
         logger.error(f"Startup error: {e}")
     
     yield  # Application runs
     
-    # Shutdown (if needed)
+    # Shutdown
     logger.info("Orchestrator shutting down...")
+    if GRAPH_AVAILABLE:
+        try:
+            close_graph_db()
+            logger.info("Graph database closed")
+        except Exception as e:
+            logger.warning(f"Error closing graph database: {e}")
 
 # --- App Setup ---
 app = FastAPI(title="Orchestrator Agent", version="5.0.0", lifespan=lifespan)
@@ -92,6 +204,29 @@ os.makedirs("reports", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("generated_images", exist_ok=True)
 os.makedirs("previews", exist_ok=True)
+
+# In-memory store for sessions awaiting platform choice (social posts)
+# Structure: {session_id: {"original_message": str, "timestamp": float}}
+_pending_platform: dict = {}
+
+
+def _detect_platform_from_text(text: str) -> Optional[str]:
+    """Return 'twitter' or 'instagram' if the text mentions one, else None."""
+    t = text.lower()
+    if any(k in t for k in ["twitter", " x ", "tweet", "x post", "on x"]):
+        return "twitter"
+    if any(k in t for k in ["instagram", "insta", " ig ", "ig post", "on ig"]):
+        return "instagram"
+    return None
+
+
+# Attach graph routes for knowledge graph insights
+if GRAPH_AVAILABLE and create_graph_routes:
+    try:
+        create_graph_routes(app, auth, db)
+        logger.info("Graph insight routes attached successfully")
+    except Exception as e:
+        logger.warning(f"Failed to attach graph routes: {e}")
 
 # ==================== PYDANTIC MODELS ====================
 
@@ -112,6 +247,7 @@ class AuthResponse(BaseModel):
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
+    active_brand: Optional[str] = None  # Brand name to use for this request
 
 class ChatResponse(BaseModel):
     session_id: str
@@ -120,6 +256,9 @@ class ChatResponse(BaseModel):
     intent: Optional[str] = None
     content_preview_id: Optional[str] = None
     workflow_cost: Optional[Dict] = None
+    response_options: Optional[List[Dict[str, Any]]] = None
+    clarification_request: Optional[Dict[str, Any]] = None
+    seo_result: Optional[Dict[str, Any]] = None
 
 class SessionResponse(BaseModel):
     id: str
@@ -131,7 +270,40 @@ class ContentApprovalRequest(BaseModel):
     approved: bool
     platform: Optional[str] = None  # For social posts
 
-# ==================== AUTHENTICATION ENDPOINTS ====================
+class WorkflowSelectionRequest(BaseModel):
+    session_id: str
+    option_id: str
+
+class CampaignSelectionRequest(BaseModel):
+    session_id: str
+    campaign_id: str
+    tier: str
+    theme: str
+    duration_days: int
+
+# â”€â”€ New models for HITL and workflow orchestration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class HitlRespondRequest(BaseModel):
+    decision: str               # approved | rejected | edited
+    edited_content: Optional[str] = None
+
+class WorkflowRunRequest(BaseModel):
+    intent: str
+    message: str
+    session_id: Optional[str] = None
+    brand_name: Optional[str] = None
+    params: Optional[Dict[str, Any]] = {}
+
+class SocialFeedbackRequest(BaseModel):
+    content_id: str
+    platform: str
+    reward: float               # 0.0â€“1.0
+
+class PromptEvolveRequest(BaseModel):
+    agent_name: str
+    context_type: str
+    feedback: str
+    current_score: float = 0.5
 
 @app.post("/auth/signup", response_model=AuthResponse)
 async def signup(req: SignupRequest):
@@ -322,6 +494,49 @@ async def update_session(session_id: str, title: str, authorization: str = Heade
         logger.error(f"Update session error: {e}")
         raise HTTPException(status_code=500, detail="Failed to update session")
 
+@app.post("/campaigns/select")
+async def select_campaign_tier(req: CampaignSelectionRequest, authorization: str = Header(None)):
+    """Handle campaign tier selection."""
+    try:
+        payload = auth.get_current_user(authorization)
+        user_id = payload['user_id']
+        
+        # Create campaign ID
+        campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
+        
+        # Create campaign in DB
+        db.create_campaign(
+            campaign_id=campaign_id,
+            user_id=user_id,
+            name=f"{req.theme} Campaign",
+            start_date=(datetime.now() + timedelta(days=1)).isoformat(),
+            end_date=(datetime.now() + timedelta(days=req.duration_days + 1)).isoformat(),
+            budget_tier=req.tier,
+            strategy=req.tier  # Using tier as strategy name for now
+        )
+        
+        # Generate agenda
+        agenda = planner_agent.generate_campaign_agenda(req.theme, req.duration_days, req.tier)
+        
+        # Save agenda to DB
+        for item in agenda:
+            db.add_campaign_agenda_item(
+                campaign_id=campaign_id,
+                scheduled_time=item["scheduled_time"],
+                action=item["action"],
+                metadata=item["metadata"]
+            )
+            
+        return {
+            "message": f"Campaign '{req.theme}' activated! First action scheduled for tomorrow.",
+            "campaign_id": campaign_id,
+            "agenda_count": len(agenda)
+        }
+        
+    except Exception as e:
+        logger.error(f"Campaign selection error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to activate campaign")
+
 # ==================== HELPER FUNCTIONS ====================
 
 def save_file_from_url(url: str, file_path: str) -> str:
@@ -360,9 +575,11 @@ def call_agent_job(
     url: str,
     payload: Dict,
     download_path_template: str = "/download/json/{job_id}",
-    result_format: str = "json"
+    result_format: str = "json",
+    session_id: Optional[str] = None
 ) -> Any:
     """Call an agent microservice and wait for result."""
+    start_time = time.time()
     try:
         # Start the job
         start_r = requests.post(url, json=payload, timeout=200)
@@ -386,7 +603,7 @@ def call_agent_job(
         logger.error(f"Error in {name}: {e}")
         raise
 
-@traceable(run_type="tool", name="📊 SEO Agent")
+@traceable(run_type="tool", name="ðŸ“Š SEO Agent")
 def run_seo_agent(url: str) -> str:
     """Run SEO analysis agent."""
     try:
@@ -396,6 +613,8 @@ def run_seo_agent(url: str) -> str:
             original_path = match.group(0)
             new_path = f"reports/{os.path.basename(original_path)}"
             if os.path.exists(original_path):
+                if os.path.exists(new_path):
+                    os.remove(new_path)  # Windows: remove first to allow rename
                 os.rename(original_path, new_path)
                 logger.info(f"SEO report saved to {new_path}")
             return new_path
@@ -405,15 +624,60 @@ def run_seo_agent(url: str) -> str:
         logger.error(f"Failed to run SEO agent. Stderr: {e.stderr}\nStdout: {e.stdout}")
         raise Exception(f"SEO Agent failed: {error_output}")
 
-@traceable(run_type="tool", name="🎨 RunwayML Image Gen")
+@traceable(run_type="tool", name="ðŸŽ¨ RunwayML Image Gen")
 def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]] = None) -> str:
-    """Generate image using Runway ML."""
+    """Generate image using Runway ML with S3 reference images."""
     if not RUNWAY_API_KEY:
         raise ValueError("RUNWAY_API_KEY not set.")
     headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}", "Content-Type": "application/json", "X-Runway-Version": "2024-11-06"}
     payload = {"promptText": prompt, "ratio": "1920:1080", "seed": int(datetime.now().timestamp()) % 4294967295, "model": "gen4_image"}
     if reference_images: 
-        payload["referenceImages"] = [{"uri": img} for img in reference_images]
+        # Process reference images - expect S3 URLs or HTTP/HTTPS URLs
+        processed_refs = []
+        for img in reference_images:
+            if not img:
+                continue
+            # Check if it's a URL (starts with http:// or https://)
+            if img.startswith(('http://', 'https://')):
+                # It's already a URL (S3 or other), use it directly
+                processed_refs.append(img)
+                logger.info(f"Using reference image URL: {img}")
+            elif os.path.exists(img) and os.path.isfile(img):
+                # Local file - upload to S3 first, then use S3 URL
+                try:
+                    logger.info(f"Uploading local reference image to S3: {img}")
+                    # Generate S3 key
+                    file_ext = os.path.splitext(img)[1]
+                    unique_id = uuid.uuid4().hex[:8]
+                    timestamp = datetime.now().strftime("%Y%m%d")
+                    s3_key = f"reference-images/{timestamp}_{unique_id}{file_ext}"
+                    
+                    # Determine content type
+                    content_type_map = {
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp'
+                    }
+                    content_type = content_type_map.get(file_ext.lower(), 'image/jpeg')
+                    
+                    # Upload to S3
+                    if s3_client and AWS_S3_BUCKET_NAME:
+                        s3_client.upload_file(img, AWS_S3_BUCKET_NAME, s3_key, ExtraArgs={'ContentType': content_type, 'ACL': 'public-read'})
+                        s3_url = f"https://{AWS_S3_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
+                        processed_refs.append(s3_url)
+                        logger.info(f"Local image uploaded to S3: {s3_url}")
+                    else:
+                        logger.warning(f"S3 not configured, skipping local file: {img}")
+                except Exception as upload_error:
+                    logger.warning(f"Failed to upload local image to S3: {upload_error}, skipping")
+            else:
+                logger.warning(f"Invalid reference image (not a URL or local file): {img}, skipping")
+        
+        if processed_refs:
+            payload["referenceImages"] = [{"uri": img} for img in processed_refs]
+            logger.info(f"Using {len(processed_refs)} reference image(s) for Runway generation")
     try:
         response = requests.post("https://api.dev.runwayml.com/v1/text_to_image", json=payload, headers=headers)
         response.raise_for_status()
@@ -460,7 +724,7 @@ def post_to_social(platform: str, text: str, image_path: str) -> str:
         logger.error(f"Social Post Error ({platform}): {e}")
         raise
 
-@traceable(run_type="tool", name="☁️ AWS S3 Hoster")
+@traceable(run_type="tool", name="â˜ï¸ AWS S3 Hoster")
 def host_on_s3(file_path: str, file_name: str, content_type: str = 'text/html') -> str:
     """Host file on AWS S3."""
     if not s3_client or not AWS_S3_BUCKET_NAME:
@@ -486,23 +750,103 @@ def normalize_brand_info(brand_info: Dict[str, Any]) -> Dict[str, Any]:
             "unique_selling_points": [],
             "website": ""
         }
-    
-    # If metadata exists (from DB), flatten it
-    if 'metadata' in brand_info and isinstance(brand_info['metadata'], dict):
-        metadata = brand_info['metadata']
-        return {
-            "brand_name": brand_info.get('brand_name', 'My Business'),
-            "location": brand_info.get('location'),
-            "contacts": brand_info.get('contacts'),
-            "industry": metadata.get('industry', 'General'),
-            "description": metadata.get('description', ''),
-            "target_audience": metadata.get('target_audience', ''),
-            "unique_selling_points": metadata.get('unique_selling_points', []),
-            "website": metadata.get('website', '')
-        }
-    
-    # Already flattened (from fresh extraction)
-    return brand_info
+
+    # Parse metadata JSON if it's a string
+    meta = brand_info.get('metadata', {})
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta) if meta else {}
+        except Exception:
+            meta = {}
+
+    _NORM_PLACEHOLDERS = {
+        "", "not specified", "not provided", "unknown", "n/a", "na",
+        "none", "null", "undefined", "your business", "my business",
+        "not available", "no name", "company name", "business name"
+    }
+
+    def _clean(val, default=''):
+        """Return val unless it's a placeholder, in which case return default."""
+        if val and str(val).strip().lower() not in _NORM_PLACEHOLDERS:
+            return str(val).strip()
+        return default
+
+    # Prefer direct DB columns; fall back to metadata JSON
+    def _pick(direct_key, meta_key=None, default=''):
+        v = brand_info.get(direct_key)
+        cleaned = _clean(v)
+        if cleaned:
+            return cleaned
+        return _clean(meta.get(meta_key or direct_key), default)
+
+    raw_name = brand_info.get('brand_name') or meta.get('brand_name', '')
+    brand_name_clean = _clean(raw_name, 'My Business')
+
+    return {
+        "brand_name":           brand_name_clean,
+        "location":             _clean(brand_info.get('location')) or _clean(meta.get('location')) or None,
+        "contacts":             _clean(brand_info.get('contacts')) or _clean(meta.get('contacts')) or None,
+        "industry":             _pick('industry', default='General'),
+        "description":          _pick('description'),
+        "target_audience":      _pick('target_audience'),
+        "tone":                 _pick('tone', default='professional'),
+        "tone_preference":      _pick('tone_preference'),
+        "tagline":              _pick('tagline'),
+        "website":              brand_info.get('website_url') or meta.get('website', ''),
+        "unique_selling_points": (
+            brand_info.get('unique_selling_points')
+            or meta.get('unique_selling_points', [])
+        ),
+        "colors":               brand_info.get('colors') or meta.get('colors', []),
+        "products_services":    meta.get('products_services', []),
+    }
+
+
+def _build_user_context_summary(user_id: int, brand_name: Optional[str] = None) -> str:
+    """
+    Build a plain-text summary of the user's stored brand profile.
+    Used to inject business context into LLM calls so the model never
+    needs to ask for details the user has already provided.
+    Returns an empty string when no profile is found.
+    """
+    try:
+        profile = db.get_brand_profile(user_id, brand_name)
+        if not profile:
+            return ""
+        b = normalize_brand_info(profile)
+        meta = profile.get('metadata', {})
+        if isinstance(meta, str):
+            try:
+                import json as _j; meta = _j.loads(meta) if meta else {}
+            except Exception:
+                meta = {}
+        parts = []
+        if b.get("brand_name") and b["brand_name"] != "My Business":
+            parts.append(f"Business Name: {b['brand_name']}")
+        if b.get("industry") and b["industry"] != "General":
+            parts.append(f"Industry: {b['industry']}")
+        if b.get("location"):
+            parts.append(f"Location: {b['location']}")
+        if b.get("description"):
+            parts.append(f"Description: {b['description']}")
+        if b.get("target_audience"):
+            parts.append(f"Target Audience: {b['target_audience']}")
+        if b.get("unique_selling_points"):
+            parts.append(f"Unique Selling Points: {', '.join(b['unique_selling_points'])}")
+        if b.get("website"):
+            parts.append(f"Website: {b['website']}")
+        # Include products/services extracted from the website
+        products = meta.get("products_services", [])
+        if products:
+            parts.append(f"Products / Services: {', '.join(products)}")
+        # Include a snippet of the crawled website content if available
+        website_content = meta.get("website_content", "")
+        if website_content:
+            parts.append(f"\n--- Crawled Website Content (first 1500 chars) ---\n{website_content[:1500]}")
+        return "\n".join(parts) if parts else ""
+    except Exception:
+        return ""
+
 
 async def extract_brand_info(user_id: int, user_input: str, url: Optional[str] = None, crawled_data: Optional[str] = None, conversation_history: Optional[List[Dict]] = None, force_new: bool = False) -> Dict[str, Any]:
     """Extract and save brand information using LLM from user input, conversation history, and/or crawled website data."""
@@ -511,8 +855,35 @@ async def extract_brand_info(user_id: int, user_input: str, url: Optional[str] =
         if not force_new:
             existing_profile = db.get_brand_profile(user_id)
             if existing_profile:
-                logger.info(f"Brand profile already exists for user {user_id}")
-                return normalize_brand_info(existing_profile)
+                # If a URL was provided, check whether it belongs to a DIFFERENT brand
+                if url:
+                    try:
+                        from urllib.parse import urlparse as _up
+                        new_domain = _up(url).netloc.replace('www.', '').lower().split('.')[0]
+                        # Check website_url column first, then metadata.website
+                        stored_website = existing_profile.get('website_url') or ''
+                        if not stored_website:
+                            meta = existing_profile.get('metadata')
+                            if isinstance(meta, str):
+                                import json as _json
+                                meta = _json.loads(meta) if meta else {}
+                            if isinstance(meta, dict):
+                                stored_website = meta.get('website', '')
+                        if stored_website:
+                            stored_domain = _up(stored_website).netloc.replace('www.', '').lower().split('.')[0]
+                            if new_domain and stored_domain and new_domain != stored_domain:
+                                logger.info(f"URL domain '{new_domain}' differs from stored '{stored_domain}' â€” re-extracting brand")
+                                force_new = True
+                        else:
+                            # No stored website â€” always re-extract when a URL is given
+                            logger.info(f"No stored website for user {user_id} â€” re-extracting from {url}")
+                            force_new = True
+                    except Exception:
+                        pass
+
+                if not force_new:
+                    logger.info(f"Brand profile already exists for user {user_id}")
+                    return normalize_brand_info(existing_profile)
         
         # Build comprehensive extraction prompt with all available context
         content_to_analyze = user_input
@@ -535,22 +906,35 @@ Current Message: {user_input}"""
 Website Content (crawled from {url}):
 {crawled_data[:5000]}"""  # Limit to avoid token overflow
         
+        # Pre-extract domain name as a strong brand_name hint
+        _domain_hint = ""
+        if url:
+            try:
+                from urllib.parse import urlparse as _urlp
+                _raw_domain = _urlp(url).netloc.replace('www.', '').split('.')[0]
+                _domain_hint = _raw_domain.replace('-', ' ').replace('_', ' ').title()
+            except Exception:
+                pass
+
         prompt = f"""Extract detailed business information from the following content (including conversation history):
         
 IMPORTANT: Look through the ENTIRE conversation history to find business details that the user may have mentioned earlier.
+{f'DOMAIN HINT: The website domain is "{_domain_hint}" â€” use this as the brand_name if the name cannot be found in the content.' if _domain_hint else ''}
 
 {content_to_analyze}
 
 Extract and return JSON with these fields:
-- brand_name: The business/company name (REQUIRED - extract from content or use domain name if from website)
+- brand_name: The business/company name (REQUIRED - extract from page title, headings, logo text, or use the DOMAIN HINT above; NEVER return "Not specified", "Unknown", or any placeholder â€” always return a real name)
 - contacts: Email, phone, or other contact info (extract if found)
 - location: Business location, city, state, or address (extract if mentioned)
 - industry: Type of business or industry (be specific: e.g., "Italian Restaurant", "E-commerce Fashion")
 - description: Detailed description of what the business does (2-3 sentences)
 - target_audience: Who are the target customers (if identifiable)
 - unique_selling_points: Key differentiators or unique features (array of strings)
+- products_services: List the specific products or services offered (array of strings, e.g. ["Vitamin C Serum", "Moisturiser", "Eye Cream"]). This is VERY IMPORTANT â€” extract every product or service name you can find.
 
 If this is a website, extract the brand name from the domain, title, or content.
+NEVER use placeholder text like "Not specified", "Unknown", "N/A" for any field â€” omit the field instead.
 Return ONLY valid JSON. Be thorough and extract all available information."""
 
         response = groq_client.chat.completions.create(
@@ -563,15 +947,40 @@ Return ONLY valid JSON. Be thorough and extract all available information."""
         extracted = json.loads(response.choices[0].message.content)
         logger.info(f"Brand extraction result: {extracted}")
         
-        # Ensure brand_name is not empty - use domain as fallback
+        # Ensure brand_name is not empty or a placeholder - use domain as fallback
+        _PLACEHOLDER_VALUES = {
+            "", "not specified", "not provided", "unknown", "n/a", "na",
+            "none", "null", "undefined", "your business", "my business"
+        }
         brand_name = extracted.get("brand_name", "").strip()
-        if not brand_name and url:
+        if brand_name.lower() in _PLACEHOLDER_VALUES and url:
             # Extract domain name as fallback
             from urllib.parse import urlparse
             domain = urlparse(url).netloc.replace('www.', '')
             brand_name = domain.split('.')[0].title()
-        if not brand_name:
+        if brand_name.lower() in _PLACEHOLDER_VALUES:
             brand_name = "My Business"
+
+        # If an existing profile already has a real brand_name, never downgrade it
+        _current = db.get_brand_profile(user_id)
+        if _current:
+            _cur_norm = normalize_brand_info(_current)
+            _cur_name = (_cur_norm.get("brand_name") or "").strip()
+            if _cur_name and _cur_name.lower() not in _PLACEHOLDER_VALUES:
+                # Keep existing name if the new extraction got a placeholder
+                if brand_name.lower() in _PLACEHOLDER_VALUES or not brand_name:
+                    brand_name = _cur_name
+            # Merge: keep existing field if new extraction returned a placeholder
+            def _keep(new_val, existing_val):
+                if not new_val or str(new_val).strip().lower() in _PLACEHOLDER_VALUES:
+                    return existing_val
+                return new_val
+            extracted["location"]         = _keep(extracted.get("location"), _cur_norm.get("location"))
+            extracted["industry"]         = _keep(extracted.get("industry"), _cur_norm.get("industry"))
+            extracted["description"]      = _keep(extracted.get("description"), _cur_norm.get("description"))
+            extracted["target_audience"]  = _keep(extracted.get("target_audience"), _cur_norm.get("target_audience"))
+            if not extracted.get("unique_selling_points"):
+                extracted["unique_selling_points"] = _cur_norm.get("unique_selling_points", [])
         
         # Convert contacts to string if it's a dict
         contacts_data = extracted.get("contacts")
@@ -583,18 +992,24 @@ Return ONLY valid JSON. Be thorough and extract all available information."""
         else:
             contacts_str = None
         
-        # Save to database with all extracted metadata
+        # Save to database â€” write to both direct columns AND metadata for compatibility
         brand_id = db.save_brand_profile(
             user_id=user_id,
             brand_name=brand_name,
             contacts=contacts_str,
             location=extracted.get("location"),
+            description=extracted.get("description", ""),
+            target_audience=extracted.get("target_audience", ""),
+            industry=extracted.get("industry", ""),
+            website_url=url or "",
             metadata={
                 "industry": extracted.get("industry", ""),
                 "description": extracted.get("description", ""),
                 "target_audience": extracted.get("target_audience", ""),
                 "unique_selling_points": extracted.get("unique_selling_points", []),
-                "website": url if url else ""
+                "products_services": extracted.get("products_services", []),
+                "website": url if url else "",
+                "website_content": crawled_data[:3000] if crawled_data else ""
             }
         )
         
@@ -630,33 +1045,39 @@ Return ONLY valid JSON. Be thorough and extract all available information."""
         return {"brand_name": fallback_brand, "industry": "", "description": "", "location": ""}
 
 async def generate_session_title(messages: List[Dict]) -> str:
-    """Generate a descriptive title for the session using LLM."""
-    if len(messages) < 2:
+    """
+    Generate a short session title deterministically from the first user message.
+    No LLM call — takes the first 6 meaningful words and title-cases them.
+    """
+    import re as _re
+
+    # Filler words to skip when building the title
+    _STOP = {
+        "i", "me", "my", "a", "an", "the", "to", "for", "of", "in", "on",
+        "at", "with", "and", "or", "is", "can", "you", "please", "hey",
+        "hi", "hello", "what", "how", "would", "could", "should", "do",
+        "just", "it", "this", "that", "be", "are", "was", "were"
+    }
+
+    # Find the first user message
+    first_user = next(
+        (m["content"] for m in messages if m.get("role") == "user"),
+        None
+    )
+    if not first_user:
         return "New Chat"
-    
-    try:
-        # Get first meaningful exchange
-        first_exchange = "\n".join([f"{m['role']}: {m['content'][:100]}" for m in messages[:4]])
-        
-        prompt = f"""Based on this conversation, generate a short, descriptive title (3-6 words):
 
-{first_exchange}
+    # Strip markdown / URLs / special chars, keep words
+    clean = _re.sub(r"https?://\S+", "", first_user)
+    clean = _re.sub(r"[^a-zA-Z0-9 ]", " ", clean)
+    words = [w for w in clean.split() if w.lower() not in _STOP and len(w) > 1]
 
-Return only the title, nothing else."""
-
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.5,
-            max_tokens=20
-        )
-        
-        title = response.choices[0].message.content.strip()
-        return title[:50]  # Limit length
-        
-    except Exception as e:
-        logger.error(f"Title generation error: {e}")
+    if not words:
         return "New Chat"
+
+    # Take up to 6 words, title-case, join
+    title = " ".join(w.capitalize() for w in words[:6])
+    return title[:50]
 
 # ==================== MAIN CHAT ENDPOINT ====================
 
@@ -688,84 +1109,226 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
         # Get conversation history
         history = db.get_recent_messages(session_id, count=10)
         history_for_router = [{"role": h["role"], "content": h["content"]} for h in history]
-        
-        # Route the query using intelligent router
-        routing_result = await router.route_user_query(req.message, history_for_router)
-        intent = routing_result["intent"]
-        confidence = routing_result["confidence"]
-        extracted_params = routing_result["extracted_params"]
+
+        # --- Platform clarification intercept ---
+        # If this session is waiting for a platform choice, try to resolve it now.
+        _pending = _pending_platform.get(session_id)
+        if _pending:
+            _detected = _detect_platform_from_text(req.message)
+            if _detected:
+                # User answered â€” restore original message + inject platform, skip router
+                logger.info(f"Platform resolved for session {session_id}: {_detected}")
+                del _pending_platform[session_id]
+                # Mutate the request so the social_post handler below uses original context
+                req = ChatRequest(
+                    message=_pending["original_message"],
+                    session_id=req.session_id,
+                    platform=_detected
+                )
+                routing_result = {
+                    "intent": "social_post",
+                    "confidence": 1.0,
+                    "requires_url": False,
+                    "requires_brand_info": False,
+                    "extracted_params": {"platform": _detected},
+                    "suggested_response": ""
+                }
+                intent = "social_post"
+                confidence = 1.0
+                extracted_params = {"platform": _detected}
+            else:
+                # Still no platform â€” ask again and bail
+                response_text = "Please choose a platform: **Twitter/X** or **Instagram**?"
+                db.save_message(session_id, "assistant", response_text, formatted_content=response_text)
+                return {
+                    "response": response_text,
+                    "session_id": session_id,
+                    "intent": "social_post",
+                    "content_preview_id": None,
+                    "workflow_cost": None,
+                    "seo_result": None,
+                    "response_options": None
+                }
+        else:
+            # Normal routing
+            routing_result = await router.route_user_query(req.message, history_for_router)
+            intent = routing_result["intent"]
+            confidence = routing_result["confidence"]
+            extracted_params = routing_result["extracted_params"]
         
         logger.info(f"Routed to intent: {intent} (confidence: {confidence})")
         
         response_text = ""
         content_preview_id = None
         workflow_cost = None
+        seo_result: Optional[Dict[str, Any]] = None
+        response_options: Optional[List[Dict[str, Any]]] = None
         
         # Handle different intents
         if intent == "general_chat":
-            # Generate conversational response
-            response_text = await router.generate_conversational_response(req.message, history_for_router)
+            # Generate conversational response with stored brand context
+            _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+            response_text = await router.generate_conversational_response(
+                req.message, history_for_router, brand_context=_brand_ctx
+            )
         
         elif intent == "brand_setup":
-            # Extract and save brand information from conversation
-            response_text = "Let me save your business information..."
-            
-            try:
-                # Extract URL if present
-                url = extracted_params.get("url") or await router.extract_url_from_message(req.message)
-                crawled_data = None
-                
-                # Crawl website if URL provided
-                if url:
+            # Guard: if user is asking a question ABOUT their existing profile,
+            # treat it as general_chat and answer from stored context.
+            _existing_profile = db.get_brand_profile(user_id, req.active_brand)
+            _is_read_query = any(kw in req.message.lower() for kw in [
+                "tell me", "what is my", "what's my", "show my", "my brand",
+                "my product", "my business name", "my industry", "my profile",
+                "my company", "my details", "can you tell", "what are my",
+                "list my", "my service", "my website", "my location",
+                "my description", "my audience", "my selling", "product name",
+                "products", "services", "what do i sell", "what do i offer"
+            ])
+            if _is_read_query and _existing_profile:
+                # If asking about products/services AND we have a website URL but no cached content,
+                # do a live crawl to get the most accurate answer.
+                _needs_live = any(kw in req.message.lower() for kw in [
+                    "product", "service", "sell", "offer", "catalogue", "catalog"
+                ])
+                _meta = _existing_profile.get('metadata', {})
+                if isinstance(_meta, str):
                     try:
-                        logger.info(f"Crawling website for brand setup: {url}")
-                        crawl_result = call_agent_job(
-                            "WebCrawler",
-                            f"{CRAWLER_BASE}/crawl",
-                            {"url": url},
+                        import json as _jj; _meta = _jj.loads(_meta) if _meta else {}
+                    except Exception:
+                        _meta = {}
+                _cached_content = _meta.get("website_content", "") if isinstance(_meta, dict) else ""
+                _stored_url = (
+                    _existing_profile.get('website_url')
+                    or (_meta.get('website') if isinstance(_meta, dict) else '')
+                )
+                if _needs_live and _stored_url and not _cached_content:
+                    try:
+                        logger.info(f"Live crawl for product query: {_stored_url}")
+                        _crawl = call_agent_job(
+                            "WebCrawler", f"{CRAWLER_BASE}/crawl",
+                            {"start_url": _stored_url, "max_pages": 3},
                             download_path_template="/download/{job_id}"
                         )
-                        crawled_data = crawl_result.get("extracted_text", "")
-                        logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
-                    except Exception as e:
-                        logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
-                
-                # Force fresh extraction by deleting existing profile first
-                try:
-                    db.delete_brand_profile(user_id)
-                    logger.info(f"Deleted old brand profile for user {user_id}")
-                except Exception as e:
-                    logger.warning(f"Could not delete old profile: {e}")
-                
-                # Extract brand info from conversation history (force_new=True)
-                brand_info = await extract_brand_info(
-                    user_id, 
-                    req.message, 
-                    url=url, 
-                    crawled_data=crawled_data,
-                    conversation_history=history_for_router,
-                    force_new=True
+                        _cached_content = _crawl.get("extracted_text", "")[:3000]
+                        # Persist so next query is instant
+                        if isinstance(_meta, dict):
+                            _meta["website_content"] = _cached_content
+                            db.save_brand_profile(
+                                user_id=user_id,
+                                brand_name=_existing_profile.get('brand_name', 'My Business'),
+                                contacts=_existing_profile.get('contacts'),
+                                location=_existing_profile.get('location'),
+                                description=_existing_profile.get('description', ''),
+                                target_audience=_existing_profile.get('target_audience', ''),
+                                industry=_existing_profile.get('industry', ''),
+                                website_url=_stored_url,
+                                metadata=_meta
+                            )
+                    except Exception as _lce:
+                        logger.warning(f"Live crawl for product query failed: {_lce}")
+                _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+                # If we just fetched live content, append it directly
+                if _needs_live and _cached_content and "Crawled Website Content" not in _brand_ctx:
+                    _brand_ctx += f"\n\n--- Website Content ---\n{_cached_content[:1500]}"
+                response_text = await router.generate_conversational_response(
+                    req.message, history_for_router, brand_context=_brand_ctx
                 )
-                
-                logger.info(f"✓ Brand profile created: {brand_info.get('brand_name')} in {brand_info.get('location', 'N/A')}")
-                
-                response_text = f"""✅ **Brand Profile Saved!**
+            else:
+                # Genuine setup / update request
+                response_text = "Let me save your business information..."
+                try:
+                    # Extract URL if present
+                    url = extracted_params.get("url") or await router.extract_url_from_message(req.message)
+                    crawled_data = None
+                    
+                    # Crawl website if URL provided
+                    if url:
+                        try:
+                            logger.info(f"Crawling website for brand setup: {url}")
+                            crawl_result = call_agent_job(
+                                "WebCrawler",
+                                f"{CRAWLER_BASE}/crawl",
+                                {"url": url, "max_pages": 5},
+                                download_path_template="/download/json/{job_id}"
+                            )
+                            # crawl_result is a list of page dicts with headers/paragraphs
+                            if isinstance(crawl_result, list):
+                                crawled_data = " ".join(
+                                    [h.get('text', '') for doc in crawl_result for h in doc.get('headers', [])] +
+                                    [p for doc in crawl_result for p in doc.get('paragraphs', [])]
+                                )
+                            elif isinstance(crawl_result, dict):
+                                crawled_data = crawl_result.get("extracted_text", "") or crawl_result.get("content", "")
+                            else:
+                                crawled_data = str(crawl_result)
+                            logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
+                        except Exception as e:
+                            logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                    
+                    # Extract brand info
+                    extracted = await extract_brand_info(
+                        user_id,
+                        req.message,
+                        url=url,
+                        crawled_data=crawled_data,
+                        conversation_history=history,
+                        force_new=True
+                    )
+                    
+                    response_text = f"I've set up your business profile for **{extracted.get('brand_name')}**.\n\n"
+                    response_text += f"**Industry:** {extracted.get('industry')}\n"
+                    response_text += f"**Description:** {extracted.get('description')}\n\n"
+                    response_text += "You can now ask me to generate content, analyze SEO, or plan marketing campaigns!"
 
-**Business Name:** {brand_info.get('brand_name', 'My Business')}
-**Industry:** {brand_info.get('industry', 'Not specified')}
-**Location:** {brand_info.get('location', 'Not specified')}
-**Description:** {brand_info.get('description', 'Not specified')}
-
-Your business information has been saved. You can now:
-- Generate blog posts
-- Create social media content
-- Analyze your website's SEO
-
-What would you like me to do next?"""
-                
-            except Exception as e:
-                logger.error(f"Brand setup error: {e}", exc_info=True)
-                response_text = f"I've noted your business information. What would you like me to help you create?"
+                except Exception as e:
+                    logger.error(f"Error in brand setup: {e}")
+                    response_text = f"I encountered an error setting up your brand profile: {str(e)}"
+        
+        elif intent == "campaign_planning":
+            # Extract parameters
+            theme = extracted_params.get("theme", "General Promotion")
+            duration_str = extracted_params.get("duration", "7 days")
+            domain = extracted_params.get("domain", "")
+            
+            # Parse duration
+            try:
+                import re
+                duration_days = int(re.search(r'\d+', duration_str).group())
+            except:
+                duration_days = 7
+            
+            # 1. Discover trends if domain provided
+            trends = []
+            if domain:
+                trends = planner_agent.discover_trends(domain)
+                theme = f"{theme} ({trends[0]})" if trends else theme
+            
+            # 2. Generate proposals
+            proposals_data = planner_agent.generate_workflow_proposals(theme, duration_days)
+            tiers = proposals_data["proposals"]
+            
+            response_text = f"I've designed 3 campaign strategies for **{theme}** ({duration_days} days).\n\n"
+            response_text += "Please select a tier to proceed:"
+            
+            # Format options for UI
+            response_options = []
+            for tier_name, details in tiers.items():
+                response_options.append({
+                    "id": tier_name,  # Use tier name as ID for simplicity
+                    "title": f"{tier_name} Tier",
+                    "description": details["description"],
+                    "meta": f"{details['frequency']} | Est. Cost: ${details['estimated_api_cost']:.2f}",
+                    "strategy": details["strategy"],
+                    "content_mix": details["content_mix"],
+                    "data": {
+                        "tier": tier_name,
+                        "theme": theme,
+                        "duration_days": duration_days
+                    }
+                })
+        
+        elif intent == "daily_schedule":
+            response_text = "I can help you manage your daily schedule and tasks. What specifically would you like to schedule?"
         
         elif intent == "seo_analysis":
             # SEO Analysis workflow
@@ -773,83 +1336,192 @@ What would you like me to do next?"""
             if not url:
                 response_text = "Please provide a URL to analyze. For example: 'Analyze https://example.com'"
             else:
-                response_text = "I'm analyzing your website's SEO. This will take a few moments..."
-                
-                # Get optimized workflow from RL agent
-                state = rl_agent.create_state_from_context(
+                # Get optimized workflow from MABO agent
+                mabo = mabo_agent.get_mabo_agent()
+                state_context = mabo.create_state_from_context(
                     intent=intent,
                     user_id=user_id,
                     content_type="seo",
                     has_website=True
                 )
-                agents = rl_agent.get_optimized_workflow(state, use_rl=True)
-                
-                # Estimate cost
+                agents = mabo.get_optimized_workflow(state_context, use_mabo=True)
                 cost_estimate = cost_model.estimate_workflow_cost(agents)
                 workflow_cost = cost_estimate
-                
+
                 try:
-                    # Execute workflow
-                    crawl_data = call_agent_job("WebCrawler", f"{CRAWLER_BASE}/crawl", {"start_url": url, "max_pages": 1})
-                    report_path = run_seo_agent(url)
-                    
-                    response_text = f"✅ **SEO Analysis Complete!**\n\nI've analyzed {url} and generated a comprehensive report.\n\n**Key Findings:**\n- Page crawled successfully\n- SEO report generated\n\n[View Full Report](/reports/{os.path.basename(report_path)})\n\nWould you like me to:\n- Generate a blog post?\n- Create social media content?\n- Analyze competitors?"
-                    
+                    import requests as _sreq
+                    _seo_resp = _sreq.post(
+                        "http://127.0.0.1:5000/analyze",
+                        json={"url": url},
+                        timeout=90
+                    )
+                    _seo_data = _seo_resp.json() if _seo_resp.ok else {}
+                    if _seo_data.get("status") == "error":
+                        raise Exception(_seo_data.get("error", "SEO audit failed"))
+
+                    _report_base = os.path.basename(_seo_data.get("report_path", ""))
+                    seo_result = {
+                        "url": url,
+                        "final_url": _seo_data.get("final_url", url),
+                        "scores": _seo_data.get("scores", {}),
+                        "recommendations": _seo_data.get("recommendations", []),
+                        "report_path": _seo_data.get("report_path", ""),
+                        "status": "completed",
+                    }
+                    _score_lines = " Â· ".join(
+                        [f"{k.title()}: {round(v*100)}" for k, v in seo_result["scores"].items()]
+                    )
+                    _rec_lines = "\n".join([
+                        f"- {r['issue'] if isinstance(r, dict) else r}"
+                        for r in seo_result["recommendations"][:3]
+                    ])
+                    response_text = (
+                        f"âœ… **SEO Audit Complete for {url}**\n\n"
+                        f"ðŸ“Š **Scores:** {_score_lines}\n\n"
+                        f"ðŸ” **Top Fixes:**\n{_rec_lines}"
+                        + (f"\n\n[ðŸ“„ Open Full Report](http://localhost:8080/{_report_base})" if _report_base else "")
+                        + "\n\n_Full scores and all recommendations are now shown in the **SEO Audit** page._"
+                    )
                 except Exception as e:
-                    response_text = f"⚠️ Analysis encountered an error: {str(e)}\n\nPlease try again or provide a different URL."
+                    response_text = f"âš ï¸ Analysis encountered an error: {str(e)}\n\nPlease try again or provide a different URL."
         
         elif intent == "blog_generation":
-            # Blog generation workflow with comprehensive analysis
-            response_text = "I'll create a blog post for you. Analyzing your business and competitors..."
-            
-            # Step 1: Extract URL if present
+            # If a URL is present in this message, check whether it belongs to a different
+            # brand than what's stored â€” if so, re-extract before generating.
             url = extracted_params.get("url") or await router.extract_url_from_message(req.message)
-            crawled_data = None
-            
-            # Step 2: Crawl website if URL provided
             if url:
                 try:
-                    logger.info(f"Crawling website: {url}")
-                    crawl_result = call_agent_job(
-                        "WebCrawler",
-                        f"{CRAWLER_BASE}/crawl",
-                        {"url": url},
-                        download_path_template="/download/{job_id}"
-                    )
-                    crawled_data = crawl_result.get("extracted_text", "")
-                    logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
-                except Exception as e:
-                    logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                    from urllib.parse import urlparse as _up
+                    new_domain = _up(url).netloc.replace('www.', '').lower().split('.')[0]
+                    existing = db.get_brand_profile(user_id, req.active_brand)
+                    needs_reextract = True
+                    if existing:
+                        # Check website_url column first, then metadata.website
+                        stored_website = existing.get('website_url') or ''
+                        if not stored_website:
+                            meta = existing.get('metadata')
+                            if isinstance(meta, str):
+                                import json as _json
+                                meta = _json.loads(meta) if meta else {}
+                            stored_website = (meta or {}).get('website', '') if isinstance(meta, dict) else ''
+                        if stored_website:
+                            stored_domain = _up(stored_website).netloc.replace('www.', '').lower().split('.')[0]
+                            needs_reextract = (new_domain != stored_domain)
+                        # else: no stored website â€” always re-extract
+                    if needs_reextract:
+                        logger.info(f"New URL domain '{new_domain}' â€” crawling and extracting brand before blog generation")
+                        try:
+                            crawl_result = call_agent_job(
+                                "WebCrawler", f"{CRAWLER_BASE}/crawl",
+                                {"start_url": url, "max_pages": 3},
+                                download_path_template="/download/{job_id}"
+                            )
+                            crawled_for_brand = crawl_result.get("extracted_text", "")
+                        except Exception as _ce:
+                            logger.warning(f"Crawl for brand extract failed: {_ce}")
+                            crawled_for_brand = ""
+                        await extract_brand_info(
+                            user_id, req.message, url=url,
+                            crawled_data=crawled_for_brand,
+                            conversation_history=history_for_router,
+                            force_new=True
+                        )
+                except Exception as _ue:
+                    logger.warning(f"URL brand-check failed: {_ue}")
+
+            # Check if we have required business details BEFORE starting generation
+            brand_profile = db.get_brand_profile(user_id, req.active_brand)
+            brand_info = None
             
-            # Step 3: Extract comprehensive brand information from conversation history
-            brand_profile = db.get_brand_profile(user_id)
-            if not brand_profile:
-                # Pass conversation history to extract business details mentioned earlier
+            if brand_profile:
+                brand_info = normalize_brand_info(brand_profile)
+                # Validate essential fields
+                if not brand_info.get('brand_name') or brand_info.get('brand_name') == 'My Business':
+                    response_text = "I need your business name to create personalized blog content. What's your business or brand name?"
+                    # Don't proceed with generation
+                elif not brand_info.get('industry') or brand_info.get('industry') in ['General', '']:
+                    response_text = f"Thanks! I have your business name ({brand_info.get('brand_name')}). What industry is your business in? (e.g., Restaurant, E-commerce, Tech, Healthcare, etc.)"
+                    # Don't proceed with generation
+                else:
+                    # All required fields present - proceed with generation
+                    response_text = "I'll pull together two blog concepts for you..."
+                    # url already extracted at the top of blog_generation block
+                    crawled_data = None
+                    
+                    if url:
+                        try:
+                            logger.info(f"Crawling website: {url}")
+                            crawl_result = call_agent_job(
+                                "WebCrawler",
+                                f"{CRAWLER_BASE}/crawl",
+                                {"start_url": url, "max_pages": 3},
+                                download_path_template="/download/{job_id}"
+                            )
+                            crawled_data = crawl_result.get("extracted_text", "")
+                            logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
+                        except Exception as e:
+                            logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                    
+                    logger.info(f"âœ“ Using brand profile: {brand_info.get('brand_name')}")
+            else:
+                # No brand profile - url already extracted at top of blog_generation block
+                crawled_data = None
+                
+                if url:
+                    try:
+                        logger.info(f"Crawling website: {url}")
+                        crawl_result = call_agent_job(
+                            "WebCrawler",
+                            f"{CRAWLER_BASE}/crawl",
+                            {"start_url": url, "max_pages": 3},
+                            download_path_template="/download/{job_id}"
+                        )
+                        crawled_data = crawl_result.get("extracted_text", "")
+                        logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
+                    except Exception as e:
+                        logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                
+                # Try to extract brand info from conversation
                 brand_info = await extract_brand_info(
-                    user_id, 
-                    req.message, 
-                    url=url, 
+                    user_id,
+                    req.message,
+                    url=url,
                     crawled_data=crawled_data,
                     conversation_history=history_for_router
                 )
-                logger.info(f"✓ Brand info extracted from conversation: {brand_info.get('brand_name')} in {brand_info.get('location', 'N/A')}")
-            else:
-                brand_info = normalize_brand_info(brand_profile)
-                logger.info(f"✓ Using existing brand profile: {brand_info.get('brand_name')}")
+                
+                # Check if essential fields are present
+                if not brand_info.get('brand_name') or brand_info.get('brand_name') == 'My Business':
+                    response_text = "I need your business name to create personalized blog content. What's your business or brand name?"
+                    brand_info = None  # Don't proceed
+                elif not brand_info.get('industry') or brand_info.get('industry') in ['General', '']:
+                    response_text = f"Thanks! I have your business name ({brand_info.get('brand_name')}). What industry is your business in? (e.g., Restaurant, E-commerce, Tech, Healthcare, etc.)"
+                    brand_info = None  # Don't proceed
+                else:
+                    logger.info(f"âœ“ Brand info extracted from conversation: {brand_info.get('brand_name')} in {brand_info.get('location', 'N/A')}")
+                    response_text = "I'll pull together two blog concepts for you..."
             
-            # Get optimized workflow
-            state = rl_agent.create_state_from_context(
-                intent=intent,
-                user_id=user_id,
-                content_type="blog",
-                has_brand_profile=brand_profile is not None
-            )
-            agents = rl_agent.get_optimized_workflow(state, use_rl=True)
-            workflow_cost = cost_model.estimate_workflow_cost(agents)
-            
-            try:
-                # Step 4: Build comprehensive business context for keyword extraction
-                business_context_for_keywords = f"""
+            # Only proceed with generation if we have valid brand_info
+            if brand_info and brand_info.get('brand_name') and brand_info.get('brand_name') != 'My Business' and brand_info.get('industry') and brand_info.get('industry') not in ['General', '']:
+                try:
+                    mabo = mabo_agent.get_mabo_agent()
+                    state_context = mabo.create_state_from_context(
+                        intent=intent,
+                        user_id=user_id,
+                        content_type="blog",
+                        has_brand_profile=brand_profile is not None
+                    )
+                    state_hash = state_context["state_hash"]
+                    primary_workflow = mabo.get_optimized_workflow_details(state_context, use_mabo=True)
+                    workflow_cost = cost_model.estimate_workflow_cost(primary_workflow["agents"])
+                    secondary_workflow = mabo.get_alternative_workflow_details(
+                        intent,
+                        state_context,
+                        exclude_workflow=primary_workflow["workflow_name"]
+                    )
+                    
+                    try:
+                        business_context_for_keywords = f"""
 Business: {brand_info.get('brand_name', 'My Business')}
 Industry: {brand_info.get('industry', 'General')}
 Location: {brand_info.get('location', 'N/A')}
@@ -861,42 +1533,48 @@ User Request: {req.message}
 
 {"Website Content Summary: " + crawled_data[:2000] if crawled_data else ""}
 """
-                
-                # Step 5: Extract keywords from comprehensive business context
-                logger.info("Extracting keywords from business context")
-                keywords_data = call_agent_job(
-                    "KeywordExtractor",
-                    f"{KEYWORD_EXTRACTOR_BASE}/extract-keywords",
-                    {"customer_statement": business_context_for_keywords, "max_results": 10},
-                    download_path_template="/download/{job_id}"
-                )
-                
-                # Step 6: Run competitor gap analysis
-                gap_analysis = None
-                try:
-                    logger.info("Running competitor gap analysis")
-                    
-                    # Build product description from brand info
-                    product_desc = f"{brand_info.get('industry', 'Business')} in {brand_info.get('location', 'N/A')}. {brand_info.get('description', '')}"
-                    
-                    gap_analysis = call_agent_job(
-                        "CompetitorGapAnalyzer",
-                        f"{GAP_ANALYZER_BASE}/analyze-keyword-gap",
-                        {
-                            "company_name": brand_info.get('brand_name', 'My Business'),
-                            "product_description": product_desc,
-                            "company_url": brand_info.get('website', ''),
-                            "max_competitors": 3,
-                            "max_pages_per_site": 1
-                        },
-                        download_path_template="/download/json/{job_id}"
-                    )
-                    logger.info("Gap analysis completed")
-                except Exception as e:
-                    logger.warning(f"Gap analysis failed: {e}, continuing without it")
-                
-                # Step 7: Create comprehensive business context for content generation
-                business_context = f"""
+                        logger.info("Extracting keywords from business context")
+                        keywords_data = call_agent_job(
+                            "KeywordExtractor",
+                            f"{KEYWORD_EXTRACTOR_BASE}/extract-keywords",
+                            {"customer_statement": business_context_for_keywords, "max_results": 10},
+                            download_path_template="/download/{job_id}",
+                            session_id=session_id
+                        )
+                        
+                        gap_analysis = None
+                        try:
+                            logger.info("Running competitor gap analysis")
+                            product_desc = f"{brand_info.get('industry', 'Business')} in {brand_info.get('location', 'N/A')}. {brand_info.get('description', '')}"
+                            gap_analysis = call_agent_job(
+                                "CompetitorGapAnalyzer",
+                                f"{GAP_ANALYZER_BASE}/analyze-keyword-gap",
+                                {
+                                    "company_name": brand_info.get('brand_name', 'My Business'),
+                                    "product_description": product_desc,
+                                    "company_url": brand_info.get('website', ''),
+                                    "max_competitors": 3,
+                                    "max_pages_per_site": 1
+                                },
+                                download_path_template="/download/json/{job_id}",
+                                session_id=session_id
+                            )
+                            logger.info("Gap analysis completed")
+                        except Exception as e:
+                            logger.warning(f"Gap analysis failed: {e}, continuing without it")
+
+                        # Reddit community intelligence (non-blocking)
+                        reddit_insights = {}
+                        try:
+                            _kw_list = keywords_data.get("keywords", [])[:8] if isinstance(keywords_data, dict) else []
+                            if _kw_list:
+                                reddit_insights = _call_reddit_research(
+                                    _kw_list, brand_info.get("brand_name", "")
+                                )
+                        except Exception as _re:
+                            logger.warning(f"Reddit research skipped: {_re}")
+
+                        business_context = f"""
 === BUSINESS PROFILE ===
 Brand: {brand_info.get('brand_name', 'My Business')}
 Industry: {brand_info.get('industry', 'General')}
@@ -914,6 +1592,14 @@ Unique Selling Points:
 === COMPETITOR INSIGHTS ===
 {gap_analysis.get('content_gaps_summary', 'Focus on unique value proposition') if gap_analysis else 'Emphasize unique strengths and local presence'}
 
+=== REDDIT COMMUNITY INTELLIGENCE ===
+{('Trending topics: ' + ', '.join(reddit_insights.get('trending_topics', []))) if reddit_insights.get('trending_topics') else 'No Reddit data available'}
+{('Community language: ' + ', '.join(reddit_insights.get('community_language', []))) if reddit_insights.get('community_language') else ''}
+{('Competitor mentions: ' + ', '.join(reddit_insights.get('competitor_mentions', []))) if reddit_insights.get('competitor_mentions') else ''}
+{chr(10).join(['- ' + a for a in reddit_insights.get('content_angles', [])]) if reddit_insights.get('content_angles') else ''}
+{('Community pain points: ' + '; '.join(reddit_insights.get('community_pain_points', []))) if reddit_insights.get('community_pain_points') else ''}
+{reddit_insights.get('summary', '')}
+
 Please create a comprehensive, SEO-optimized blog post that:
 1. Addresses the user's specific request: {req.message}
 2. Highlights the business's unique strengths and location
@@ -921,106 +1607,342 @@ Please create a comprehensive, SEO-optimized blog post that:
 4. Fills identified content gaps in the market
 5. Appeals to the target audience
 """
-                
-                # Step 8: Generate blog content
-                logger.info("Generating blog content")
-                blog_html = call_agent_job(
-                    "ContentAgent",
-                    f"{CONTENT_AGENT_BASE}/generate-blog",
-                    {
-                        "business_details": business_context,
-                        "keywords": keywords_data,
-                        "target_tone": "informative",
-                        "blog_length": "medium"
-                    },
-                    download_path_template="/download/html/{job_id}",
-                    result_format="html"
-                )
-                
-                # Save as preview
-                content_id = str(uuid.uuid4())
-                preview_path = f"previews/blog_{content_id}.html"
-                os.makedirs("previews", exist_ok=True)
-                with open(preview_path, "w", encoding="utf-8") as f:
-                    f.write(blog_html)
-                
-                db.save_generated_content(
-                    content_id=content_id,
-                    session_id=session_id,
-                    content_type="blog",
-                    content=blog_html,
-                    preview_url=f"/preview/blog/{content_id}",
-                    metadata={
-                        "brand_name": brand_info.get("brand_name", "My Business"),
-                        "location": brand_info.get("location"),
-                        "industry": brand_info.get("industry"),
-                        "topic": req.message,
-                        "keywords_used": keywords_data.get("keywords", [])[:5] if isinstance(keywords_data, dict) else []
-                    }
-                )
-                
-                content_preview_id = content_id
-                response_text = f"""✅ **Blog Post Generated!**
+                        
+                        variant_configs = [
+                            {
+                                "label": "Option A Â· Research-Driven Depth",
+                                "tone": "informative",
+                                "length": "long",
+                                "workflow": primary_workflow,
+                                "source": "mabo"
+                            },
+                            {
+                                "label": "Option B Â· Fast Conversion Story",
+                                "tone": "persuasive",
+                                "length": "medium",
+                                "workflow": secondary_workflow,
+                                "source": "baseline"
+                            }
+                        ]
+                        
+                        response_options = []
+                        os.makedirs("previews", exist_ok=True)
+                        
+                        for variant in variant_configs:
+                            try:
+                                option_id = f"opt_{uuid.uuid4().hex[:8]}"
+                                workflow_cost_estimate = cost_model.estimate_workflow_cost(variant["workflow"]["agents"])
+                                blog_html = call_agent_job(
+                                    "ContentAgent",
+                                    f"{CONTENT_AGENT_BASE}/generate-blog",
+                                    {
+                                        "business_details": business_context,
+                                        "keywords": keywords_data,
+                                        "target_tone": variant["tone"],
+                                        "blog_length": variant["length"],
+                                        "variant_label": variant["label"]
+                                    },
+                                    download_path_template="/download/html/{job_id}",
+                                    result_format="html",
+                                    session_id=session_id  # Pass session_id for metrics
+                                )
+                                
+                                content_id = str(uuid.uuid4())
+                                preview_path = f"previews/blog_{content_id}.html"
+                                with open(preview_path, "w", encoding="utf-8") as f:
+                                    f.write(blog_html)
+                                
+                                keywords_used = keywords_data.get("keywords", [])[:5] if isinstance(keywords_data, dict) else []
+                                metadata = {
+                                    "brand_name": brand_info.get("brand_name", "My Business"),
+                                    "location": brand_info.get("location"),
+                                    "industry": brand_info.get("industry"),
+                                    "topic": req.message,
+                                    "keywords_used": keywords_used,
+                                    "option_id": option_id,
+                                    "selection_group": state_hash,
+                                    "variant_label": variant["label"],
+                                    "variant_tone": variant["tone"],
+                                    "workflow_name": variant["workflow"]["workflow_name"],
+                                    "workflow_agents": variant["workflow"]["agents"],
+                                    "workflow_source": variant["source"]
+                                }
+                                
+                                db.save_generated_content(
+                                    content_id=content_id,
+                                    session_id=session_id,
+                                    content_type="blog",
+                                    content=blog_html,
+                                    preview_url=f"/preview/blog/{content_id}",
+                                    metadata=metadata
+                                )
+                                
+                                # --- ðŸ§  SAVE MEMORY (VECTOR DB) ---
+                                try:
+                                    logger.info(f"Saving vector memory for content {content_id}")
+                                    # Create embedding for the text (using topic for now as proxy for full text to be fast)
+                                    # Ideally we embed the whole blog, but for speed we embed the topic + description
+                                    rich_text = f"{req.message}. {business_context}"
+                                    text_embedding = memory.get_text_embedding(rich_text)
+                                    
+                                    memory_entity = {
+                                        "campaign_id": content_id,
+                                        "text_vector": text_embedding.tolist() if hasattr(text_embedding, 'tolist') else text_embedding,
+                                        "text_model": "all-MiniLM-L6-v2",
+                                        "context_metadata": metadata,
+                                        "alignment_score": 1.0, # Initial assumption
+                                        "source": "orchestrator",
+                                        "tags": [brand_info.get("industry", "General")]
+                                    }
+                                    memory.write_campaign_entity(memory_entity)
+                                    logger.info(f"Memory saved for {content_id}")
+                                except Exception as mem_err:
+                                    logger.warning(f"Failed to save vector memory: {mem_err}")
+                                # ----------------------------------
 
-I've created a comprehensive blog post for **{brand_info.get('brand_name', 'your business')}** {'in ' + brand_info.get('location') if brand_info.get('location') else ''}.
+                                db.save_workflow_variant(
+                                    option_id=option_id,
+                                    session_id=session_id,
+                                    content_id=content_id,
+                                    workflow_name=variant["workflow"]["workflow_name"],
+                                    state_hash=state_hash,
+                                    label=variant["label"],
+                                    metadata={
+                                        "tone": variant["tone"],
+                                        "length": variant["length"],
+                                        "cost_estimate": workflow_cost_estimate
+                                    }
+                                )
+                                
+                                mabo.register_workflow_execution(
+                                    content_id=content_id,
+                                    state_hash=state_hash,
+                                    action=variant["workflow"]["workflow_name"],
+                                    cost=workflow_cost_estimate["total_cost"],
+                                    execution_time=workflow_cost_estimate["total_time"]
+                                )
+                                
+                                _critic_text = blog_html[:1000] if blog_html else ""
+                                _critic_brand = brand_info.get("brand_name", "")
+                                _critic_data = _call_critic_sync(
+                                    content_id, _critic_text, "blog", _critic_brand, req.message
+                                )
 
-**Topic:** {req.message}
-**Industry:** {brand_info.get('industry', 'General')}
-**Keywords:** {', '.join(keywords_data.get('keywords', [])[:5]) if isinstance(keywords_data, dict) else 'Optimized'}
+                                # Feed critic score into MABO as an immediate quality reward
+                                if _critic_data and _critic_data.get("overall") is not None:
+                                    mabo.update_engagement_metrics(
+                                        content_id, float(_critic_data["overall"])
+                                    )
+                                    if _critic_data.get("passed"):
+                                        mabo.update_content_approval(content_id, approved=True)
+                                    logger.info(
+                                        f"[MABO] Blog critic reward fed: content={content_id} "
+                                        f"overall={_critic_data['overall']:.2f} passed={_critic_data.get('passed')}"
+                                    )
+                                    # Score the prompt version that generated this content
+                                    try:
+                                        from prompt_optimizer import score_latest_for_agent
+                                        score_latest_for_agent(
+                                            "content_agent", "blog",
+                                            float(_critic_data["overall"])
+                                        )
+                                    except Exception as _pe:
+                                        logger.warning(f"[PromptOptimizer] Blog scoring skipped: {_pe}")
 
-**Preview:** Click the preview card below to see the full blog.
+                                response_options.append({
+                                    "option_id": option_id,
+                                    "label": variant["label"],
+                                    "tone": variant["tone"].title(),
+                                    "workflow_name": variant["workflow"]["workflow_name"],
+                                    "workflow_agents": variant["workflow"]["agents"],
+                                    "cost": workflow_cost_estimate["total_cost"],
+                                    "cost_display": cost_model.format_cost_display(workflow_cost_estimate["total_cost"]),
+                                    "preview_url": f"/preview/blog/{content_id}",
+                                    "content_id": content_id,
+                                    "content_type": "blog",
+                                    "state_hash": state_hash,
+                                    "critic": _critic_data,
+                                })
+                            except Exception as variant_error:
+                                logger.error(f"Variant generation failed ({variant['label']}): {variant_error}", exc_info=True)
+                                continue
+                        
+                        if response_options:
+                            option_lines = "\n".join([
+                                f"- {opt['label']}: {opt['tone']} tone Â· {opt['cost_display']} Â· workflow `{opt['workflow_name']}`"
+                                for opt in response_options
+                            ])
+                            response_text = f"""ðŸ“ **Two Draft Blogs Ready**
 
-**Actions:**
-- Approve & Publish to S3
-- Regenerate with changes
-- Cancel"""
-                
-            except Exception as e:
-                logger.error(f"Blog generation error: {e}", exc_info=True)
-                response_text = f"⚠️ Blog generation encountered an error: {str(e)}\n\nPlease try again with a different topic."
+I've produced two variations for *{brand_info.get('brand_name', 'your brand')}*. Review the cards below and pick the one that best fits your campaign.
+
+{option_lines}
+
+Tap a card to preview and lock in your preferred option. Once you choose, I'll tailor the workflow and budget around it."""
+                        else:
+                            response_text = "âš ï¸ I couldn't generate the blog variations right now. Please try again or adjust your prompt."
+                    except Exception as e:
+                        logger.error(f"Blog generation error: {e}", exc_info=True)
+                        response_text = f"âš ï¸ Blog generation encountered an error: {str(e)}\n\nPlease try again with a different topic."
+                except Exception as e:
+                    logger.error(f"Blog generation setup error: {e}", exc_info=True)
+                    response_text = f"âš ï¸ Blog generation encountered an error: {str(e)}\n\nPlease try again with a different topic."
+            else:
+                # Missing required fields - response_text already set above asking for info
+                pass
         
         elif intent == "social_post":
-            # Social media post generation with comprehensive analysis
-            response_text = "Creating social media content for you. Analyzing your business and competitors..."
-            
-            # Step 1: Extract URL if present
+            # --- Platform selection gate ---
+            chosen_platform = (
+                extracted_params.get("platform")
+                or req.platform  # type: ignore[attr-defined]
+                or _detect_platform_from_text(req.message)
+            )
+            if chosen_platform:
+                chosen_platform = chosen_platform.lower().strip()
+                # Normalise: "x" -> "twitter"
+                if chosen_platform == "x":
+                    chosen_platform = "twitter"
+            else:
+                # No platform specified â€” ask and park the request
+                import time as _time
+                _pending_platform[session_id] = {
+                    "original_message": req.message,
+                    "timestamp": _time.time()
+                }
+                _q = (
+                    "Which platform would you like the post for?\n"
+                    "**Twitter/X** or **Instagram**?"
+                )
+                db.save_message(session_id, "assistant", _q, formatted_content=_q)
+                return {
+                    "response": _q,
+                    "session_id": session_id,
+                    "intent": "social_post",
+                    "content_preview_id": None,
+                    "workflow_cost": None,
+                    "seo_result": None,
+                    "response_options": None
+                }
+
+            # If a URL is present, check if it's a different brand than stored â€” re-extract if so
             url = extracted_params.get("url") or await router.extract_url_from_message(req.message)
-            crawled_data = None
-            
-            # Step 2: Crawl website if URL provided
             if url:
                 try:
-                    logger.info(f"Crawling website: {url}")
-                    crawl_result = call_agent_job(
-                        "WebCrawler",
-                        f"{CRAWLER_BASE}/crawl",
-                        {"url": url},
-                        download_path_template="/download/{job_id}"
-                    )
-                    crawled_data = crawl_result.get("extracted_text", "")
-                    logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
-                except Exception as e:
-                    logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                    from urllib.parse import urlparse as _up
+                    new_domain = _up(url).netloc.replace('www.', '').lower().split('.')[0]
+                    existing = db.get_brand_profile(user_id, req.active_brand)
+                    needs_reextract = True
+                    if existing:
+                        # Check website_url column first, then metadata.website
+                        stored_website = existing.get('website_url') or ''
+                        if not stored_website:
+                            meta = existing.get('metadata')
+                            if isinstance(meta, str):
+                                import json as _json
+                                meta = _json.loads(meta) if meta else {}
+                            stored_website = (meta or {}).get('website', '') if isinstance(meta, dict) else ''
+                        if stored_website:
+                            stored_domain = _up(stored_website).netloc.replace('www.', '').lower().split('.')[0]
+                            needs_reextract = (new_domain != stored_domain)
+                        # else: no stored website â€” always re-extract
+                    if needs_reextract:
+                        logger.info(f"New URL domain '{new_domain}' â€” re-extracting brand for social post")
+                        try:
+                            crawl_result = call_agent_job(
+                                "WebCrawler", f"{CRAWLER_BASE}/crawl",
+                                {"start_url": url, "max_pages": 3},
+                                download_path_template="/download/{job_id}"
+                            )
+                            crawled_for_brand = crawl_result.get("extracted_text", "")
+                        except Exception as _ce:
+                            logger.warning(f"Crawl for brand extract failed: {_ce}")
+                            crawled_for_brand = ""
+                        await extract_brand_info(
+                            user_id, req.message, url=url,
+                            crawled_data=crawled_for_brand,
+                            conversation_history=history_for_router,
+                            force_new=True
+                        )
+                except Exception as _ue:
+                    logger.warning(f"URL brand-check failed (social): {_ue}")
+
+            # Check if we have required business details BEFORE starting generation
+            brand_profile = db.get_brand_profile(user_id, req.active_brand)
+            brand_info = None
             
-            # Step 3: Extract comprehensive brand information from conversation history
-            brand_profile = db.get_brand_profile(user_id)
-            if not brand_profile:
-                # Pass conversation history to extract business details mentioned earlier
+            if brand_profile:
+                brand_info = normalize_brand_info(brand_profile)
+                # Validate essential fields
+                if not brand_info.get('brand_name') or brand_info.get('brand_name') == 'My Business':
+                    response_text = "I need your business name to create personalized social media content. What's your business or brand name?"
+                    # Don't proceed with generation
+                elif not brand_info.get('industry') or brand_info.get('industry') in ['General', '']:
+                    response_text = f"Thanks! I have your business name ({brand_info.get('brand_name')}). What industry is your business in? (e.g., Restaurant, E-commerce, Tech, Healthcare, etc.)"
+                    # Don't proceed with generation
+                else:
+                    # All required fields present - proceed with generation
+                    response_text = "Creating multiple social angles for you..."
+                    # url already extracted at top of social_post block
+                    crawled_data = None
+                    
+                    if url:
+                        try:
+                            logger.info(f"Crawling website: {url}")
+                            crawl_result = call_agent_job(
+                                "WebCrawler",
+                                f"{CRAWLER_BASE}/crawl",
+                                {"start_url": url, "max_pages": 3},
+                                download_path_template="/download/{job_id}"
+                            )
+                            crawled_data = crawl_result.get("extracted_text", "")
+                            logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
+                        except Exception as e:
+                            logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                    
+                    logger.info(f"âœ“ Using brand profile: {brand_info.get('brand_name')}")
+            else:
+                # No brand profile - url already extracted at top of social_post block
+                crawled_data = None
+                
+                if url:
+                    try:
+                        logger.info(f"Crawling website: {url}")
+                        crawl_result = call_agent_job(
+                            "WebCrawler",
+                            f"{CRAWLER_BASE}/crawl",
+                            {"start_url": url, "max_pages": 3},
+                            download_path_template="/download/{job_id}"
+                        )
+                        crawled_data = crawl_result.get("extracted_text", "")
+                        logger.info(f"Website crawled successfully: {len(crawled_data)} characters")
+                    except Exception as e:
+                        logger.warning(f"Website crawl failed: {e}, continuing without crawled data")
+                
+                # Try to extract brand info from conversation
                 brand_info = await extract_brand_info(
-                    user_id, 
-                    req.message, 
-                    url=url, 
+                    user_id,
+                    req.message,
+                    url=url,
                     crawled_data=crawled_data,
                     conversation_history=history_for_router
                 )
-                logger.info(f"✓ Brand info extracted from conversation: {brand_info.get('brand_name')} in {brand_info.get('location', 'N/A')}")
-            else:
-                brand_info = normalize_brand_info(brand_profile)
-                logger.info(f"✓ Using existing brand profile: {brand_info.get('brand_name')}")
+                
+                # Check if essential fields are present
+                if not brand_info.get('brand_name') or brand_info.get('brand_name') == 'My Business':
+                    response_text = "I need your business name to create personalized social media content. What's your business or brand name?"
+                    brand_info = None  # Don't proceed
+                elif not brand_info.get('industry') or brand_info.get('industry') in ['General', '']:
+                    response_text = f"Thanks! I have your business name ({brand_info.get('brand_name')}). What industry is your business in? (e.g., Restaurant, E-commerce, Tech, Healthcare, etc.)"
+                    brand_info = None  # Don't proceed
+                else:
+                    logger.info(f"âœ“ Brand info extracted from conversation: {brand_info.get('brand_name')} in {brand_info.get('location', 'N/A')}")
+                    response_text = "Creating multiple social angles for you..."
             
-            try:
-                # Step 4: Build comprehensive business context for keyword extraction
-                business_context_for_keywords = f"""
+            # Only proceed with generation if we have valid brand_info
+            if brand_info and brand_info.get('brand_name') and brand_info.get('brand_name') != 'My Business' and brand_info.get('industry') and brand_info.get('industry') not in ['General', '']:
+                try:
+                    business_context_for_keywords = f"""
 Business: {brand_info.get('brand_name', 'My Business')}
 Industry: {brand_info.get('industry', 'General')}
 Location: {brand_info.get('location', 'N/A')}
@@ -1032,129 +1954,494 @@ User Request: {req.message}
 
 {"Website Content Summary: " + crawled_data[:2000] if crawled_data else ""}
 """
-                
-                # Step 5: Extract keywords from comprehensive business context
-                logger.info("Extracting keywords from business context")
-                keywords_data = call_agent_job(
-                    "KeywordExtractor",
-                    f"{KEYWORD_EXTRACTOR_BASE}/extract-keywords",
-                    {"customer_statement": business_context_for_keywords, "max_results": 8},
-                    download_path_template="/download/{job_id}"
+                    logger.info("Extracting keywords from business context")
+                    keywords_data = call_agent_job(
+                        "KeywordExtractor",
+                        f"{KEYWORD_EXTRACTOR_BASE}/extract-keywords",
+                        {"customer_statement": business_context_for_keywords, "max_results": 8},
+                        download_path_template="/download/{job_id}"
+                    )
+                    
+                    gap_analysis = None
+                    try:
+                        logger.info("Running competitor gap analysis")
+                        product_desc = f"{brand_info.get('industry', 'Business')} in {brand_info.get('location', 'N/A')}. {brand_info.get('description', '')}"
+                        gap_analysis = call_agent_job(
+                            "CompetitorGapAnalyzer",
+                            f"{GAP_ANALYZER_BASE}/analyze-keyword-gap",
+                            {
+                                "company_name": brand_info.get('brand_name', 'My Business'),
+                                "product_description": product_desc,
+                                "company_url": brand_info.get('website', ''),
+                                "max_competitors": 3,
+                                "max_pages_per_site": 1
+                            },
+                            download_path_template="/download/json/{job_id}"
+                        )
+                        logger.info("Gap analysis completed")
+                    except Exception as e:
+                        logger.warning(f"Gap analysis failed: {e}, continuing without it")
+
+                    # Reddit community intelligence (non-blocking)
+                    reddit_insights_social = {}
+                    try:
+                        _kw_list_s = keywords_data.get("keywords", [])[:8] if isinstance(keywords_data, dict) else []
+                        if _kw_list_s:
+                            reddit_insights_social = _call_reddit_research(
+                                _kw_list_s, brand_info.get("brand_name", "")
+                            )
+                    except Exception as _re:
+                        logger.warning(f"Reddit research (social) skipped: {_re}")
+
+                    mabo = mabo_agent.get_mabo_agent()
+                    state_context = mabo.create_state_from_context(
+                        intent=intent,
+                        user_id=user_id,
+                        content_type="social",
+                        has_brand_profile=brand_profile is not None
+                    )
+                    state_hash = state_context["state_hash"]
+                    primary_workflow = mabo.get_optimized_workflow_details(state_context, use_mabo=True)
+                    workflow_cost = cost_model.estimate_workflow_cost(primary_workflow["agents"])
+                    secondary_workflow = mabo.get_alternative_workflow_details(
+                        intent,
+                        state_context,
+                        exclude_workflow=primary_workflow["workflow_name"]
+                    )
+                    
+                    base_social_context = {
+                        "keywords": keywords_data,
+                        "brand_name": brand_info.get("brand_name", "My Business"),
+                        "industry": brand_info.get("industry", ""),
+                        "location": brand_info.get("location", ""),
+                        "target_audience": brand_info.get("target_audience", ""),
+                        "unique_selling_points": brand_info.get("unique_selling_points", []),
+                        "competitor_insights": " | ".join(filter(None, [
+                            gap_analysis.get("content_gaps_summary", "") if gap_analysis else "",
+                            ("Reddit trends: " + ", ".join(reddit_insights_social.get("trending_topics", []))) if reddit_insights_social.get("trending_topics") else "",
+                            ("Community language: " + ", ".join(reddit_insights_social.get("community_language", []))) if reddit_insights_social.get("community_language") else "",
+                            ("Competitor mentions: " + ", ".join(reddit_insights_social.get("competitor_mentions", []))) if reddit_insights_social.get("competitor_mentions") else "",
+                        ])),
+                        "user_request": req.message,
+                        "platforms": [chosen_platform],
+                        "tone": "professional"
+                    }
+                    
+                    variant_configs = [
+                        {
+                            "label": "Option A Â· Authority Launch",
+                            "tone": "professional",
+                            "workflow": primary_workflow,
+                            "source": "mabo"
+                        },
+                        {
+                            "label": "Option B Â· Conversational Buzz",
+                            "tone": "playful",
+                            "workflow": secondary_workflow,
+                            "source": "baseline"
+                        }
+                ]
+                    
+                    response_options = []
+                    
+                    for variant in variant_configs:
+                        try:
+                            option_id = f"opt_{uuid.uuid4().hex[:8]}"
+                            workflow_cost_estimate = cost_model.estimate_workflow_cost(variant["workflow"]["agents"])
+                            variant_payload = dict(base_social_context)
+                            variant_payload["tone"] = variant["tone"]
+                            
+                            social_data = call_agent_job(
+                                "ContentAgent",
+                                f"{CONTENT_AGENT_BASE}/generate-social",
+                                variant_payload
+                            )
+                            
+                            posts = social_data.get('posts', {})
+                            twitter_post = posts.get('twitter', {})
+                            instagram_post = posts.get('instagram', {})
+                            # Use only the chosen platform's copy
+                            if chosen_platform == "twitter":
+                                primary_copy = twitter_post.get('copy', '')
+                                secondary_copy = ''
+                            else:
+                                primary_copy = instagram_post.get('copy', '')
+                                secondary_copy = ''
+                            post_preview = json.dumps({chosen_platform: primary_copy})
+                            image_prompts = social_data.get('image_prompts', [])
+                            image_prompt = image_prompts[0] if image_prompts else f"Professional, high-quality social media image for {brand_info.get('brand_name', 'brand')} in {brand_info.get('industry', 'business')} industry, located in {brand_info.get('location', 'their area')}, showcasing {req.message[:50]}, {brand_info.get('unique_selling_points', ['quality service'])[0] if brand_info.get('unique_selling_points') else 'professional service'}, photorealistic style, modern design"
+                            
+                            # Get reference images from brand profile (S3 URLs)
+                            reference_images = []
+                            try:
+                                brand_profile = db.get_brand_profile(user_id, req.active_brand)
+                                if brand_profile:
+                                    # Get logo URL if available
+                                    logo_url = brand_profile.get('logo_url')
+                                    if logo_url:
+                                        reference_images.append(logo_url)
+                                    
+                                    # Get other reference images from metadata
+                                    metadata = brand_profile.get('metadata', {})
+                                    if isinstance(metadata, dict):
+                                        assets = metadata.get('assets', {})
+                                        # Get reference_image assets
+                                        ref_images = assets.get('reference_image', [])
+                                        for asset in ref_images:
+                                            if isinstance(asset, dict) and asset.get('url'):
+                                                reference_images.append(asset['url'])
+                                        # Also include item images
+                                        item_images = assets.get('item', [])
+                                        for asset in item_images:
+                                            if isinstance(asset, dict) and asset.get('url'):
+                                                reference_images.append(asset['url'])
+                            except Exception as e:
+                                logger.debug(f"Error getting reference images from brand profile: {e}")
+                            
+                            # Generate image during preview (before approval)
+                            image_path = None
+                            try:
+                                logger.info(f"Generating preview image for variant {variant['label']}...")
+                                # Build comprehensive image prompt with business context
+                                detailed_prompt = f"{image_prompt}. Brand: {brand_info.get('brand_name', '')}. Industry: {brand_info.get('industry', '')}. Location: {brand_info.get('location', '')}. Target audience: {brand_info.get('target_audience', '')}. Unique selling points: {', '.join(brand_info.get('unique_selling_points', []))}"
+                                image_path = generate_image_with_runway(detailed_prompt, reference_images if reference_images else None)
+                                logger.info(f"Preview image generated: {image_path}")
+                            except Exception as img_error:
+                                logger.warning(f"Preview image generation failed (will generate on approval): {img_error}")
+                                image_path = None
+                            
+                            content_id = str(uuid.uuid4())
+                            metadata = {
+                                "brand_name": brand_info.get("brand_name", "My Business"),
+                                "location": brand_info.get("location"),
+                                "industry": brand_info.get("industry"),
+                                "target_audience": brand_info.get("target_audience"),
+                                "unique_selling_points": brand_info.get("unique_selling_points", []),
+                                "platforms": [chosen_platform],
+                                "hashtags": twitter_post.get('hashtags', []),
+                                "keywords_used": keywords_data.get("keywords", [])[:5] if isinstance(keywords_data, dict) else [],
+                                "image_prompt": image_prompt,
+                                "image_path": image_path,  # Store generated image path
+                                "reference_images": reference_images if reference_images else [],
+                                "option_id": option_id,
+                                "selection_group": state_hash,
+                                "variant_label": variant["label"],
+                                "variant_tone": variant["tone"],
+                                "workflow_name": variant["workflow"]["workflow_name"],
+                                "workflow_agents": variant["workflow"]["agents"],
+                                "workflow_source": variant["source"],
+                                "post_copy": {
+                                    "twitter": twitter_post.get('copy', ''),
+                                    "instagram": instagram_post.get('copy', '')
+                                },
+                                "full_post_data": social_data
+                            }
+                            
+                            # Set preview_url to image if available
+                            preview_url = f"/preview/image/{image_path}" if image_path else None
+                            
+                            db.save_generated_content(
+                                content_id=content_id,
+                                session_id=session_id,
+                                content_type="post",
+                                content=post_preview,
+                                preview_url=preview_url,
+                                metadata=metadata
+                            )
+
+                            # --- ðŸ§  SAVE MEMORY (VECTOR DB) ---
+                            try:
+                                logger.info(f"Saving vector memory for social content {content_id}")
+                                # Text Memory
+                                rich_text = f"Social Post ({variant['tone']}): {req.message}. Twitter: {twitter_post.get('copy', '')}. Instagram: {instagram_post.get('copy', '')}"
+                                text_embedding = memory.get_text_embedding(rich_text)
+                                
+                                # Visual Memory (if image exists)
+                                visual_embedding = None
+                                if image_path and os.path.exists(image_path):
+                                    try:
+                                        from tools import embedding
+                                        # Load image model on demand
+                                        img_model = embedding.load_image_model()
+                                        visual_embedding = embedding.embed_image(img_model, image_path).tolist()
+                                        logger.info("Generated visual embedding for social image")
+                                    except Exception as ve:
+                                        logger.warning(f"Visual embedding failed: {ve}")
+
+                                memory_entity = {
+                                    "campaign_id": content_id,
+                                    "text_vector": text_embedding,
+                                    "visual_vector": visual_embedding,
+                                    "text_model": "all-MiniLM-L6-v2",
+                                    "visual_model": "clip-ViT-B-32" if visual_embedding else None,
+                                    "context_metadata": metadata,
+                                    "alignment_score": 1.0,
+                                    "source": "orchestrator",
+                                    "tags": ["social", brand_info.get("industry", "General"), variant["tone"]]
+                                }
+                                memory.write_campaign_entity(memory_entity)
+                                logger.info(f"Social memory saved for {content_id}")
+                            except Exception as mem_err:
+                                logger.warning(f"Failed to save social vector memory: {mem_err}")
+                            # ----------------------------------
+                            
+                            db.save_workflow_variant(
+                                option_id=option_id,
+                                session_id=session_id,
+                                content_id=content_id,
+                                workflow_name=variant["workflow"]["workflow_name"],
+                                state_hash=state_hash,
+                                label=variant["label"],
+                                metadata={
+                                    "tone": variant["tone"],
+                                    "cost_estimate": workflow_cost_estimate
+                                }
+                            )
+                            
+                            mabo.register_workflow_execution(
+                                content_id=content_id,
+                                state_hash=state_hash,
+                                action=variant["workflow"]["workflow_name"],
+                                cost=workflow_cost_estimate["total_cost"],
+                                execution_time=workflow_cost_estimate["total_time"]
+                            )
+                            
+                            _social_text = primary_copy
+                            _critic_data_social = _call_critic_sync(
+                                content_id, _social_text, "social_post",
+                                brand_info.get("brand_name", ""), req.message
+                            )
+
+                            # Feed critic score into MABO as an immediate quality reward
+                            if _critic_data_social and _critic_data_social.get("overall") is not None:
+                                mabo.update_engagement_metrics(
+                                    content_id, float(_critic_data_social["overall"])
+                                )
+                                if _critic_data_social.get("passed"):
+                                    mabo.update_content_approval(content_id, approved=True)
+                                logger.info(
+                                    f"[MABO] Social critic reward fed: content={content_id} "
+                                    f"overall={_critic_data_social['overall']:.2f} passed={_critic_data_social.get('passed')}"
+                                )
+                                # Score the prompt version that generated this content
+                                try:
+                                    from prompt_optimizer import score_latest_for_agent
+                                    score_latest_for_agent(
+                                        "content_agent", "social_post",
+                                        float(_critic_data_social["overall"])
+                                    )
+                                except Exception as _pe:
+                                    logger.warning(f"[PromptOptimizer] Social scoring skipped: {_pe}")
+
+                            response_options.append({
+                                "option_id": option_id,
+                                "label": variant["label"],
+                                "tone": variant["tone"].title(),
+                                "workflow_name": variant["workflow"]["workflow_name"],
+                                "workflow_agents": variant["workflow"]["agents"],
+                                "cost": workflow_cost_estimate["total_cost"],
+                                "cost_display": cost_model.format_cost_display(workflow_cost_estimate["total_cost"]),
+                                "content_id": content_id,
+                                "content_type": "post",
+                                "state_hash": state_hash,
+                                "platform": chosen_platform,
+                                "twitter_copy": primary_copy if chosen_platform == "twitter" else "",
+                                "instagram_copy": primary_copy if chosen_platform == "instagram" else "",
+                                "hashtags": (twitter_post if chosen_platform == "twitter" else instagram_post).get('hashtags', []),
+                                "preview_url": preview_url,
+                                "preview_text": f"{variant['label']} ready for {chosen_platform.title()}.",
+                                "critic": _critic_data_social,
+                            })
+                        except Exception as variant_error:
+                            logger.error(f"Social variant failed ({variant['label']}): {variant_error}", exc_info=True)
+                            continue
+                    
+                    if response_options:
+                        platform_label = chosen_platform.title().replace("Twitter", "Twitter/X")
+                        response_text = f"ðŸ“£ **{len(response_options)} {platform_label} Post Concept{'s' if len(response_options) > 1 else ''} Ready**\n\nReview the cards below â€” each shows the generated image and {platform_label} copy. Hit **Approve & Post** on the one you like, or tap ðŸ”„ to regenerate the image."
+                    else:
+                        response_text = "âš ï¸ I couldn't generate social concepts right now. Please try again."
+                except Exception as e:
+                    logger.error(f"Social post error: {e}", exc_info=True)
+                    response_text = f"âš ï¸ Post generation error: {str(e)}\n\nPlease try again with a different prompt."
+            else:
+                # Missing required fields - response_text already set above asking for info
+                pass
+        
+        elif intent == "campaign_post":
+            # User wants to post/publish content to social platforms
+            ig_configured = bool(INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD)
+            tw_configured = bool(TWITTER_API_KEY and TWITTER_ACCESS_TOKEN)
+
+            status_lines = []
+            if ig_configured:
+                status_lines.append(f"âœ… **Instagram** â€” connected as `{INSTAGRAM_USERNAME}`")
+            else:
+                status_lines.append("âŒ **Instagram** â€” add `INSTAGRAM_USERNAME` and `INSTAGRAM_PASSWORD` to your .env")
+            if tw_configured:
+                status_lines.append("âœ… **Twitter / X** â€” connected")
+            else:
+                status_lines.append("âŒ **Twitter / X** â€” add Twitter API keys to your .env")
+
+            status_text = "\n".join(status_lines)
+            connected_platforms = []
+            if ig_configured:
+                connected_platforms.append("Instagram")
+            if tw_configured:
+                connected_platforms.append("Twitter/X")
+            platform_str = " & ".join(connected_platforms) if connected_platforms else "any platform"
+
+            response_text = (
+                f"ðŸ“± **Social Media Publishing**\n\n"
+                f"**Platform Status:**\n{status_text}\n\n"
+                f"**How to publish:**\n"
+                f"1. Say **\"Create a social post about [your topic]\"** to generate platform-specific copy\n"
+                f"2. Review the two draft options that appear\n"
+                f"3. Click **Approve & Post** on the card you like â€” it will publish to {platform_str} automatically\n\n"
+                f"Would you like me to generate a social post for you right now?"
+            )
+
+        elif intent == "image_generation":
+            _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+            response_text = await router.generate_conversational_response(
+                req.message, history_for_router, brand_context=_brand_ctx
+            )
+
+        elif intent == "competitor_research":
+            brand_profile = db.get_brand_profile(user_id, req.active_brand)
+            if not brand_profile:
+                response_text = (
+                    "I need your business details to find competitors. "
+                    "Please share your **business name** and **industry** "
+                    "(or say \"setup my business\" to configure your profile)."
                 )
-                
-                # Step 6: Run competitor gap analysis
-                gap_analysis = None
+            else:
+                brand_info = normalize_brand_info(brand_profile)
                 try:
-                    logger.info("Running competitor gap analysis")
-                    
-                    # Build product description from brand info
-                    product_desc = f"{brand_info.get('industry', 'Business')} in {brand_info.get('location', 'N/A')}. {brand_info.get('description', '')}"
-                    
-                    gap_analysis = call_agent_job(
+                    response_text = f"\U0001f50d Analysing competitors for **{brand_info.get('brand_name')}**..."
+                    product_desc = (
+                        f"{brand_info.get('industry', 'Business')} "
+                        f"in {brand_info.get('location', 'N/A')}. "
+                        f"{brand_info.get('description', '')}"
+                    )
+                    gap_result = call_agent_job(
                         "CompetitorGapAnalyzer",
                         f"{GAP_ANALYZER_BASE}/analyze-keyword-gap",
                         {
-                            "company_name": brand_info.get('brand_name', 'My Business'),
+                            "company_name": brand_info.get("brand_name", "My Business"),
                             "product_description": product_desc,
-                            "company_url": brand_info.get('website', ''),
-                            "max_competitors": 3,
-                            "max_pages_per_site": 1
+                            "company_url": brand_info.get("website", ""),
+                            "max_competitors": 5,
+                            "max_pages_per_site": 2,
                         },
                         download_path_template="/download/json/{job_id}"
                     )
-                    logger.info("Gap analysis completed")
-                except Exception as e:
-                    logger.warning(f"Gap analysis failed: {e}, continuing without it")
-                
-                # Step 7: Create enriched social media content request
-                social_context = {
-                    "keywords": keywords_data,
-                    "brand_name": brand_info.get("brand_name", "My Business"),
-                    "industry": brand_info.get("industry", ""),
-                    "location": brand_info.get("location", ""),
-                    "target_audience": brand_info.get("target_audience", ""),
-                    "unique_selling_points": brand_info.get("unique_selling_points", []),
-                    "competitor_insights": gap_analysis.get("content_gaps_summary", "") if gap_analysis else "",
-                    "user_request": req.message,
-                    "platforms": ["twitter", "instagram"],
-                    "tone": "professional"
-                }
-                
-                # Step 8: Generate social content
-                logger.info("Generating social media content")
-                social_data = call_agent_job(
-                    "ContentAgent",
-                    f"{CONTENT_AGENT_BASE}/generate-social",
-                    social_context
-                )
-                
-                # Step 9: Generate image using Runway
-                image_prompts = social_data.get('image_prompts', [])
-                
-                # Create contextual image prompt
-                location_str = f" in {brand_info.get('location')}" if brand_info.get('location') else ""
-                image_prompt = image_prompts[0] if image_prompts else f"Professional social media image for {brand_info.get('brand_name', 'a business')}{location_str}, about {req.message[:50]}, modern, high-quality, eye-catching"
-                
-                try:
-                    image_path = generate_image_with_runway(image_prompt)
-                    logger.info(f"Image generated: {image_path}")
-                except Exception as img_error:
-                    logger.warning(f"Image generation failed: {img_error}, using placeholder")
-                    image_path = None
-                
-                # Save to preview
-                content_id = str(uuid.uuid4())
-                post_text = social_data['posts']['twitter']['copy']
-                
-                db.save_generated_content(
-                    content_id=content_id,
-                    session_id=session_id,
-                    content_type="post",
-                    content=post_text,
-                    preview_url=image_path,
-                    metadata={
-                        "brand_name": brand_info.get("brand_name", "My Business"),
-                        "location": brand_info.get("location"),
-                        "industry": brand_info.get("industry"),
-                        "platforms": ["twitter", "instagram"],
-                        "hashtags": social_data['posts']['twitter'].get('hashtags', []),
-                        "image_path": image_path,
-                        "keywords_used": keywords_data.get("keywords", [])[:5] if isinstance(keywords_data, dict) else []
-                    }
-                )
-                
-                content_preview_id = content_id
-                
-                # Show preview with detailed info
-                response_text = f"""✅ **Social Media Post Generated!**
+                    competitors = gap_result.get("competitors", [])
+                    gaps_summary = gap_result.get("content_gaps_summary", "")
+                    top_keywords = gap_result.get("top_competitor_keywords", [])
 
-**Brand:** {brand_info.get('brand_name', 'My Business')} {'in ' + brand_info.get('location') if brand_info.get('location') else ''}
-**Industry:** {brand_info.get('industry', 'General')}
+                    if competitors:
+                        comp_lines = "\n".join([
+                            f"- **{c.get('name', c)}**" +
+                            (f" â€” {c.get('url', '')}" if isinstance(c, dict) and c.get('url') else "")
+                            for c in competitors[:5]
+                        ])
+                        kw_lines = (
+                            "\n\n\U0001f4cc **Keywords they rank for:** "
+                            + ", ".join(top_keywords[:8])
+                        ) if top_keywords else ""
+                        response_text = (
+                            f"\U0001f3c6 **Top Competitors for {brand_info.get('brand_name')}** "
+                            f"({brand_info.get('industry', 'your industry')})"
+                            f"\n\n{comp_lines}"
+                            f"{kw_lines}"
+                            f"\n\n\U0001f4ca **Market Gaps You Can Own:**\n{gaps_summary}"
+                            f"\n\nWould you like me to **create content** targeting these gaps, or run a full **SEO audit**?"
+                        )
+                    else:
+                        _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+                        response_text = await router.generate_conversational_response(
+                            req.message, history_for_router, brand_context=_brand_ctx
+                        )
+                except Exception as _ce:
+                    logger.warning(f"Competitor analysis failed: {_ce}")
+                    _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+                    response_text = await router.generate_conversational_response(
+                        req.message, history_for_router, brand_context=_brand_ctx
+                    )
 
-**Post Content:**
-{post_text}
+        elif intent == "deep_research":
+            _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+            response_text = await router.generate_conversational_response(
+                req.message, history_for_router, brand_context=_brand_ctx
+            )
 
-**Hashtags:** {', '.join(social_data['posts']['twitter'].get('hashtags', []))}
-**Keywords Used:** {', '.join(keywords_data.get('keywords', [])[:3]) if isinstance(keywords_data, dict) else 'Optimized'}
+        elif intent == "critic_review":
+            _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+            response_text = await router.generate_conversational_response(
+                req.message, history_for_router, brand_context=_brand_ctx
+            )
 
-{'**Image:** Generated and ready for preview' if image_path else '**Image:** Will be generated on approval'}
-
-**Actions:**
-- Preview & Approve
-- Regenerate
-- Cancel"""
-                
-            except Exception as e:
-                logger.error(f"Social post error: {e}", exc_info=True)
-                response_text = f"⚠️ Post generation error: {str(e)}\n\nPlease try again with a different prompt."
-        
         elif intent == "metrics_report":
             # Show metrics dashboard link
-            response_text = "📊 **Social Media Metrics**\n\nView your performance metrics on the dashboard:\n\n[Open Metrics Dashboard](/metrics.html)\n\nI can also show specific metrics here. What would you like to see?"
+            response_text = "ðŸ“Š **Social Media Metrics**\n\nView your performance metrics on the dashboard:\n\n[Open Metrics Dashboard](/metrics.html)\n\nI can also show specific metrics here. What would you like to see?"
         
         else:
-            # Fallback
-            response_text = await router.generate_conversational_response(req.message, history_for_router)
+            # Fallback â€” always provide brand context so generic answers are relevant
+            _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+            response_text = await router.generate_conversational_response(
+                req.message, history_for_router, brand_context=_brand_ctx
+            )
+        
+        # Check if clarification is needed for business details
+        clarification_request = None
+        
+        # Check for required URL first
+        if routing_result.get("requires_url") and not extracted_params.get("url"):
+            clarification_request = {
+                "type": "missing_url",
+                "message": "I need a website URL to analyze. Please provide the URL of the website you'd like me to check.",
+                "field": "url",
+                "required": True
+            }
+        # Check for required business details for content generation
+        elif intent in ["blog_generation", "social_post"]:
+            brand_profile = db.get_brand_profile(user_id, req.active_brand)
+            missing_fields = []
+            
+            if not brand_profile:
+                # No brand profile at all - need all essential fields
+                missing_fields = ["brand_name", "industry"]
+                clarification_request = {
+                    "type": "missing_brand_info",
+                    "message": "I need some information about your business to create personalized content. Please provide:\n\n1. **Business Name** (required)\n2. **Industry** (required - e.g., 'Restaurant', 'E-commerce', 'Tech Startup')\n3. **Location** (optional but helpful - city/state)\n\nYou can provide this information in your message, or say 'setup business' to configure it step by step.",
+                    "fields": missing_fields,
+                    "required": True,
+                    "intent": intent
+                }
+            else:
+                # Brand profile exists - check if essential fields are present
+                brand_info = normalize_brand_info(brand_profile)
+                
+                if not brand_info.get('brand_name') or brand_info.get('brand_name') == 'My Business':
+                    missing_fields.append("brand_name")
+                if not brand_info.get('industry') or brand_info.get('industry') in ['General', '']:
+                    missing_fields.append("industry")
+                
+                if missing_fields:
+                    field_names = {
+                        "brand_name": "Business Name",
+                        "industry": "Industry"
+                    }
+                    missing_list = [field_names.get(f, f) for f in missing_fields]
+                    clarification_request = {
+                        "type": "missing_brand_info",
+                        "message": f"I need some additional information about your business to create personalized content. Please provide:\n\n" + "\n".join([f"- **{name}** (required)" for name in missing_list]) + "\n\nYou can provide this information in your message.",
+                        "fields": missing_fields,
+                        "required": True,
+                        "intent": intent,
+                        "existing_profile": True
+                    }
         
         # Save assistant response
         db.save_message(session_id, "assistant", response_text, formatted_content=response_text)
@@ -1171,7 +2458,10 @@ User Request: {req.message}
             formatted_response=response_text,
             intent=intent,
             content_preview_id=content_preview_id,
-            workflow_cost=workflow_cost
+            workflow_cost=workflow_cost,
+            response_options=response_options,
+            clarification_request=clarification_request,
+            seo_result=seo_result
         )
     
     except HTTPException:
@@ -1214,6 +2504,53 @@ async def preview_image(image_path: str):
         logger.error(f"Image preview error: {e}")
         raise HTTPException(status_code=500, detail="Failed to load image")
 
+
+@app.get("/images")
+async def list_generated_images():
+    """List all generated images with their preview URLs."""
+    img_dir = "generated_images"
+    os.makedirs(img_dir, exist_ok=True)
+    images = []
+    for fname in sorted(os.listdir(img_dir), reverse=True):
+        if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+            fpath = os.path.join(img_dir, fname)
+            try:
+                stat = os.stat(fpath)
+                images.append({
+                    "filename": fname,
+                    "url": f"/preview/image/generated_images/{fname}",
+                    "size_bytes": stat.st_size,
+                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                })
+            except OSError:
+                continue
+    return {"images": images, "count": len(images)}
+
+
+@app.post("/generate-image")
+async def generate_image_endpoint(request: Request):
+    """Generate an image from a text prompt using RunwayML and return its preview URL."""
+    try:
+        body = await request.json()
+        prompt = body.get("prompt", "").strip()
+        if not prompt:
+            raise HTTPException(status_code=400, detail="prompt is required")
+        reference_images = body.get("reference_images") or []
+        # generate_image_with_runway is blocking — run in thread pool
+        import asyncio
+        loop = asyncio.get_event_loop()
+        image_path = await loop.run_in_executor(
+            None, lambda: generate_image_with_runway(prompt, reference_images or None)
+        )
+        preview_url = f"http://127.0.0.1:8004/preview/image/{image_path}"
+        return {"image_path": image_path, "preview_url": preview_url, "status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"/generate-image failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/content/{content_id}/details")
 async def get_content_details(content_id: str, authorization: str = Header(None)):
     """Get content details including metadata."""
@@ -1246,7 +2583,7 @@ async def get_brand_profile(authorization: str = Header(None)):
         payload = auth.get_current_user(authorization)
         user_id = payload['user_id']
         
-        brand_profile = db.get_brand_profile(user_id)
+        brand_profile = db.get_brand_profile(user_id, req.active_brand)
         if not brand_profile:
             return {"message": "No brand profile found", "profile": None}
         
@@ -1275,6 +2612,125 @@ async def delete_brand_profile(authorization: str = Header(None)):
         logger.error(f"Delete brand profile error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete brand profile")
 
+@app.post("/content/{content_id}/regenerate-image")
+async def regenerate_image(content_id: str, authorization: str = Header(None)):
+    """Regenerate the AI image for a social post card without changing the copy."""
+    try:
+        payload = auth.get_current_user(authorization)
+        content = db.get_generated_content(content_id)
+        if not content:
+            raise HTTPException(status_code=404, detail="Content not found")
+
+        metadata = content.get('metadata', {})
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except Exception:
+                metadata = {}
+
+        # Build image prompt from stored prompt or fall back to brand context
+        image_prompt = metadata.get('image_prompt')
+        if not image_prompt:
+            brand_name = metadata.get('brand_name', 'business')
+            industry = metadata.get('industry', '')
+            location = metadata.get('location', '')
+            usps = metadata.get('unique_selling_points', [])
+            image_prompt = f"Professional social media image for {brand_name}"
+            if industry:
+                image_prompt += f" in the {industry} industry"
+            if location:
+                image_prompt += f" located in {location}"
+            if usps:
+                image_prompt += f", showcasing {usps[0]}"
+            image_prompt += ", photorealistic style, modern design"
+
+        reference_images = metadata.get('reference_images', [])
+
+        try:
+            new_image_path = generate_image_with_runway(
+                image_prompt, reference_images if reference_images else None
+            )
+        except Exception as img_err:
+            logger.error(f"Image regeneration failed: {img_err}")
+            raise HTTPException(status_code=500, detail=f"Image generation failed: {str(img_err)}")
+
+        new_preview_url = f"/preview/image/{new_image_path}"
+
+        # Persist new image path to DB
+        metadata['image_path'] = new_image_path
+        metadata['image_prompt'] = image_prompt
+        db.update_content_metadata(content_id, {"image_path": new_image_path, "image_prompt": image_prompt})
+
+        # Update preview_url column
+        with db.get_db_connection() as conn:
+            conn.execute(
+                "UPDATE generated_content SET preview_url = ? WHERE id = ?",
+                (new_preview_url, content_id)
+            )
+
+        logger.info(f"Image regenerated for content {content_id}: {new_image_path}")
+        return {"preview_url": new_preview_url, "image_path": new_image_path}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Regenerate image error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to regenerate image")
+
+
+@app.post("/workflow/select")
+async def select_workflow_option(req: WorkflowSelectionRequest, authorization: str = Header(None)):
+    """Record client selection between workflow variants and update MABO feedback."""
+    try:
+        payload = auth.get_current_user(authorization)
+        user_id = payload["user_id"]
+        
+        session = db.get_session(req.session_id, user_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        variant = db.get_workflow_variant(req.option_id)
+        if not variant:
+            raise HTTPException(status_code=404, detail="Option not found")
+        
+        if variant["session_id"] != req.session_id:
+            raise HTTPException(status_code=400, detail="Option does not belong to this session")
+        
+        state_hash = variant["state_hash"]
+        db.mark_variant_selection(req.option_id, True)
+        db.clear_variant_selection(req.session_id, state_hash, exclude_option_id=req.option_id)
+        
+        variants = db.get_workflow_variants(req.session_id, state_hash)
+        mabo = mabo_agent.get_mabo_agent()
+        
+        selected_content_id = variant["content_id"]
+        selection_message = f"âœ… Locked in **{variant.get('label', 'your preferred option')}**. I'll continue with workflow `{variant['workflow_name']}`."
+        
+        for item in variants:
+            is_selected = item["option_id"] == req.option_id
+            db.update_content_metadata(
+                item["content_id"],
+                {
+                    "selection_status": "selected" if is_selected else "dismissed",
+                    "selection_recorded_at": datetime.now().isoformat()
+                }
+            )
+            db.mark_variant_selection(item["option_id"], is_selected)
+            mabo.update_content_approval(item["content_id"], approved=is_selected)
+        
+        db.save_message(req.session_id, "assistant", selection_message, formatted_content=selection_message)
+        
+        return {
+            "message": selection_message,
+            "content_id": selected_content_id,
+            "state_hash": state_hash
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Workflow selection error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to record selection")
+
 @app.post("/content/{content_id}/approve")
 async def approve_content(content_id: str, req: ContentApprovalRequest, background_tasks: BackgroundTasks, authorization: str = Header(None)):
     """Approve and publish content."""
@@ -1289,32 +2745,55 @@ async def approve_content(content_id: str, req: ContentApprovalRequest, backgrou
             # Host on S3 or post to social
             if content['type'] == 'blog':
                 preview_path = f"previews/blog_{content_id}.html"
-                s3_url = host_on_s3(preview_path, f"blogs/{content_id}.html")
+                try:
+                    s3_url = host_on_s3(preview_path, f"blogs/{content_id}.html")
+                except Exception as _s3_err:
+                    logger.warning(f"S3 upload skipped ({_s3_err}); using local preview URL")
+                    s3_url = f"http://localhost:8080/{os.path.basename(preview_path)}"
                 db.update_content_status(content_id, "approved", s3_url)
-                return {"message": "Blog published successfully", "url": s3_url}
+                return {"message": "Blog approved successfully", "url": s3_url}
             
             elif content['type'] == 'post':
                 # Post to social media platforms
                 try:
                     metadata = content.get('metadata', {})
                     image_path = metadata.get('image_path') or content.get('preview_url')
-                    post_text = content['content']
+                    post_data = metadata.get('post_copy') or {}
                     hashtags = metadata.get('hashtags', [])
                     platforms = metadata.get('platforms', ['twitter', 'instagram'])
-                    
-                    # Add hashtags to post text
-                    full_text = f"{post_text}\n\n{' '.join(hashtags)}" if hashtags else post_text
                     
                     # Generate image if not exists
                     if not image_path or not os.path.exists(image_path):
                         logger.info("Image not found, generating new image...")
-                        image_prompt = f"Professional social media image for {metadata.get('brand_name', 'business')}"
+                        # Use the stored image_prompt from metadata, or build a comprehensive one
+                        stored_prompt = metadata.get('image_prompt')
+                        if stored_prompt:
+                            image_prompt = stored_prompt
+                        else:
+                            # Build comprehensive prompt with business context
+                            brand_name = metadata.get('brand_name', 'business')
+                            industry = metadata.get('industry', '')
+                            location = metadata.get('location', '')
+                            usps = metadata.get('unique_selling_points', [])
+                            image_prompt = f"Professional, high-quality social media image for {brand_name}"
+                            if industry:
+                                image_prompt += f" in the {industry} industry"
+                            if location:
+                                image_prompt += f" located in {location}"
+                            if usps:
+                                image_prompt += f", showcasing {usps[0]}"
+                            image_prompt += ", photorealistic style, modern design"
+                        
+                        reference_images = metadata.get('reference_images', [])
                         try:
-                            image_path = generate_image_with_runway(image_prompt)
+                            image_path = generate_image_with_runway(image_prompt, reference_images if reference_images else None)
                             logger.info(f"Image generated: {image_path}")
+                            # Update metadata with new image path
+                            metadata['image_path'] = image_path
+                            db.update_content_metadata(content_id, {"image_path": image_path})
                         except Exception as img_error:
-                            logger.error(f"Image generation failed: {img_error}")
-                            raise HTTPException(status_code=500, detail="Image generation failed")
+                            logger.warning(f"Image generation skipped (no key or failed): {img_error}")
+                            image_path = None  # proceed without image
                     
                     # Post to social media platforms
                     post_urls = {}
@@ -1323,9 +2802,15 @@ async def approve_content(content_id: str, req: ContentApprovalRequest, backgrou
                     for platform in platforms:
                         try:
                             logger.info(f"Posting to {platform}...")
-                            post_url = post_to_social(platform, full_text, image_path)
+                            copy = post_data.get(platform) if isinstance(post_data, dict) else None
+                            if not copy:
+                                copy = content['content']
+                                if isinstance(copy, str):
+                                    copy = copy.replace("Twitter:", "").replace("Instagram:", "").strip()
+                            text_with_tags = f"{copy}\n\n{' '.join(hashtags)}" if hashtags else copy
+                            post_url = post_to_social(platform, text_with_tags, image_path)
                             post_urls[platform] = post_url
-                            logger.info(f"✓ Posted to {platform}: {post_url}")
+                            logger.info(f"âœ“ Posted to {platform}: {post_url}")
                             
                             # Save to social_posts for metrics tracking
                             db.save_social_post(content_id, platform, post_url)
@@ -1340,12 +2825,12 @@ async def approve_content(content_id: str, req: ContentApprovalRequest, backgrou
                         final_url = ", ".join([f"{p}: {url}" for p, url in post_urls.items()])
                         db.update_content_status(content_id, "approved", final_url)
                         
-                        response_msg = f"✅ Post published successfully!\n\n"
+                        response_msg = f"âœ… Post published successfully!\n\n"
                         for platform, url in post_urls.items():
                             response_msg += f"**{platform.title()}:** {url}\n"
                         
                         if errors:
-                            response_msg += f"\n⚠️ Some platforms failed:\n" + "\n".join(errors)
+                            response_msg += f"\nâš ï¸ Some platforms failed:\n" + "\n".join(errors)
                         
                         # Schedule background metrics collection (wait 30 seconds for APIs to update)
                         import time
@@ -1358,7 +2843,9 @@ async def approve_content(content_id: str, req: ContentApprovalRequest, backgrou
                         
                         return {"message": response_msg, "urls": post_urls, "errors": errors if errors else None}
                     else:
-                        raise HTTPException(status_code=500, detail=f"Failed to post to all platforms: {', '.join(errors)}")
+                        logger.warning(f"All social platforms failed: {errors}")
+                        db.update_content_status(content_id, "approved")
+                        return {"message": f"Content approved. Social posting unavailable: {', '.join(errors)}", "urls": {}, "errors": errors}
                         
                 except Exception as e:
                     logger.error(f"Social media posting error: {e}")
@@ -1450,27 +2937,513 @@ async def get_report(name: str):
     return FileResponse(file_path)
 
 @app.post("/upload/{session_id}")
-async def upload_file(session_id: str, file: UploadFile = File(...), authorization: str = Header(None)):
-    """Upload file for processing."""
+async def upload_file(session_id: str, file: UploadFile = File(...), authorization: str = Header(None), asset_type: str = Query("general", description="Type of asset: logo, item, reference_image, or general")):
+    """
+    Upload file (image/logo/etc) to S3 and store S3 URL in database.
+    
+    asset_type: "logo", "item", "reference_image", or "general"
+    """
     try:
         payload = auth.get_current_user(authorization)
-        local_path = f"uploads/{session_id}_{file.filename}"
-        with open(local_path, "wb") as buffer:
-            buffer.write(await file.read())
-        return JSONResponse(content={"message": f"File '{file.filename}' uploaded", "path": local_path})
+        user_id = payload['user_id']
+        
+        # Validate file type (only images for now)
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"File type not allowed. Allowed: {', '.join(allowed_extensions)}")
+        
+        # Read file content
+        file_content = await file.read()
+        file_size = len(file_content)
+        
+        # Limit file size (10MB)
+        max_size = 10 * 1024 * 1024
+        if file_size > max_size:
+            raise HTTPException(status_code=400, detail=f"File too large. Maximum size: 10MB")
+        
+        # Determine content type
+        content_type_map = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml'
+        }
+        content_type = content_type_map.get(file_ext, 'application/octet-stream')
+        
+        # Generate unique S3 key
+        import uuid
+        unique_id = uuid.uuid4().hex[:8]
+        timestamp = datetime.now().strftime("%Y%m%d")
+        s3_key = f"user-assets/{user_id}/{asset_type}/{timestamp}_{unique_id}{file_ext}"
+        
+        # Upload to S3
+        if not s3_client or not AWS_S3_BUCKET_NAME:
+            # Fallback: save locally if S3 not configured
+            logger.warning("S3 not configured, saving file locally")
+            local_path = f"uploads/{session_id}_{file.filename}"
+            os.makedirs("uploads", exist_ok=True)
+            with open(local_path, "wb") as buffer:
+                buffer.write(file_content)
+            return JSONResponse(content={
+                "message": f"File '{file.filename}' uploaded (local storage)",
+                "path": local_path,
+                "s3_url": None,
+                "asset_type": asset_type
+            })
+        
+        # Upload to S3
+        try:
+            s3_client.put_object(
+                Bucket=AWS_S3_BUCKET_NAME,
+                Key=s3_key,
+                Body=file_content,
+                ContentType=content_type,
+              # Make images publicly accessible
+            )
+            s3_url = f"https://{AWS_S3_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
+            logger.info(f"File uploaded to S3: {s3_url}")
+        except Exception as s3_error:
+            logger.error(f"S3 upload failed: {s3_error}")
+            # Fallback to local storage
+            local_path = f"uploads/{session_id}_{file.filename}"
+            os.makedirs("uploads", exist_ok=True)
+            with open(local_path, "wb") as buffer:
+                buffer.write(file_content)
+            return JSONResponse(content={
+                "message": f"File '{file.filename}' uploaded (local storage - S3 failed)",
+                "path": local_path,
+                "s3_url": None,
+                "asset_type": asset_type
+            })
+        
+        # Store S3 URL in database
+        try:
+            # Update brand profile if it's a logo
+            if asset_type == "logo":
+                brand_profile = db.get_brand_profile(user_id, req.active_brand)
+                if brand_profile:
+                    db.update_brand_profile(
+                        user_id=user_id,
+                        brand_name=brand_profile.get('brand_name'),
+                        contacts=brand_profile.get('contacts'),
+                        location=brand_profile.get('location'),
+                        logo_url=s3_url
+                    )
+                else:
+                    # Create brand profile with logo
+                    db.save_brand_profile(
+                        user_id=user_id,
+                        brand_name="My Business",
+                        contacts=None,
+                        location=None,
+                        logo_url=s3_url
+                    )
+            
+            # Store in user assets (add to metadata or create new table entry)
+            # For now, we'll store in brand profile metadata
+            brand_profile = db.get_brand_profile(user_id, req.active_brand)
+            if brand_profile:
+                metadata = brand_profile.get('metadata', {})
+                if not isinstance(metadata, dict):
+                    metadata = json.loads(metadata) if metadata else {}
+                
+                # Store asset URLs in metadata
+                if 'assets' not in metadata:
+                    metadata['assets'] = {}
+                if asset_type not in metadata['assets']:
+                    metadata['assets'][asset_type] = []
+                
+                asset_info = {
+                    "url": s3_url,
+                    "filename": file.filename,
+                    "uploaded_at": datetime.now().isoformat(),
+                    "size": file_size,
+                    "content_type": content_type
+                }
+                metadata['assets'][asset_type].append(asset_info)
+                
+                # Keep only last 20 assets per type
+                if len(metadata['assets'][asset_type]) > 20:
+                    metadata['assets'][asset_type] = metadata['assets'][asset_type][-20:]
+                
+                db.update_brand_profile(
+                    user_id=user_id,
+                    brand_name=brand_profile.get('brand_name'),
+                    contacts=brand_profile.get('contacts'),
+                    location=brand_profile.get('location'),
+                    logo_url=brand_profile.get('logo_url'),
+                    metadata=metadata
+                )
+        except Exception as db_error:
+            logger.warning(f"Failed to store asset URL in database: {db_error}")
+            # Continue anyway, S3 upload succeeded
+        
+        return JSONResponse(content={
+            "message": f"File '{file.filename}' uploaded successfully",
+            "s3_url": s3_url,
+            "asset_type": asset_type,
+            "filename": file.filename,
+            "size": file_size
+        })
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail="Upload failed")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.get("/scheduler/status")
 async def scheduler_status():
     """Get scheduler status."""
     return get_scheduler_status()
 
+@app.get("/user/assets")
+async def get_user_assets(authorization: str = Header(None), asset_type: Optional[str] = Query(None, description="Filter by asset type: logo, item, reference_image, or general")):
+    """Get user's uploaded assets (S3 URLs)."""
+    try:
+        payload = auth.get_current_user(authorization)
+        user_id = payload['user_id']
+        
+        brand_profile = db.get_brand_profile(user_id, req.active_brand)
+        if not brand_profile:
+            return {"assets": [], "logo_url": None}
+        
+        logo_url = brand_profile.get('logo_url')
+        metadata = brand_profile.get('metadata', {})
+        if not isinstance(metadata, dict):
+            metadata = json.loads(metadata) if metadata else {}
+        
+        assets = metadata.get('assets', {})
+        
+        # Filter by asset_type if specified
+        if asset_type:
+            filtered_assets = assets.get(asset_type, [])
+            return {
+                "assets": filtered_assets,
+                "logo_url": logo_url if asset_type == "logo" else None
+            }
+        
+        # Return all assets
+        all_assets = []
+        for asset_type_key, asset_list in assets.items():
+            for asset in asset_list:
+                asset['asset_type'] = asset_type_key
+                all_assets.append(asset)
+        
+        # Sort by uploaded_at (newest first)
+        all_assets.sort(key=lambda x: x.get('uploaded_at', ''), reverse=True)
+        
+        return {
+            "assets": all_assets,
+            "logo_url": logo_url
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get user assets error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get user assets")
+
 @app.get("/rl/stats")
 async def rl_stats():
-    """Get RL agent statistics."""
-    return rl_agent.get_q_table_summary()
+    """Get MABO agent statistics (legacy endpoint name)."""
+    mabo = mabo_agent.get_mabo_agent()
+    return mabo.get_mabo_stats()
+
+def sanitize_json(obj: Any) -> Any:
+    """Recursively sanitize object for JSON serialization (replace inf/nan)."""
+    try:
+        import numpy as np
+        has_numpy = True
+    except ImportError:
+        has_numpy = False
+    
+    if isinstance(obj, dict):
+        return {k: sanitize_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_json(item) for item in obj]
+    elif isinstance(obj, float):
+        if math.isinf(obj) or math.isnan(obj):
+            return None
+        return obj
+    elif has_numpy:
+        if isinstance(obj, np.floating):
+            if math.isinf(obj) or math.isnan(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.ndarray):
+            return sanitize_json(obj.tolist())
+    return obj
+
+@app.get("/mabo/stats")
+async def mabo_stats():
+    """Get MABO agent statistics."""
+    try:
+        mabo = mabo_agent.get_mabo_agent()
+        stats = mabo.get_mabo_stats()
+        
+        # Add validation metrics
+        try:
+            from validation_metrics import get_validation_metrics
+            validation = get_validation_metrics()
+            stats["validation"] = validation.get_comprehensive_report()
+        except Exception as e:
+            logger.warning(f"Could not load validation metrics: {e}")
+            stats["validation"] = {"error": "Validation metrics not available"}
+        
+        # Final sanitization pass to ensure JSON compliance
+        stats = sanitize_json(stats)
+        
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting MABO stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get MABO stats: {str(e)}")
+
+@app.post("/mabo/batch-update")
+async def trigger_mabo_update(authorization: str = Header(None)):
+    """Trigger MABO batch update (for testing/scheduling)."""
+    try:
+        payload = auth.get_current_user(authorization)
+        mabo = mabo_agent.get_mabo_agent()
+        result = mabo.perform_batch_update()
+        return result
+    except Exception as e:
+        logger.error(f"MABO update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== HITL ENDPOINTS ====================
+
+@app.get("/hitl/pending/{session_id}")
+async def get_pending_hitl(session_id: str):
+    """Return pending HITL events for a session (polled by frontend â€” no auth required)."""
+    from database import get_pending_hitl_events
+    events = get_pending_hitl_events(session_id)
+    return {"events": events, "count": len(events)}
+
+
+@app.post("/hitl/respond/{event_id}")
+async def respond_hitl(event_id: str, req: HitlRespondRequest,
+                       authorization: str = Header(None)):
+    """User responds to a HITL event (approve/reject/edit)."""
+    payload = auth.get_current_user(authorization)
+    from database import resolve_hitl_event, get_hitl_event
+    event = get_hitl_event(event_id)
+    if not event:
+        raise HTTPException(404, f"HITL event {event_id} not found")
+    resolve_hitl_event(event_id, {
+        "decision": req.decision,
+        "edited_content": req.edited_content,
+        "user_id": payload["user_id"],
+        "responded_at": datetime.now().isoformat(),
+    })
+    # If approved/edited, also record decision in critic_logs
+    if event.get("event_type") == "content_review":
+        content_id = event["payload"].get("content_id")
+        if content_id:
+            from database import update_critic_decision
+            update_critic_decision(content_id, req.decision)
+    return {"status": "recorded", "event_id": event_id, "decision": req.decision}
+
+
+# ==================== WORKFLOW RUN ENDPOINT ====================
+
+@app.post("/workflow/run")
+@trace_workflow(name="orchestrator_workflow", tags=["orchestrator"])
+async def run_workflow(req: WorkflowRunRequest, authorization: str = Header(None)):
+    """
+    Execute a named agent workflow, run critic, emit HITL event if needed.
+    Returns workflow_run_id and intermediate results.
+    """
+    user_payload = auth.get_current_user(authorization)
+    user_id = user_payload["user_id"]
+    session_id = req.session_id or str(uuid.uuid4())
+
+    from intelligent_router import get_workflow_plan
+    from database import create_workflow_run, update_workflow_run, get_workflow_run
+
+    plan = get_workflow_plan(req.intent, req.params or {})
+    run_id = str(uuid.uuid4())
+    langsmith_run_id = get_current_run_id()
+
+    create_workflow_run(
+        run_id=run_id,
+        session_id=session_id,
+        user_id=user_id,
+        workflow_name=req.intent,
+        agent_sequence=plan.agents,
+        agent_settings=plan.params,
+        langsmith_run_id=langsmith_run_id,
+    )
+
+    steps_output: Dict[str, Any] = {}
+
+    try:
+        for i, agent in enumerate(plan.agents):
+            update_workflow_run(run_id, "running", current_step=i)
+            logger.info(f"[{run_id}] Step {i}: {agent}")
+            # Dispatch to agent microservice
+            result = await _call_agent(agent, req.message, req.brand_name, plan.params, steps_output)
+            steps_output[agent] = result
+
+        update_workflow_run(run_id, "completed", steps_output=steps_output, completed=True)
+        return {
+            "workflow_run_id": run_id,
+            "session_id": session_id,
+            "status": "completed",
+            "agents_run": plan.agents,
+            "results": steps_output,
+            "langsmith_run_id": langsmith_run_id,
+        }
+
+    except Exception as e:
+        logger.error(f"Workflow {run_id} failed: {e}", exc_info=True)
+        update_workflow_run(run_id, "failed", steps_output=steps_output, completed=True)
+        raise HTTPException(500, f"Workflow failed: {e}")
+
+
+async def _call_agent(agent_name: str, message: str, brand_name: Optional[str],
+                      params: Dict, prior_outputs: Dict) -> Dict:
+    """Dispatch a single agent step and return its result dict."""
+    agent_url_map = {
+        "webcrawler":           f"{CRAWLER_BASE}/crawl",
+        "keyword_extractor":    f"{KEYWORD_EXTRACTOR_BASE}/extract",
+        "gap_analyzer":         f"{GAP_ANALYZER_BASE}/analyze",
+        "content_agent_blog":   f"{CONTENT_AGENT_BASE}/generate-blog",
+        "content_agent_social": f"{CONTENT_AGENT_BASE}/generate-social",
+        "seo_agent":            "http://127.0.0.1:5000/analyze",
+        "research_agent":       f"{RESEARCH_AGENT_BASE}/research",
+        "brand_agent":          f"{BRAND_AGENT_BASE}/brand",
+        "image_agent":          f"{IMAGE_AGENT_BASE}/generate",
+        "critic_agent":         f"{CRITIC_AGENT_BASE}/critique",
+        "campaign_agent":       f"{CAMPAIGN_AGENT_BASE}/post",
+    }
+    url = agent_url_map.get(agent_name)
+    if not url:
+        return {"skipped": True, "reason": f"No URL mapping for agent {agent_name}"}
+
+    # Build agent-specific payloads to match each service's schema
+    target_url = params.get("url") or params.get("start_url") or message
+    if agent_name == "webcrawler":
+        payload = {"start_url": target_url, "max_pages": params.get("max_pages", 3)}
+    elif agent_name == "keyword_extractor":
+        crawled_text = prior_outputs.get("webcrawler", {}).get("extracted_text", message)
+        payload = {"text": crawled_text, "num_keywords": params.get("num_keywords", 20)}
+    elif agent_name == "gap_analyzer":
+        payload = {"domain": target_url, "keywords": prior_outputs.get("keyword_extractor", {}).get("keywords", [])}
+    elif agent_name == "seo_agent":
+        payload = {"url": target_url}
+    elif agent_name == "research_agent":
+        payload = {"domain": target_url, "topic": message, "depth_level": params.get("depth_level", 2)}
+    elif agent_name in ("content_agent_blog", "content_agent_social"):
+        payload = {
+            "message": message,
+            "brand_name": brand_name,
+            **params,
+            "prior_keywords": prior_outputs.get("keyword_extractor", {}).get("keywords", []),
+            "prior_research": prior_outputs.get("research_agent", {}).get("research_brief", ""),
+        }
+    elif agent_name == "critic_agent":
+        payload = {
+            "content_text": prior_outputs.get("content_agent_blog", prior_outputs.get("content_agent_social", {})).get("content", message),
+            "intent": params.get("intent", "blog"),
+            "brand_name": brand_name,
+        }
+    elif agent_name == "image_agent":
+        payload = {"prompt": message, "style": params.get("style", "photorealistic")}
+    elif agent_name == "campaign_agent":
+        payload = {"user_id": params.get("user_id", 1), "platform": params.get("platform", "linkedin"), "content_text": message}
+    else:
+        payload = {"message": message, "brand_name": brand_name, **params}
+
+    try:
+        resp = requests.post(url, json=payload, timeout=120)
+        if resp.status_code in (200, 201, 202):
+            return resp.json()
+        return {"error": f"HTTP {resp.status_code}", "body": resp.text[:200]}
+    except requests.exceptions.RequestException as e:
+        return {"error": str(e)}
+
+
+# ==================== SOCIAL FEEDBACK & PROMPT EVOLUTION ====================
+
+@app.post("/feedback/social")
+async def social_feedback(req: SocialFeedbackRequest, authorization: str = Header(None)):
+    """Feed social media performance back into MABO and LangSmith."""
+    auth.get_current_user(authorization)
+    mabo = mabo_agent.get_mabo_agent()
+    # Try to find the langsmith_run_id from the content record
+    langsmith_id = None
+    try:
+        from database import get_content
+        content = get_content(req.content_id)
+        if content:
+            langsmith_id = content.get("langsmith_run_id")
+    except Exception:
+        pass
+    mabo.record_social_feedback(req.content_id, req.platform, req.reward, langsmith_id)
+    return {"status": "recorded", "content_id": req.content_id, "reward": req.reward}
+
+
+@app.post("/prompt/evolve")
+async def prompt_evolve(req: PromptEvolveRequest, authorization: str = Header(None)):
+    """Ask the prompt optimizer to evolve a prompt using LLM mutation."""
+    auth.get_current_user(authorization)
+    mabo = mabo_agent.get_mabo_agent()
+    version_id = mabo.trigger_prompt_evolution(
+        req.agent_name, req.context_type, req.feedback, req.current_score
+    )
+    return {"status": "evolved" if version_id else "failed", "version_id": version_id}
+
+
+@app.get("/prompt-log")
+async def get_prompt_log(limit: int = 100, agent_name: Optional[str] = None,
+                         context_type: Optional[str] = None):
+    """Return prompt version history for the UI log page (no auth â€” read-only telemetry)."""
+    try:
+        from database import get_db_connection
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            where_clauses, params = [], []
+            if agent_name:
+                where_clauses.append("agent_name = ?")
+                params.append(agent_name)
+            if context_type:
+                where_clauses.append("context_type = ?")
+                params.append(context_type)
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            cursor.execute(
+                f"""
+                SELECT id, agent_name, context_type, prompt_text,
+                       performance_score, use_count, created_at, updated_at
+                FROM prompt_versions
+                {where_sql}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                params + [limit],
+            )
+            rows = [dict(r) for r in cursor.fetchall()]
+            # Also fetch distinct agent+context combos for filter options
+            cursor.execute(
+                "SELECT DISTINCT agent_name, context_type FROM prompt_versions ORDER BY agent_name, context_type"
+            )
+            agents = [{"agent_name": r[0], "context_type": r[1]} for r in cursor.fetchall()]
+        return {"versions": rows, "total": len(rows), "agents": agents}
+    except Exception as e:
+        logger.error(f"/prompt-log failed: {e}")
+        return {"versions": [], "total": 0, "agents": [], "error": str(e)}
+
+
+@app.get("/tracer/status")
+async def get_tracer_status():
+    """Return LangSmith tracer configuration status."""
+    return tracer_status()
+
 
 @app.get("/")
 async def root():

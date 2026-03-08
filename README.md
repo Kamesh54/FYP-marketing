@@ -1,711 +1,586 @@
-# 🚀 AI-Powered Multi-Agent Content Marketing Platform
+# 🚀 Multi-Agent Content Marketing Platform
 
-A sophisticated multi-agent system that leverages AI to automate content marketing workflows, from SEO analysis to social media posting with intelligent decision-making and metrics tracking.
+**AI-Powered Content Generation, SEO Analysis & Marketing Automation**
 
-![Version](https://img.shields.io/badge/version-5.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.12-green)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-teal)
-![License](https://img.shields.io/badge/license-MIT-orange)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-18+-black.svg)](https://nextjs.org/)
+[![License](https://img.shields.io/badge/License-FYP-yellow.svg)](LICENSE)
 
 ---
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Agent Communication](#agent-communication)
-- [API Documentation](#api-documentation)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-- [Troubleshooting](#troubleshooting)
+- [Overview](#-overview)
+- [Features](#-features)
+- [System Architecture](#️-system-architecture)
+- [Installation](#️-installation)
+- [Configuration](#-configuration)
+- [Quick Start](#-quick-start)
+- [Usage Guide](#-usage-guide)
+- [API Reference](#-api-reference)
+- [Agent Documentation](#-agent-documentation)
+- [Project Structure](#-project-structure)
+- [Technologies](#️-technologies)
+- [Contributing](#-contributing)
 
 ---
 
-## 🎯 Overview
+## 📋 Overview
 
-This platform uses a **multi-agent architecture** powered by **Groq LLM** to automate end-to-end content marketing:
+The **Multi-Agent Content Marketing Platform** is an advanced, AI-powered system that automates content creation, SEO analysis, competitor research, and social media marketing. Built with a microservices architecture, it uses multiple specialized agents working together to deliver comprehensive marketing solutions.
 
-1. **Extract business information** from user input or websites
-2. **Analyze competitors** and identify content gaps
-3. **Generate SEO-optimized blogs** and social media posts
-4. **Post to Instagram & Twitter** with AI-generated images
-5. **Track engagement metrics** and optimize using reinforcement learning
-6. **Provide ChatGPT-like conversational interface** for natural interaction
+The platform leverages cutting-edge technologies including Large Language Models (LLMs), Multi-Agent Bayesian Optimization (MABO), reinforcement learning, and intelligent routing to optimize content generation workflows and maximize marketing ROI.
 
-### What Makes It Unique?
+### Key Highlights
 
-- 🤖 **Intelligent Agent Orchestration** - Autonomous agents communicate and coordinate
-- 🧠 **Context-Aware Brand Memory** - Remembers your business details across sessions
-- 📊 **Reinforcement Learning** - Optimizes agent selection based on performance
-- 🎨 **AI Image Generation** - Creates visual content with RunwayML
-- 📈 **Real-Time Metrics** - Tracks social media engagement automatically
-- 💬 **Natural Conversations** - ChatGPT-like interface with intent recognition
+- 🤖 **Multi-Agent System:** Specialized agents for different marketing tasks
+- 🧠 **AI-Powered:** Uses Groq LLM (Moonshot AI) for intelligent content generation
+- 📊 **MABO Framework:** Multi-Agent Bayesian Optimization for workflow optimization
+- 🔍 **SEO Analysis:** Comprehensive SEO auditing and keyword research
+- 📱 **Social Media:** Automated content creation for multiple platforms
+- 📈 **Analytics:** Real-time metrics collection and performance monitoring
+- 🔐 **Secure:** JWT-based authentication and session management
 
 ---
 
-## ✨ Key Features
+## ✨ Features
 
-### Content Generation
-- ✅ **Blog Post Generation** - SEO-optimized, keyword-rich articles
-- ✅ **Social Media Posts** - Platform-specific content (Twitter, Instagram)
-- ✅ **AI Image Generation** - Professional visuals for posts
-- ✅ **Multi-Platform Publishing** - Direct posting to social media
+### 📝 Blog Generation
+Generate SEO-optimized blog posts with premium HTML design, including reading progress bars, table of contents, dark mode, and advanced animations.
 
-### Intelligence Layer
-- 🧠 **Brand Profile Extraction** - Automatically captures business details
-- 🔍 **Competitor Analysis** - Identifies content gaps and opportunities
-- 🎯 **Keyword Research** - Extracts relevant SEO keywords
-- 🤖 **Intent Recognition** - Routes queries to appropriate agents
-- 📚 **Conversation Memory** - Maintains context across sessions
+### 🔍 SEO Analysis
+Comprehensive SEO auditing with keyword analysis, competitor research, and actionable recommendations.
 
-### Analytics & Optimization
-- 📊 **Engagement Tracking** - Instagram & Twitter metrics
-- 🔄 **Auto-Refresh Metrics** - Updates on page load
-- 📈 **Performance Dashboard** - Visual analytics
-- 🎓 **Reinforcement Learning** - Improves agent selection over time
+### 📱 Social Media
+Create engaging social media content for Twitter, Instagram, Reddit, and more with platform-specific optimization.
 
-### User Experience
-- 💬 **ChatGPT-Like Interface** - Natural conversation flow
-- 🖼️ **Content Preview** - Approve before publishing
-- 📱 **Session Management** - Resume conversations anytime
-- 🔐 **JWT Authentication** - Secure user accounts
+### 🎯 Competitor Analysis
+Identify content gaps, analyze competitor strategies, and discover new opportunities.
+
+### 🧠 Intelligent Routing
+AI-powered intent recognition routes user queries to the appropriate agents automatically.
+
+### 📊 Performance Metrics
+Track content performance, engagement rates, and ROI with comprehensive analytics.
+
+### 💰 Budget Optimization
+MABO framework optimizes budget allocation across campaigns using Bayesian optimization.
+
+### 🔄 Workflow Automation
+Automated workflows for content creation, approval, and publishing with background job processing.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
-### System Overview
+### Layered Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USER INTERFACE                           │
-│  (agent.html - ChatGPT-like, metrics.html - Dashboard)          │
-└────────────────────┬────────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    ORCHESTRATOR (FastAPI)                        │
-│  • JWT Authentication      • Session Management                  │
-│  • Intent Routing          • Brand Memory                        │
-│  • Content Approval Flow   • RL Agent Selection                  │
-└─────┬──────┬──────┬──────┬──────┬──────┬──────┬────────────────┘
-      │      │      │      │      │      │      │
-      ▼      ▼      ▼      ▼      ▼      ▼      ▼
-┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
-│  Web    │ │ Keyword │ │Competitor│ │ Content │ │  SEO    │
-│ Crawler │ │Extractor│ │   Gap   │ │  Agent  │ │ Agent   │
-│         │ │         │ │ Analyzer │ │         │ │         │
-│ :8000   │ │ :8001   │ │  :8002  │ │  :8003  │ │  :5000  │
-└─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
-      │          │            │            │           │
-      └──────────┴────────────┴────────────┴───────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │  EXTERNAL APIS   │
-                    │  • Groq LLM      │
-                    │  • RunwayML      │
-                    │  • Twitter API   │
-                    │  • Instagram API │
-                    │  • SerpAPI       │
-                    └──────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│              PRESENTATION LAYER                              │
+│  • Frontend (Next.js)  • HTML Dashboards  • API Endpoints   │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│              ORCHESTRATION LAYER                             │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │         Orchestrator (FastAPI :8004)                │    │
+│  │  • JWT Auth  • Session Mgmt  • Intent Routing       │    │
+│  │  • MABO Agent  • Workflow Orchestration            │    │
+│  └──────┬──────────┬──────────┬──────────┬────────────┘    │
+└─────────┼──────────┼──────────┼──────────┼─────────────────┘
+          │          │          │          │
+┌─────────▼──────────▼──────────▼──────────▼─────────────────┐
+│                    AGENT LAYER                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  Web     │  │ Keyword │  │Competitor│  │ Content  │   │
+│  │ Crawler  │  │Extractor│  │   Gap    │  │  Agent   │   │
+│  │  :8000   │  │  :8001  │  │  :8002  │  │  :8003  │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   SEO    │  │  Reddit  │  │ Metrics  │  │  MABO    │   │
+│  │  Agent   │  │  Agent   │  │Collector │  │ Framework│   │
+│  │  :5000   │  │  :8010  │  │(Internal)│  │(Internal)│   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    DATA LAYER                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   SQLite DB  │  │  Cache Layer │  │  File System │      │
+│  │  • Users     │  │  • API Cache │  │  • Images    │      │
+│  │  • Sessions  │  │  • Responses │  │  • Previews │      │
+│  │  • Content   │  │              │  │  • Reports   │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Agent Communication Flow
+### Communication Patterns
 
-```
-USER → Orchestrator → IntelligentRouter (LLM) → Intent Classification
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │  Intent Router  │
-                    │  Confidence: 95%│
-                    └────────┬────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        ▼                    ▼                    ▼
-   blog_generation      social_post         seo_analysis
-        │                    │                    │
-        ▼                    ▼                    ▼
-    RL Agent Selects     RL Agent Selects    RL Agent Selects
-    Best Workflow        Best Workflow       Best Workflow
-        │                    │                    │
-        ▼                    ▼                    ▼
-   [WebCrawler] ──┐    [WebCrawler] ──┐     [WebCrawler]
-   [Keyword]   ──┤    [Keyword]   ──┤          │
-   [Gap]       ──┤    [Gap]       ──┤          ▼
-   [Content]   ──┘    [Content]   ──┘     [SEOAgent]
-        │                    │                    │
-        ▼                    ▼                    ▼
-   Blog Preview       Social Preview        SEO Report
-        │                    │                    │
-        ▼                    ▼                    ▼
-   User Approval      User Approval         Display
-        │                    │
-        ▼                    ▼
-   AWS S3 Hosting     Instagram + Twitter
-        │                    │
-        ▼                    ▼
-   Public URL         Metrics Collection
-```
+- **Job-Based:** Agents communicate via job IDs for async operations
+- **Direct API Calls:** Synchronous requests for immediate responses
+- **Event-Driven:** Background tasks and scheduled jobs
 
 ---
 
-## 🛠️ Tech Stack
-
-### Backend
-- **FastAPI** - High-performance async web framework
-- **Python 3.12** - Modern Python with type hints
-- **SQLite** - Embedded database for data persistence
-- **Groq API** - Fast LLM inference (Llama 3.3 70B)
-- **Tweepy** - Twitter API integration
-- **Instagrapi** - Instagram API integration
-
-### Frontend
-- **Vanilla JavaScript** - Fast, no-framework approach
-- **HTML5/CSS3** - Modern responsive design
-- **Markdown Rendering** - Real-time message formatting
-
-### AI & ML
-- **LangSmith** - LLM observability and tracing
-- **Reinforcement Learning** - Q-learning for agent optimization
-- **RunwayML** - AI image generation
-
-### DevOps & Monitoring
-- **APScheduler** - Background job scheduling
-- **Python Logging** - Comprehensive logging
-- **Tenacity** - Retry logic for API calls
-
----
-
-## 📦 Installation
+## ⚙️ Installation
 
 ### Prerequisites
 
-- Python 3.12+
-- Windows/Linux/MacOS
-- API Keys (see Configuration)
+- Python 3.8+
+- Node.js 18+ (for frontend)
+- SQLite (included with Python)
+- API Keys (see Configuration section)
 
 ### Step 1: Clone Repository
 
 ```bash
-git clone <your-repo-url>
-cd "multi agent"
+git clone <repository-url>
+cd FYP
 ```
 
-### Step 2: Install Dependencies
+### Step 2: Install Python Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 3: Configure Environment
-
-Create a `.env` file in the project root:
+Or use the automated installer:
 
 ```bash
-# Copy example
-cp .env.example .env
-
-# Edit with your API keys
-notepad .env  # Windows
-nano .env     # Linux/Mac
+python install_dependencies.py
 ```
 
-### Step 4: Initialize Database
+### Step 3: Install Frontend Dependencies
 
 ```bash
-python -c "import database; database.create_tables()"
+cd frontend
+npm install
+# or
+pnpm install
 ```
 
-### Step 5: Test Instagram Login (Optional)
+### Step 4: Configure Environment
+
+Create a `.env` file in the root directory (see Configuration section).
+
+### Step 5: Initialize Database
 
 ```bash
-python test_instagram_login.py
+python -c "import database; database.initialize_database()"
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🔧 Configuration
 
-### Required API Keys
+### Environment Variables
 
-Add these to your `.env` file:
+Create a `.env` file with the following variables:
 
-```bash
-# AI/LLM
-GROQ_API_KEY=gsk_xxxxx                    # Required - Get from console.groq.com
-LANGSMITH_API_KEY=ls_xxxxx                # Optional - LangSmith tracing
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GROQ_API_KEY` | Groq API key for LLM (Moonshot AI) | ✅ Yes |
+| `SERPAPI_API_KEY` | SerpAPI key for search results | ✅ Yes |
+| `RUNWAY_API_KEY` | Runway API for image generation | ⚠️ Optional |
+| `TWITTER_API_KEY` | Twitter API credentials | ⚠️ Optional |
+| `TWITTER_API_SECRET` | Twitter API secret | ⚠️ Optional |
+| `TWITTER_ACCESS_TOKEN` | Twitter access token | ⚠️ Optional |
+| `TWITTER_ACCESS_TOKEN_SECRET` | Twitter access token secret | ⚠️ Optional |
+| `INSTAGRAM_USERNAME` | Instagram account username | ⚠️ Optional |
+| `INSTAGRAM_PASSWORD` | Instagram account password | ⚠️ Optional |
+| `AWS_ACCESS_KEY_ID` | AWS S3 access key | ⚠️ Optional |
+| `AWS_SECRET_ACCESS_KEY` | AWS S3 secret key | ⚠️ Optional |
+| `AWS_S3_BUCKET_NAME` | S3 bucket name | ⚠️ Optional |
+| `JWT_SECRET` | Secret key for JWT tokens | ✅ Yes |
 
-# Social Media
-TWITTER_API_KEY=xxxxx                      # Required for Twitter posting
-TWITTER_API_SECRET=xxxxx
-TWITTER_ACCESS_TOKEN=xxxxx
-TWITTER_ACCESS_TOKEN_SECRET=xxxxx
-TWITTER_BEARER_TOKEN=xxxxx
+### Example .env File
 
-INSTAGRAM_USERNAME=your_username           # Required for Instagram
-INSTAGRAM_PASSWORD=your_password
+```env
+# Required
+GROQ_API_KEY=your_groq_api_key_here
+SERPAPI_API_KEY=your_serpapi_key_here
+JWT_SECRET=your_jwt_secret_here
 
-# Image Generation
-RUNWAYML_API_KEY=xxxxx                     # Required for AI images
-
-# Search & SEO
-SERPAPI_KEY=xxxxx                          # Required for competitor analysis
-
-# AWS (Optional - for blog hosting)
-AWS_ACCESS_KEY_ID=xxxxx                    # Optional
-AWS_SECRET_ACCESS_KEY=xxxxx
-AWS_S3_BUCKET=your-bucket-name
-AWS_REGION=us-east-1
-
-# App Configuration
-JWT_SECRET=your-random-secret-key-here     # Change this!
-DATABASE_PATH=orchestrator_memory.sqlite
+# Optional
+RUNWAY_API_KEY=your_runway_key_here
+TWITTER_API_KEY=your_twitter_key_here
+TWITTER_API_SECRET=your_twitter_secret_here
+TWITTER_ACCESS_TOKEN=your_twitter_access_token
+TWITTER_ACCESS_TOKEN_SECRET=your_twitter_access_token_secret
+INSTAGRAM_USERNAME=your_instagram_username
+INSTAGRAM_PASSWORD=your_instagram_password
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_S3_BUCKET_NAME=your_bucket_name
 ```
-
-### API Key Sources
-
-| Service | Get Keys From | Free Tier? |
-|---------|---------------|------------|
-| Groq | https://console.groq.com | ✅ Yes |
-| Twitter | https://developer.twitter.com | ✅ Limited |
-| Instagram | Your Instagram account | ✅ Yes |
-| RunwayML | https://runwayml.com | ⚠️ Credits |
-| SerpAPI | https://serpapi.com | ✅ Limited |
-| AWS S3 | https://aws.amazon.com | ✅ Free tier |
 
 ---
 
-## 🚀 Usage
+## 🚀 Quick Start
 
-### Starting the Platform
+### Starting All Services
 
-#### Option 1: Start All Services (Windows)
+Use the automated startup script:
+
+**Windows:**
 ```bash
-start.bat
+start_all_services.bat
 ```
 
-#### Option 2: Start Manually
-
-**Terminal 1 - Orchestrator:**
+**Linux/Mac:**
 ```bash
-python orchestrator.py
-# Runs on http://127.0.0.1:8004
+python start_all_services.py
 ```
 
-**Terminal 2 - WebCrawler:**
+### Starting Services Individually
+
 ```bash
+# Terminal 1: Web Crawler
 python webcrawler.py
-# Runs on http://127.0.0.1:8000
-```
 
-**Terminal 3 - Keyword Extractor:**
-```bash
+# Terminal 2: Keyword Extractor
 python keywordExtraction.py
-# Runs on http://127.0.0.1:8001
-```
 
-**Terminal 4 - Gap Analyzer:**
-```bash
+# Terminal 3: Gap Analyzer
 python CompetitorGapAnalyzerAgent.py
-# Runs on http://127.0.0.1:8002
-```
 
-**Terminal 5 - Content Agent:**
-```bash
+# Terminal 4: Content Agent
 python content_agent.py
-# Runs on http://127.0.0.1:8003
-```
 
-**Terminal 6 - SEO Agent:**
-```bash
+# Terminal 5: SEO Agent
 python seo_agent.py
-# Runs on http://127.0.0.1:5000
+
+# Terminal 6: Reddit Agent
+python reddit_agent.py
+
+# Terminal 7: Orchestrator
+python orchestrator.py
 ```
 
 ### Accessing the Platform
 
-1. **Main Interface:** http://127.0.0.1:8004/agent.html
-2. **Metrics Dashboard:** http://127.0.0.1:8004/metrics.html
-3. **Login Page:** http://127.0.0.1:8004/login.html
+- **Orchestrator API:** http://localhost:8004
+- **Frontend:** http://localhost:3000 (if running Next.js)
+- **API Docs:** http://localhost:8004/docs (Swagger UI)
 
-### Quick Start Guide
+### First Steps
 
-#### 1. Create Account
-- Open http://127.0.0.1:8004/login.html
-- Click "Sign Up"
-- Enter email and password
-
-#### 2. Set Up Business Profile
-```
-You: Hi, I want to set up my business
-AI: Let me save your business information...
-
-You: I run a cloud kitchen called Cloud24 in Chennai. 
-     My email is cloud24@gmail.com, phone: 7305900924
-
-AI: ✅ Brand Profile Saved!
-    Business Name: Cloud24
-    Industry: Cloud Kitchen
-    Location: Chennai
-```
-
-#### 3. Generate Content
-```
-You: Create a blog post about healthy meal prep
-
-AI: I'll create a blog post for you. Analyzing your business 
-    and competitors...
-    [Shows preview with approval buttons]
-```
-
-#### 4. Post to Social Media
-```
-You: Create a social media post for Instagram
-
-AI: Creating social media content for you...
-    [Shows image + text preview]
-    [Approve to post]
-```
-
-#### 5. View Metrics
-```
-Open: http://127.0.0.1:8004/metrics.html
-- See engagement rates
-- Track post performance
-- Compare platforms
-```
+1. Sign up for an account via `POST /auth/signup`
+2. Login to get JWT token via `POST /auth/login`
+3. Start a chat session via `POST /chat`
+4. Try: "Generate a blog post about AI trends"
 
 ---
 
-## 🔄 Agent Communication
+## 📖 Usage Guide
 
-### Communication Protocol
+### 1. Authentication
 
-All agents communicate via **HTTP REST APIs** with a standardized job-based pattern:
-
-```python
-# 1. Initiate Job
-POST /endpoint
-Response: {"job_id": "uuid", "status": "started"}
-
-# 2. Check Status
-GET /status/{job_id}
-Response: {"status": "running|completed|failed"}
-
-# 3. Download Result
-GET /download/{job_id}
-Response: {result data}
-```
-
-### Message Flow Example
-
-**Blog Generation Workflow:**
-
-```
-1. User Input
-   └─> Orchestrator receives: "Write a blog about SEO"
-
-2. Intent Classification
-   └─> IntelligentRouter (Groq) → Intent: "blog_generation"
-
-3. Brand Context Retrieval
-   └─> Database → Brand Profile: {name, industry, location}
-
-4. RL Agent Selection
-   └─> RLAgent → Workflow: "comprehensive_blog"
-       [webcrawler → keyword → gap → content]
-
-5. Agent Execution Chain:
-   
-   A. WebCrawler (if URL provided)
-      POST /crawl {"url": "..."}
-      └─> Returns: {"extracted_text": "..."}
-   
-   B. KeywordExtractor
-      POST /extract-keywords {
-        "customer_statement": "Business context + user query"
-      }
-      └─> Returns: {"keywords": [...], "domains": [...]}
-   
-   C. CompetitorGapAnalyzer
-      POST /analyze-keyword-gap {
-        "company_name": "Cloud24",
-        "product_description": "...",
-        "company_url": "..."
-      }
-      └─> Returns: {"content_gaps": [...], "opportunities": [...]}
-   
-   D. ContentAgent
-      POST /generate-blog {
-        "keywords": {...},
-        "business_details": {...},
-        "gap_analysis": {...}
-      }
-      └─> Returns: {"html": "...", "metadata": {...}}
-
-6. Content Storage
-   └─> Database → Save as "pending" status
-
-7. User Preview
-   └─> Frontend shows content with [Approve] [Reject]
-
-8. Post-Approval
-   └─> Upload to AWS S3 → Public URL
-   └─> Update status: "approved"
-   └─> RL Agent records reward
-
-9. Metrics Collection (Background)
-   └─> APScheduler → Every 4 hours
-   └─> MetricsCollector → Updates engagement data
-```
-
-See [AGENT_ARCHITECTURE.md](./docs/AGENT_ARCHITECTURE.md) for detailed communication patterns.
-
----
-
-## 📚 API Documentation
-
-### Orchestrator API (Port 8004)
-
-#### Authentication
+**Sign Up:**
 ```bash
-# Signup
-POST /signup
-Body: {"email": "user@example.com", "password": "pass123"}
-
-# Login
-POST /login
-Body: {"email": "user@example.com", "password": "pass123"}
-Response: {"token": "jwt-token", "user_id": 1}
+curl -X POST http://localhost:8004/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "SecurePass123"}'
 ```
 
-#### Chat
+**Login:**
 ```bash
-# Send message
-POST /chat
-Headers: {"Authorization": "Bearer {token}"}
-Body: {
-  "message": "Create a blog post",
-  "session_id": "uuid"
+curl -X POST http://localhost:8004/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "SecurePass123"}'
+```
+
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user_id": 1,
+  "email": "user@example.com",
+  "expires_at": "2024-12-20T12:00:00"
 }
 ```
 
-#### Content Management
-```bash
-# Approve content
-POST /content/{content_id}/approve
-Body: {"approved": true}
+### 2. Chat Interface
 
-# Get preview
-GET /preview/blog/{content_id}
-GET /preview/image/{image_path}
+**Start a conversation:**
+```bash
+curl -X POST http://localhost:8004/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "message": "Generate a blog post about sustainable technology",
+    "session_id": null
+  }'
 ```
 
-#### Metrics
-```bash
-# Trigger collection
-POST /metrics/collect?days=7
+### 3. Content Approval
 
-# Get dashboard
-GET /metrics/dashboard?days=30
+**Approve generated content:**
+```bash
+curl -X POST http://localhost:8004/content/{content_id}/approve \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"approved": true}'
 ```
 
-### Agent APIs
+---
 
-See individual agent README files:
-- [WebCrawler API](./docs/WEBCRAWLER_README.md)
-- [Keyword Extractor API](./docs/KEYWORD_EXTRACTOR_README.md)
-- [Gap Analyzer API](./docs/GAP_ANALYZER_README.md)
-- [Content Agent API](./docs/CONTENT_AGENT_README.md)
-- [SEO Agent API](./docs/SEO_AGENT_README.md)
+## 📡 API Reference
+
+### Authentication Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/auth/signup` | Register new user |
+| `POST` | `/auth/login` | User login |
+| `GET` | `/auth/me` | Get current user info |
+
+### Chat & Content Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/chat` | Main chat interface |
+| `GET` | `/sessions` | List user sessions |
+| `POST` | `/content/{id}/approve` | Approve content |
+| `GET` | `/content/{id}/preview` | Preview content |
+
+### Metrics & Analytics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/metrics/dashboard` | Get analytics dashboard |
+| `GET` | `/mabo/stats` | Get MABO optimization stats |
+| `POST` | `/mabo/batch-update` | Trigger MABO batch update |
+
+**Full API Documentation:** Visit http://localhost:8004/docs for interactive Swagger UI.
+
+---
+
+## 🤖 Agent Documentation
+
+### Agent Ports & Services
+
+| Agent | Port | File | Purpose |
+|-------|------|------|---------|
+| **Web Crawler** | `8000` | `webcrawler.py` | Website content extraction |
+| **Keyword Extractor** | `8001` | `keywordExtraction.py` | SEO keyword extraction |
+| **Gap Analyzer** | `8002` | `CompetitorGapAnalyzerAgent.py` | Competitor analysis |
+| **Content Agent** | `8003` | `content_agent.py` | Blog & social content generation |
+| **SEO Agent** | `5000` | `seo_agent.py` | SEO analysis & reporting |
+| **Reddit Agent** | `8010` | `reddit_agent.py` | Reddit content & engagement |
+| **Orchestrator** | `8004` | `orchestrator.py` | Main coordination service |
+
+### Key Components
+
+- **MABO Framework:** Multi-Agent Bayesian Optimization for workflow optimization
+- **Intelligent Router:** AI-powered intent recognition and routing
+- **Performance Monitor:** Real-time metrics collection and analysis
+- **Budget Allocator:** Optimized budget distribution across campaigns
+- **Feedback Analyzer:** Learning from content performance
+
+### Individual Agent Endpoints
+
+#### Web Crawler (Port 8000)
+
+- `POST /crawl` - Start crawl job
+- `GET /status/{job_id}` - Check status
+- `GET /download/{job_id}` - Download JSON
+- `GET /download/docx/{job_id}` - Download DOCX
+
+#### Keyword Extractor (Port 8001)
+
+- `POST /extract-keywords` - Extract keywords
+- `GET /status/{job_id}` - Check status
+- `GET /download/{job_id}` - Download results
+
+#### Gap Analyzer (Port 8002)
+
+- `POST /analyze-keyword-gap` - Start analysis
+- `GET /status/{job_id}` - Check status
+- `GET /download/json/{job_id}` - Download analysis
+
+#### Content Agent (Port 8003)
+
+- `POST /generate-blog` - Generate blog post
+- `POST /generate-social` - Generate social media content
+- `POST /analyze-content` - Analyze existing content
+- `GET /status/{job_id}` - Check job status
+- `GET /download/html/{job_id}` - Download blog HTML
+
+#### Reddit Agent (Port 8010)
+
+- `POST /extract-keywords` - Extract Reddit keywords
+- `POST /search-subreddits` - Search relevant subreddits
+- `POST /generate-post` - Generate Reddit post
+- `POST /post` - Post to Reddit (optional)
+
+For detailed agent documentation, see the `docs/` directory.
 
 ---
 
 ## 📁 Project Structure
 
 ```
-multi agent/
-├── orchestrator.py              # Main coordinator (FastAPI)
-├── webcrawler.py                # Website content extraction
-├── keywordExtraction.py         # SEO keyword analysis
-├── CompetitorGapAnalyzerAgent.py # Competitive analysis
-├── content_agent.py             # Blog/social content generation
-├── seo_agent.py                 # SEO auditing
-├── metrics_collector.py         # Social media metrics
-├── rl_agent.py                  # Reinforcement learning
-├── intelligent_router.py        # Intent classification
-├── database.py                  # SQLite operations
-├── auth.py                      # JWT authentication
-├── scheduler.py                 # Background jobs
-├── cost_model.py                # Cost tracking
+FYP/
+├── agents/                    # Agent microservices
+│   ├── webcrawler.py         # Web crawling service
+│   ├── keywordExtraction.py  # Keyword extraction
+│   ├── CompetitorGapAnalyzerAgent.py  # Competitor analysis
+│   ├── content_agent.py      # Content generation
+│   ├── seo_agent.py          # SEO analysis
+│   └── reddit_agent.py       # Reddit integration
 │
-├── agent.html                   # ChatGPT-like UI
-├── metrics.html                 # Analytics dashboard
-├── login.html                   # Authentication UI
-├── style.css                    # Global styles
-├── script.js                    # Shared JS utilities
+├── core/                      # Core framework
+│   ├── orchestrator.py       # Main orchestrator
+│   ├── mabo_framework.py     # MABO optimization
+│   ├── mabo_agent.py         # MABO agent
+│   ├── intelligent_router.py # Intent routing
+│   ├── database.py           # Database layer
+│   ├── auth.py               # Authentication
+│   ├── cost_model.py         # Cost estimation
+│   └── scheduler.py          # Job scheduling
 │
-├── requirements.txt             # Python dependencies
-├── .env                         # Configuration (create this)
-├── start.bat                    # Launch script (Windows)
+├── frontend/                  # Next.js frontend
+│   ├── app/                  # App router pages
+│   ├── components/           # React components
+│   └── lib/                  # Utilities
 │
-├── docs/                        # Detailed documentation
-│   ├── AGENT_ARCHITECTURE.md
-│   ├── WEBCRAWLER_README.md
-│   ├── KEYWORD_EXTRACTOR_README.md
-│   ├── GAP_ANALYZER_README.md
-│   ├── CONTENT_AGENT_README.md
-│   └── SEO_AGENT_README.md
+├── docs/                     # Documentation
+│   ├── README.md            # Main docs index
+│   ├── AGENT_ARCHITECTURE.md # Architecture guide
+│   └── [agent]_README.md    # Individual agent docs
 │
-├── generated_images/            # AI-generated visuals
-├── previews/                    # Content previews
-├── reports/                     # SEO reports
-├── uploads/                     # User uploads
-├── cache/                       # Agent response cache
-└── orchestrator_memory.sqlite   # Main database
+├── database/                 # SQLite database
+├── cache/                    # API response cache
+├── generated_images/         # Generated images
+├── previews/                 # Content previews
+├── reports/                  # SEO reports
+│
+├── requirements.txt          # Python dependencies
+├── .env                      # Environment variables
+├── README.md                 # This file
+└── README.html              # HTML version (for local viewing)
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## 🛠️ Technologies
 
-### Common Issues
+### Backend
 
-#### 1. Instagram "Challenge Required" Error
-```bash
-# Solution: Login on Instagram app first
-python test_instagram_login.py
-# Complete any security checks, wait 24 hours
-```
+- **FastAPI:** Modern Python web framework
+- **Groq:** LLM API (Moonshot AI - Kimi K2)
+- **SQLite:** Lightweight database
+- **JWT:** Authentication tokens
+- **APScheduler:** Background job scheduling
+- **Pydantic:** Data validation
+- **Tenacity:** Retry logic
 
-#### 2. Twitter 401 Unauthorized
-```
-# This is normal with free tier
-# Metrics work with estimated impressions
-# For real data: Apply for Elevated access
-https://developer.twitter.com/en/portal/products/elevated
-```
+### AI & ML
 
-#### 3. Groq JSON Validation Error
-```
-# Usually self-correcting
-# Check prompts don't have special characters
-# Retry the operation
-```
+- **MABO Framework:** Multi-Agent Bayesian Optimization
+- **Reinforcement Learning:** Workflow optimization
+- **LLM:** Moonshot AI (Kimi K2) for content generation
+- **Scipy:** Scientific computing for optimization
 
-#### 4. "MetricsCollector not defined"
-```bash
-# Fixed in latest version
-# Ensure you have latest orchestrator.py
-```
+### Frontend
 
-#### 5. Database Locked Error
-```bash
-# Close all connections
-# Restart orchestrator.py
-```
+- **Next.js:** React framework
+- **TypeScript:** Type-safe JavaScript
+- **Tailwind CSS:** Utility-first CSS
 
-### Debug Mode
+### External Services
 
-Enable detailed logging:
-
-```python
-# In orchestrator.py
-logging.basicConfig(level=logging.DEBUG)
-```
-
----
-
-## 📊 Performance & Scalability
-
-### Current Capabilities
-- ✅ **Concurrent Users:** 10-50 (SQLite limit)
-- ✅ **Requests/sec:** ~100 (FastAPI async)
-- ✅ **Agent Response Time:** 2-10 seconds
-- ✅ **Storage:** Unlimited (SQLite 140TB limit)
-
-### Scaling Considerations
-
-For production deployment:
-
-1. **Database:** Migrate to PostgreSQL
-2. **Caching:** Add Redis for agent responses
-3. **Queue:** Use Celery for background jobs
-4. **Load Balancer:** Nginx for multiple orchestrator instances
-5. **Monitoring:** Prometheus + Grafana
-
----
-
-## 🔐 Security
-
-- ✅ JWT-based authentication
-- ✅ Password hashing (bcrypt)
-- ✅ API key protection (.env)
-- ✅ SQL injection prevention (parameterized queries)
-- ⚠️ HTTPS recommended for production
-- ⚠️ Rate limiting recommended for production
+- **SerpAPI:** Search engine results
+- **Runway:** Image generation
+- **AWS S3:** Cloud storage
+- **Twitter API:** Social media posting
+- **Instagram API:** Social media posting
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see:
+Contributions are welcome! Please follow these guidelines:
 
 1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Code Style
+
+- Follow PEP 8 for Python code
+- Use type hints where possible
+- Write docstrings for functions and classes
+- Add comments for complex logic
 
 ---
 
-## 📝 License
+## 📄 License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **Groq** - Lightning-fast LLM inference
-- **FastAPI** - Modern Python web framework
-- **RunwayML** - AI image generation
-- **LangSmith** - LLM observability
+This project is part of a Final Year Project (FYP). Please refer to your institution's guidelines for usage and distribution.
 
 ---
 
-## 📞 Support
+## 💬 Support
 
-- 📧 Email: support@example.com
-- 📖 Docs: [Full Documentation](./docs/)
-- 🐛 Issues: [GitHub Issues](https://github.com/your-repo/issues)
-- 💬 Discord: [Community Server](https://discord.gg/your-server)
+For issues, questions, or contributions:
+
+- Check the `docs/` directory for detailed documentation
+- Review agent-specific README files
+- Check API documentation at `/docs` endpoint
 
 ---
 
-## 🗺️ Roadmap
+## 🎯 Roadmap
 
-### Version 5.1 (Q1 2025)
-- [ ] Facebook & LinkedIn integration
-- [ ] Voice input support
+- [ ] Enhanced MABO optimization algorithms
+- [ ] Additional social media platform support
+- [ ] Real-time collaboration features
+- [ ] Advanced analytics dashboard
 - [ ] Multi-language content generation
-- [ ] Video content generation
-
-### Version 6.0 (Q2 2025)
-- [ ] PostgreSQL migration
-- [ ] GraphQL API
-- [ ] Mobile app (React Native)
-- [ ] Team collaboration features
+- [ ] API rate limiting and caching improvements
 
 ---
 
-**Built with ❤️ using AI and Multi-Agent Systems**
+**Built with ❤️ for FYP**
 
-*Last Updated: October 2024 | Version 5.0.0*
+*Powered by FastAPI, Next.js, and AI*
+
+---
+**Embeddings & Memory — Execution & Output**
+
+- **What was added:** a lightweight embedding helper and a CLI to populate the vector store from local artifacts:
+  - Helper: `tools/embedding.py` — wrappers for `sentence-transformers` models (text + image).
+  - CLI: `scripts/populate_chroma.py` — scans `previews/` (HTML) and `generated_images/` and writes embeddings to Chroma (if available) and a SQLite `campaign_memory` table.
+
+- **Install prerequisites:**
+  - Add to environment: `pip install -r requirements.txt` and `pip install chromadb sentence-transformers`.
+
+- **Run (safe dry-run):**
+  - `python scripts/populate_chroma.py --dry-run`
+  - Output: lists found preview HTML files and images; does NOT download models or write to the vector store.
+
+- **Run (populate):**
+  - `python scripts/populate_chroma.py`
+  - Behavior: loads `sentence-transformers` models, computes embeddings, writes vectors to Chroma collections `campaign_text` and `campaign_visual` (if Chroma available), and inserts/updates rows in the SQLite `campaign_memory` table.
+
+- **SQLite storage (`campaign_memory` table):** each row contains: `campaign_id`, `visual_vector` (JSON array or `{"chroma_id":...}`), `text_vector` (JSON array or `{"chroma_id":...}`), `visual_model`, `text_model`, `context_metadata`, `performance_node`, `alignment_score`, `dedup_info`, `tags`, `source`, and `created_at`.
+
+- **Vector store (Chroma):** when available, vectors are stored in collections named `campaign_text` and `campaign_visual`. Metadata contains `campaign_id` for easy lookup. The code gracefully falls back to storing vectors inline in SQLite when Chroma is not available.
+
+- **TeleMem dedup output:** calling `telemem.deduplicate()` returns a summary JSON with keys: `clusters`, `merged_clusters`, and `merged_details` where each detail contains `telemem_id`, `representative_campaign_id`, `merged_campaigns`, and `merge_score`.
+
+- **Planner output (`CampaignPlannerAgent.generate_proposals()`):** returns a 3-tier `proposals` list (budget, balanced, premium). Each proposal includes: `tier`, `budget`, `expected_cost`, `expected_reward`, `expected_ctr`, `creative` (text, `image_prompt`, `image_model`), `schedule` (start/end/recommended_windows), `low_noise_windows`, and `pivot_trigger` flag.
+
+- **Where to look for artifacts after running:**
+  - Vector store: local Chroma directory or Chroma server (depends on your config).
+  - DB records: `database/app.db`, table `campaign_memory`.
+  - Preview/generated files used as inputs: `previews/` and `generated_images/`.
+
+If you'd like, I can add a short `README` for `scripts/` that includes sample runs, or implement a one-shot command to populate only new files since the last run. Tell me which you'd prefer.
+

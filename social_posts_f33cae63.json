@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Discover simple, effective skincare with The Ordinary! High-quality products at affordable prices #TheOrdinary #EcommerceSkincare",
+      "length": 280,
+      "call_to_action": "Shop Now",
+      "hashtags": [
+        "#TheOrdinary",
+        "#EcommerceSkincare",
+        "#Beauty"
+      ]
+    },
+    "instagram": {
+      "copy": "Elevate your skincare routine with The Ordinary! Our products offer a seamless experience, combining high-quality ingredients with affordable prices. Guided by our mission to provide simple, effective skincare solutions, we help you achieve your beauty goals #TheOrdinary #EcommerceSkincare #Beauty",
+      "length": 300,
+      "call_to_action": "Explore Our Products",
+      "hashtags": [
+        "#TheOrdinary",
+        "#EcommerceSkincare",
+        "#Beauty",
+        "#SkincareLovers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person with glowing skin, surrounded by The Ordinary skincare products",
+    "Photorealistic image of The Ordinary skincare products on a minimalist shelf, with a cityscape in the background"
+  ],
+  "meta": {
+    "brand_name": "The Ordinary",
+    "location": "N/A",
+    "industry": "E-commerce Skincare and Beauty",
+    "generated_at": "2026-03-05T04:57:41.499928Z"
+  }
+}
