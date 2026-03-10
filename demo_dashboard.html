@@ -1,0 +1,1021 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MABO Optimisation Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0c0c0f;
+  --surface:  #111118;
+  --card:     #16161e;
+  --border:   rgba(255,255,255,0.09);
+  --border2:  rgba(255,255,255,0.05);
+  --accent:   #7c6afc;
+  --accent2:  #00c2cb;
+  --green:    #1fd96e;
+  --yellow:   #ffc11a;
+  --pink:     #f04baf;
+  --orange:   #ff7434;
+  --red:      #ef4444;
+  --text:     #e8eaf0;
+  --muted:    rgba(232,234,240,0.42);
+  --muted2:   rgba(232,234,240,0.22);
+  --radius:   14px;
+  --radius-sm:8px;
+}
+
+html { font-size: 15px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  padding: 28px 32px 56px;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -.025em; }
+h2 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.mb-5 { margin-bottom: 20px; }
+.mb-6 { margin-bottom: 28px; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+
+/* Header */
+.header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border);
+}
+.header h1 { margin-bottom: 4px; }
+.header p { color: var(--muted); font-size: .9rem; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 15px; border-radius: 99px;
+  font-size: .8rem; font-weight: 600;
+  background: rgba(124,106,252,.15); color: var(--accent);
+  border: 1px solid rgba(124,106,252,.3);
+}
+.badge::before {
+  content:""; width:7px; height:7px; border-radius:50%;
+  background:var(--accent); display:inline-block;
+}
+
+/* Controls */
+.controls {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px;
+  display: grid; grid-template-columns: 1fr 1.4fr 170px 145px; gap: 16px; align-items: end;
+}
+.ctrl-group { display: flex; flex-direction: column; gap: 6px; }
+.ctrl-group label {
+  font-size: .75rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.ctrl-group input, .ctrl-group select {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px; color: var(--text);
+  font-size: .95rem; font-family: inherit; outline: none; transition: border-color .2s;
+}
+.ctrl-group input:focus, .ctrl-group select:focus { border-color: var(--accent); }
+#startBtn {
+  padding: 11px 22px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+  font-size: .95rem; font-weight: 700; font-family: inherit;
+  background: var(--accent); color: #fff; transition: opacity .2s, transform .15s; width: 100%;
+}
+#startBtn:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+#startBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Stats */
+.stats-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 24px; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 22px; }
+.stat-card .slabel { font-size: .78rem; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+.stat-card .svalue {
+  font-size: 2.1rem; font-weight: 800; letter-spacing: -.035em; line-height: 1;
+  background: linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.stat-card .ssub { font-size: .76rem; color: var(--muted); margin-top: 6px; }
+
+/* Pipeline */
+.pipeline {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 24px; margin-bottom: 24px;
+}
+.pipeline-label {
+  font-size: .72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted); margin-bottom: 14px;
+}
+.stages { display: flex; gap: 0; overflow-x: auto; padding-bottom: 2px; align-items: center; }
+.stage { display: flex; align-items: center; flex-shrink: 0; }
+.stage-node {
+  padding: 8px 15px; border-radius: var(--radius-sm);
+  font-size: .83rem; font-weight: 500;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--muted); transition: all .25s; white-space: nowrap;
+}
+.stage-node.active { background: rgba(124,106,252,.2); border-color: var(--accent); color:#fff; box-shadow:0 0 14px rgba(124,106,252,.25); }
+.stage-node.done   { background: rgba(31,217,110,.1);  border-color: var(--green);  color: var(--green); }
+.arrow { color: rgba(255,255,255,.18); padding: 0 8px; font-size: .9rem; }
+
+/* Charts */
+.chart-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 22px 24px;
+  margin-bottom: 24px;
+}
+.chart-card h2 { margin-bottom: 4px; }
+.chart-sub { font-size: .8rem; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+.chart-card canvas { max-height: 500px; }
+
+/* Detail panel */
+.col-heading {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted); margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border2);
+}
+.prompt-chip {
+  display: inline-flex; align-items: center;
+  padding: 5px 13px; border-radius: 99px; font-size: .83rem; font-weight: 600;
+  background: rgba(0,194,203,.12); color: var(--accent2);
+  border: 1px solid rgba(0,194,203,.25); margin-bottom: 10px;
+}
+.inset-box {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 13px 15px;
+  font-size: .88rem; line-height: 1.75; color: rgba(232,234,240,.72);
+  min-height: 80px;
+}
+.content-box {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 16px 18px;
+  font-size: .96rem; line-height: 1.8; color: var(--text);
+  min-height: 140px; white-space: pre-wrap; word-break: break-word;
+}
+.meta-chips { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+.meta-chip { font-size: .81rem; color: var(--muted); }
+.meta-chip strong { color: var(--text); font-weight: 600; }
+.score-row { display: flex; flex-direction: column; gap: 11px; margin-bottom: 14px; }
+.score-item .score-header { display: flex; justify-content: space-between; font-size: .83rem; margin-bottom: 4px; }
+.score-item .score-header .slabel { color: var(--muted); }
+.score-track { height: 7px; background: rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
+.score-fill { height:100%; border-radius:99px; transition: width .5s ease; width:0%; }
+.verdict-box {
+  font-size:.87rem; line-height:1.65; color:rgba(232,234,240,.62);
+  background:rgba(255,255,255,.025); border:1px solid var(--border2);
+  border-radius:var(--radius-sm); padding:11px 14px; margin-bottom:12px;
+}
+.action-tag {
+  display:inline-block; margin-top:10px; padding:4px 11px; border-radius:6px;
+  font-size:.78rem; font-family:"SF Mono","Fira Code",monospace;
+  background:rgba(0,194,203,.1); color:var(--accent2); border:1px solid rgba(0,194,203,.2);
+}
+.sug-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
+.sug-item { padding:6px 11px; border-radius:7px; font-size:.84rem; line-height:1.5; }
+.sug-ok  { background:rgba(31,217,110,.07);  border:1px solid rgba(31,217,110,.18); color:var(--green); }
+.sug-tip { background:rgba(255,193,26,.06);   border:1px solid rgba(255,193,26,.18);  color:var(--yellow); }
+
+/* History */
+.history-section {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 32px; overflow: hidden;
+}
+.history-header {
+  padding: 20px 24px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.history-header h2 { margin-bottom: 3px; }
+.history-header p { font-size:.83rem; color:var(--muted); }
+.history-count {
+  flex-shrink:0; padding:4px 12px; border-radius:99px; font-size:.78rem; font-weight:700;
+  background:rgba(124,106,252,.15); color:var(--accent); border:1px solid rgba(124,106,252,.3);
+}
+.hist-thead {
+  display:grid; grid-template-columns:50px 200px 1fr 155px 120px 88px 46px;
+  padding:10px 24px;
+  font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+  border-bottom:1px solid var(--border2); background:var(--surface);
+}
+.hist-row { border-bottom:1px solid var(--border2); cursor:pointer; }
+.hist-row:last-child { border-bottom:none; }
+.hist-row-head {
+  display:grid; grid-template-columns:50px 200px 1fr 155px 120px 88px 46px;
+  padding:13px 24px; align-items:center; transition:background .15s;
+}
+.hist-row:hover .hist-row-head { background:rgba(255,255,255,.02); }
+.hist-row.expanded .hist-row-head { background:rgba(124,106,252,.07); }
+.hist-num {
+  width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-size:.82rem; font-weight:700; background:rgba(124,106,252,.18); color:var(--accent);
+  border:1px solid rgba(124,106,252,.3);
+}
+.hist-pname { font-size:.9rem; font-weight:600; color:var(--text); margin-bottom:2px; }
+.hist-psub  { font-size:.75rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hist-prev  { font-size:.86rem; color:rgba(232,234,240,.58); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:14px; }
+.score-pills { display:flex; flex-direction:column; gap:3px; }
+.sp-row { display:flex; align-items:center; gap:5px; font-size:.76rem; }
+.sp-lbl { color:var(--muted); width:46px; flex-shrink:0; }
+.sp-bar { flex:1; height:4px; background:rgba(255,255,255,.06); border-radius:99px; overflow:hidden; }
+.sp-fill { height:100%; border-radius:99px; }
+.sp-val { width:30px; text-align:right; font-weight:600; font-size:.75rem; }
+.reward-big { font-size:1.15rem; font-weight:800; letter-spacing:-.02em; text-align:center; }
+.expand-btn {
+  width:28px; height:28px; border-radius:6px; border:1px solid var(--border);
+  background:transparent; cursor:pointer; color:var(--muted); display:flex;
+  align-items:center; justify-content:center; font-size:.88rem; transition:all .2s; margin:auto;
+}
+.expand-btn:hover { border-color:var(--accent); color:var(--accent); }
+.hist-row.expanded .expand-btn { transform:rotate(180deg); border-color:var(--accent); color:var(--accent); }
+.hist-detail {
+  display:none; padding:0 24px 22px;
+  background:rgba(255,255,255,.015); border-top:1px solid var(--border2);
+}
+.hist-row.expanded .hist-detail { display:block; }
+.hist-detail-grid {
+  display:grid; grid-template-columns:1fr 1.6fr 1fr; gap:22px; padding-top:20px;
+}
+.hist-detail-col h3 {
+  font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em;
+  color: var(--muted); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border2);
+}
+
+/* Empty state */
+.empty-hist { padding:52px 24px; text-align:center; color:var(--muted); }
+.empty-hist .icon { font-size:2.5rem; margin-bottom:14px; }
+.empty-hist p { max-width:320px; margin:0 auto; font-size:.9rem; line-height:1.6; }
+
+/* Status */
+#connBanner {
+  display:none; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.3);
+  border-radius:var(--radius-sm); padding:14px 18px; margin-bottom:18px; color:#fca5a5; font-size:.88rem;
+}
+#statusBar {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:13px 18px; font-size:.9rem; color:var(--muted); display:flex; align-items:center; gap:10px;
+}
+.dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.dot.running { background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 1s infinite; }
+.dot.done    { background:var(--accent2); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+/* Mabo legend */
+.mabo-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:.79rem; color:var(--muted); margin-top:12px; align-items:center; }
+.mabo-legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+@media(max-width:1100px){
+  .controls { grid-template-columns:1fr 1fr; }
+  .grid-2,.grid-3{grid-template-columns:1fr 1fr;}
+  .hist-thead,.hist-row-head{grid-template-columns:50px 1fr 100px 88px 46px;}
+  .hist-thead>*:nth-child(4),.hist-row-head>*:nth-child(4),
+  .hist-thead>*:nth-child(5),.hist-row-head>*:nth-child(5){display:none;}
+}
+@media(max-width:768px){
+  body{padding:16px;}
+  .grid-2,.grid-3{grid-template-columns:1fr;}
+  .stats-row{grid-template-columns:repeat(2,1fr);}
+  .hist-detail-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <h1>MABO Optimisation Dashboard</h1>
+    <p style="margin-top:4px;">Multi-Agent Bayesian Optimisation &middot; Gaussian Process UCB &middot; Non-LLM Critic</p>
+  </div>
+  <span class="badge">Live Demo</span>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Campaign Topic</label>
+    <input id="topicInput" value="our new skincare product launch" />
+  </div>
+  <div class="ctrl-group">
+    <label>Brand Profile</label>
+    <input id="brandInput" value="Sustainable wellness brand &mdash; warm, empowering tone for conscious consumers" />
+  </div>
+  <div class="ctrl-group">
+    <label>Iterations</label>
+    <input id="itersSelect" type="number" value="8" min="1" max="100" placeholder="e.g. 8" />
+  </div>
+  <div class="ctrl-group">
+    <label>&nbsp;</label>
+    <button id="startBtn" onclick="startDemo()">&#9654; Run Demo</button>
+  </div>
+</div>
+
+<!-- STATS ROW -->
+<div class="stats-row mb-6">
+  <div class="stat-card">
+    <div class="slabel">Current Iteration</div>
+    <div class="svalue" id="statIter">&#8212;</div>
+    <div class="ssub" id="statTotal">of 8</div>
+  </div>
+  <div class="stat-card">
+    <div class="slabel">Best Reward</div>
+    <div class="svalue" id="statBest">&#8212;</div>
+    <div class="ssub" id="statBestIt">iteration &#8212;</div>
+  </div>
+  <div class="stat-card">
+    <div class="slabel">Critic Score</div>
+    <div class="svalue" id="statCritic">&#8212;</div>
+    <div class="ssub">overall</div>
+  </div>
+  <div class="stat-card">
+    <div class="slabel">Engagement Rate</div>
+    <div class="svalue" id="statEng">&#8212;</div>
+    <div class="ssub">simulated IG</div>
+  </div>
+  <div class="stat-card">
+    <div class="slabel">Improvement</div>
+    <div class="svalue" id="statImprove">&#8212;</div>
+    <div class="ssub">first &rarr; best</div>
+  </div>
+</div>
+
+<!-- PIPELINE TRACE -->
+<div class="pipeline mb-6">
+  <div class="pipeline-label">Pipeline Trace</div>
+  <div class="stages" id="pipelineStages"></div>
+</div>
+
+<!-- CONNECTION BANNER -->
+<div id="connBanner">
+  &#9888; <strong>Backend not reachable.</strong> Open this page via <code>http://localhost:8020</code> and make sure <code>demo_runner.py</code> is running.
+</div>
+
+<!-- CHARTS ROW 1 -->
+<div class="mb-5">
+  <div class="chart-card">
+    <h2>Reward Over Iterations</h2>
+    <p class="chart-sub">MABO composite reward &#8593; as Bayesian optimisation learns better prompt configurations over time</p>
+    <canvas id="rewardChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Critic Scores Breakdown</h2>
+    <p class="chart-sub">Intent &middot; Brand alignment &middot; Writing quality &middot; Overall &mdash; derived from embeddings and readability maths</p>
+    <canvas id="criticChart"></canvas>
+  </div>
+</div>
+
+<!-- CHARTS ROW 2 -->
+<div class="mb-5">
+  <div class="chart-card">
+    <h2>Simulated Instagram Metrics</h2>
+    <p class="chart-sub">Likes &middot; Saves &middot; Engagement rate &mdash; wired to critic output as the external reward signal</p>
+    <canvas id="igChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>MABO Exploration &mdash; Action Space</h2>
+    <p class="chart-sub">Each dot = one iteration. Zones = prompt templates. Colour = reward level. Number inside = iteration index.</p>
+    <canvas id="maboChart"></canvas>
+    <div class="mabo-legend">
+      <div style="display:flex;align-items:center;gap:5px;"><div class="mabo-legend-dot" style="background:#1fd96e;"></div> Reward &ge; 0.80 (High)</div>
+      <div style="display:flex;align-items:center;gap:5px;"><div class="mabo-legend-dot" style="background:#ffc11a;"></div> 0.65 &ndash; 0.80 (Medium)</div>
+      <div style="display:flex;align-items:center;gap:5px;"><div class="mabo-legend-dot" style="background:#ff7434;"></div> &lt; 0.65 (Low)</div>
+      <span style="border-left:1px solid rgba(255,255,255,0.1);padding-left:10px;font-size:.75rem;">Size &prop; reward</span>
+    </div>
+  </div>
+</div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 3D GP ACTION SPACE -->
+<div class="mb-5">
+  <div class="chart-card">
+    <h2>GP Exploration &mdash; 3D Action Space</h2>
+    <p class="chart-sub">
+      Each sphere = one GP observation. Axes = the 3 MABO dimensions the GP optimises simultaneously.
+      Colour = reward (green=high, yellow=medium, orange=low). Size &prop; reward.
+      As iterations grow, the GP clusters toward the high-reward region.
+    </p>
+    <div id="mabo3d" style="width:100%;height:520px;"></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;font-size:.77rem;color:var(--muted);">
+      <span><strong style="color:#1fd96e;">&#9632;</strong> Reward &ge; 0.80</span>
+      <span><strong style="color:#ffc11a;">&#9632;</strong> 0.65 &ndash; 0.80</span>
+      <span><strong style="color:#ff7434;">&#9632;</strong> &lt; 0.65</span>
+      <span style="border-left:1px solid rgba(255,255,255,.1);padding-left:14px;">X = Prompt style (0=Benefit CTA &rarr; 1=Question Hook)</span>
+      <span>Y = Tone (0=soft &rarr; 1=bold)</span>
+      <span>Z = Length pref (0=short &rarr; 1=long)</span>
+    </div>
+  </div>
+</div>
+
+<!-- CHARTS ROW 3 -->
+<div class="mb-6">
+  <div class="chart-card">
+    <h2>GP Convergence</h2>
+    <p class="chart-sub">Exploration variance &#8595; (GP fills space) &middot; Best reward &#8593; (exploitation) &middot; <span style="color:var(--pink)">&kappa; decays</span> (exploration bonus tapers but never reaches 0)</p>
+    <canvas id="convergenceChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Regret Curve</h2>
+    <p class="chart-sub">Instantaneous regret = best_so_far &minus; current_reward &rarr; 0 as BO converges to the optimum</p>
+    <canvas id="regretChart"></canvas>
+  </div>
+</div>
+
+<!-- LATEST ITERATION DETAIL -->
+<div class="chart-card mb-6">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+    <h2>Latest Iteration Detail</h2>
+    <span id="detailItBadge" style="padding:3px 12px;border-radius:99px;font-size:.78rem;font-weight:700;background:rgba(124,106,252,.15);color:var(--accent);border:1px solid rgba(124,106,252,.3);">&#8212;</span>
+  </div>
+  <div class="grid-3">
+    <div>
+      <div class="col-heading">Prompt Used</div>
+      <div id="detailPromptName" class="prompt-chip">&#8212;</div>
+      <div style="font-size:.84rem;color:var(--muted);margin-bottom:10px;line-height:1.55;" id="detailPromptDesc">What this style does: &#8212;</div>
+      <div class="inset-box" id="detailPromptText" style="font-style:italic;">Run the demo&#8230;</div>
+      <div id="detailActionPt" class="action-tag">&#8212;</div>
+    </div>
+    <div>
+      <div class="col-heading">Generated Caption</div>
+      <div class="content-box" id="detailContent">Run the demo to see the generated Instagram caption here&#8230;</div>
+      <div class="meta-chips">
+        <span class="meta-chip">FK Grade: <strong id="detailFK">&#8212;</strong></span>
+        <span class="meta-chip">Words: <strong id="detailWC">&#8212;</strong></span>
+        <span class="meta-chip">Vocab diversity: <strong id="detailTTR">&#8212;</strong></span>
+      </div>
+    </div>
+    <div>
+      <div class="col-heading">Critic Report</div>
+      <div class="score-row">
+        <div class="score-item">
+          <div class="score-header"><span class="slabel">Intent alignment</span><span style="font-weight:700;color:var(--accent);" id="detailIntentVal">&#8212;</span></div>
+          <div class="score-track"><div class="score-fill" id="detailIntentBar" style="background:var(--accent);"></div></div>
+        </div>
+        <div class="score-item">
+          <div class="score-header"><span class="slabel">Brand alignment</span><span style="font-weight:700;color:var(--pink);" id="detailBrandVal">&#8212;</span></div>
+          <div class="score-track"><div class="score-fill" id="detailBrandBar" style="background:var(--pink);"></div></div>
+        </div>
+        <div class="score-item">
+          <div class="score-header"><span class="slabel">Writing quality</span><span style="font-weight:700;color:var(--yellow);" id="detailQualVal">&#8212;</span></div>
+          <div class="score-track"><div class="score-fill" id="detailQualBar" style="background:var(--yellow);"></div></div>
+        </div>
+        <div class="score-item">
+          <div class="score-header"><span class="slabel">Overall (MABO reward)</span><span style="font-weight:700;color:var(--green);" id="detailOverallVal">&#8212;</span></div>
+          <div class="score-track" style="height:9px;"><div class="score-fill" id="detailOverallBar" style="background:linear-gradient(90deg,var(--accent),var(--green));"></div></div>
+        </div>
+      </div>
+      <div class="verdict-box" id="detailCritiqueText">&#8212;</div>
+      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;">Improvement Suggestions</div>
+      <ul class="sug-list" id="detailSuggestions"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ITERATION HISTORY (complete, every iteration) -->
+<div class="history-section mb-6">
+  <div class="history-header">
+    <div>
+      <h2>Complete Iteration History</h2>
+      <p>Every run recorded below &mdash; click any row to expand the full prompt, content, and critic report</p>
+    </div>
+    <span class="history-count" id="historyCount">0 iterations</span>
+  </div>
+  <div class="hist-thead">
+    <div>#</div>
+    <div>Prompt Template</div>
+    <div>Content Preview</div>
+    <div>Critic Scores</div>
+    <div>IG Metrics</div>
+    <div style="text-align:center;">Reward</div>
+    <div></div>
+  </div>
+  <div id="historyRows">
+    <div class="empty-hist">
+      <div class="icon">&#128300;</div>
+      <p>No iterations yet. Configure your campaign above and click <strong>Run Demo</strong> to begin.</p>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="statusBar">
+  <div class="dot" id="statusDot"></div>
+  <span id="statusText">Ready &mdash; configure and click &#9654; Run Demo</span>
+</div>
+
+<script>
+// Constants
+const ACCENT  = "#7c6afc";
+const ACCENT2 = "#00c2cb";
+const GREEN   = "#1fd96e";
+const YELLOW  = "#ffc11a";
+const PINK    = "#f04baf";
+const ORANGE  = "#ff7434";
+
+const PROMPT_DESCRIPTIONS = {
+  "Benefit-focused CTA":    "Leads with the product key benefit and ends with a clear call-to-action. Best for conversion-focused posts.",
+  "Storytelling + Emojis":  "Tells a mini story to hook the reader, adds emojis for visual rhythm. Best for brand-awareness posts.",
+  "Emotional Connection":   "Uses empathy and authentic voice to build a human connection. Best for loyalty and community posts.",
+  "Social Proof + Urgency": "Cites results or popularity, then adds scarcity signal. Best for sales and campaigns.",
+  "Question Hook":          "Opens with a direct question, answers it with the product presentation. Best for saves and engagement.",
+};
+
+const PROMPT_ZONES = [
+  { name: "Benefit\nCTA",        short: "Benefit CTA",   start: 0.0, end: 0.2, fill: "rgba(124,106,252,0.12)", line: "#7c6afc" },
+  { name: "Storytelling\n+Emoji",short: "Storytelling",  start: 0.2, end: 0.4, fill: "rgba(0,194,203,0.10)",   line: "#00c2cb" },
+  { name: "Emotional\nConnect",  short: "Emotional",     start: 0.4, end: 0.6, fill: "rgba(255,193,26,0.09)",  line: "#ffc11a" },
+  { name: "Social Proof\n+Urgency",short:"Social Proof", start: 0.6, end: 0.8, fill: "rgba(240,75,175,0.09)",  line: "#f04baf" },
+  { name: "Question\nHook",      short: "Question Hook", start: 0.8, end: 1.0, fill: "rgba(31,217,110,0.10)",  line: "#1fd96e" },
+];
+
+const STAGES = [
+  "Intent Classification", "MABO Prompt Selection", "Content Generation",
+  "Critic Evaluation", "Simulated IG Metrics", "Reward Computation", "BO Update",
+];
+
+// State
+let rewardChart, criticChart, igChart, maboChart, convergenceChart, regretChart;
+let gp3dPoints = [];  // accumulates all GP observation points for the 3D chart
+
+const GP3D_LAYOUT = {
+  paper_bgcolor: '#16161e',
+  plot_bgcolor:  '#16161e',
+  font: { family: 'Inter,system-ui,sans-serif', color: '#e8eaf0', size: 11 },
+  margin: { l:0, r:0, t:10, b:0 },
+  scene: {
+    bgcolor: '#111118',
+    xaxis: { title:'Prompt Style (dim 0)', titlefont:{color:'#7c6afc'}, color:'rgba(232,234,240,.5)', gridcolor:'rgba(255,255,255,.07)', range:[0,1] },
+    yaxis: { title:'Tone (dim 1)',         titlefont:{color:'#00c2cb'}, color:'rgba(232,234,240,.5)', gridcolor:'rgba(255,255,255,.07)', range:[0,1] },
+    zaxis: { title:'Length Pref (dim 2)',  titlefont:{color:'#ffc11a'}, color:'rgba(232,234,240,.5)', gridcolor:'rgba(255,255,255,.07)', range:[0,1] },
+    camera: { eye:{ x:1.6, y:1.6, z:1.0 } },
+  },
+  showlegend: false,
+};
+
+function reward3dColor(r) {
+  if (r >= 0.80) return 'rgba(31,217,110,0.90)';
+  if (r >= 0.65) return 'rgba(255,193,26,0.90)';
+  return 'rgba(255,116,52,0.90)';
+}
+
+function update3DChart() {
+  if (!gp3dPoints.length) return;
+  const trace = {
+    type:      'scatter3d',
+    mode:      'markers+text',
+    x: gp3dPoints.map(p => p.x),
+    y: gp3dPoints.map(p => p.y),
+    z: gp3dPoints.map(p => p.z),
+    text:      gp3dPoints.map(p => String(p.it)),
+    textfont:  { color:'rgba(0,0,0,0.85)', size:9, family:'Inter,system-ui,sans-serif' },
+    textposition: 'middle center',
+    marker: {
+      color:   gp3dPoints.map(p => reward3dColor(p.reward)),
+      size:    gp3dPoints.map(p => 7 + p.reward * 10),
+      opacity: 0.92,
+      line:    { width:0 },
+    },
+    hovertemplate:
+      '<b>Iteration %{text}</b><br>' +
+      'Template dim: %{x:.3f}<br>' +
+      'Tone: %{y:.3f}<br>' +
+      'Length: %{z:.3f}<br>' +
+      'Reward: ' + gp3dPoints.map(p=>p.reward.toFixed(4)).join('<br>') + // fallback
+      '<extra></extra>',
+    customdata: gp3dPoints.map(p => [p.reward.toFixed(4), p.prompt]),
+    hovertemplate: '<b>It. %{text}</b>  reward=%{customdata[0]}<br>Template: %{customdata[1]}<br>Style=%{x:.2f}  Tone=%{y:.2f}  Len=%{z:.2f}<extra></extra>',
+  };
+  Plotly.react('mabo3d', [trace], GP3D_LAYOUT, { responsive:true, displayModeBar:false });
+}
+
+// initialise empty 3D chart on load
+function init3DChart() {
+  Plotly.newPlot('mabo3d', [], GP3D_LAYOUT, { responsive:true, displayModeBar:false });
+}
+let firstReward = null, bestReward = -Infinity, bestIter = 1;
+let iterationHistory = [];
+
+// Chart.js defaults
+Chart.defaults.color       = "rgba(232,234,240,0.55)";
+Chart.defaults.borderColor = "rgba(255,255,255,0.07)";
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+Chart.defaults.font.size   = 13;
+
+// Pipeline
+function buildPipeline() {
+  document.getElementById("pipelineStages").innerHTML = STAGES.map((s,i) => `
+    <div class="stage">${i>0?"<span class=\"arrow\">\u2192</span>":""}
+      <div class="stage-node" id="stage_${i}">${s}</div>
+    </div>`).join("");
+}
+buildPipeline();
+
+function activateStage(idx) {
+  STAGES.forEach((_,i) => {
+    const el = document.getElementById("stage_"+i);
+    el.classList.remove("active","done");
+    if (i < idx) el.classList.add("done");
+    if (i === idx) el.classList.add("active");
+  });
+}
+function allStagesDone() {
+  STAGES.forEach((_,i) => {
+    const el = document.getElementById("stage_"+i);
+    el.classList.remove("active"); el.classList.add("done");
+  });
+}
+
+function setStatus(text, mode) {
+  document.getElementById("statusText").textContent = text;
+  document.getElementById("statusDot").className = "dot " + (mode||"");
+}
+function setStat(id, val) { document.getElementById(id).textContent = val; }
+
+// Build charts
+function buildCharts() {
+  const baseOpts = (y0,y1) => ({
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { position:"bottom", labels:{ boxWidth:12, padding:16 } } },
+    scales: {
+      y: { min:y0, max:y1, grid:{ color:"rgba(255,255,255,0.05)" }, ticks:{ maxTicksLimit:6 } },
+      x: { grid:{ display:false }, ticks:{ maxRotation:0 } },
+    },
+    animation: { duration:500 },
+  });
+
+  rewardChart = new Chart(document.getElementById("rewardChart").getContext("2d"), {
+    type:"line", data:{ labels:[], datasets:[
+      { label:"Reward",       data:[], borderColor:GREEN,  backgroundColor:GREEN+"20",  borderWidth:2.5, pointRadius:5, fill:true, tension:0.4 },
+      { label:"Best So Far",  data:[], borderColor:YELLOW, backgroundColor:"transparent", borderWidth:2, pointRadius:0, borderDash:[6,4], tension:0.1 },
+    ]}, options: baseOpts(0,1),
+  });
+
+  criticChart = new Chart(document.getElementById("criticChart").getContext("2d"), {
+    type:"line", data:{ labels:[], datasets:[
+      { label:"Intent",  data:[], borderColor:ACCENT,  backgroundColor:"transparent", borderWidth:2, pointRadius:4, tension:0.4 },
+      { label:"Brand",   data:[], borderColor:PINK,    backgroundColor:"transparent", borderWidth:2, pointRadius:4, tension:0.4 },
+      { label:"Quality", data:[], borderColor:YELLOW,  backgroundColor:"transparent", borderWidth:2, pointRadius:4, tension:0.4 },
+      { label:"Overall", data:[], borderColor:GREEN,   backgroundColor:GREEN+"18",    borderWidth:2.5, pointRadius:5, fill:true, tension:0.4 },
+    ]}, options: baseOpts(0,1),
+  });
+
+  igChart = new Chart(document.getElementById("igChart").getContext("2d"), {
+    type:"bar", data:{ labels:[], datasets:[
+      { label:"Likes", data:[], backgroundColor:ACCENT+"cc", borderRadius:5, yAxisID:"y" },
+      { label:"Saves", data:[], backgroundColor:PINK+"cc",   borderRadius:5, yAxisID:"y" },
+      { label:"Eng.%", data:[], type:"line", borderColor:GREEN, backgroundColor:"transparent",
+        tension:0.4, pointRadius:4, fill:false, borderWidth:2.5, yAxisID:"y2" },
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ position:"bottom", labels:{ boxWidth:12, padding:16 } } },
+      scales:{
+        y:  { position:"left",  grid:{ color:"rgba(255,255,255,0.05)" }, ticks:{ maxTicksLimit:6 } },
+        y2: { position:"right", grid:{ display:false }, min:0, max:35,
+              title:{ display:true, text:"Eng. Rate %", color:"rgba(255,255,255,0.4)", font:{ size:10 } },
+              ticks:{ color:"rgba(255,255,255,0.4)", callback: v => v+"%" } },
+        x:  { grid:{ display:false }, ticks:{ maxRotation:0 } },
+      },
+      animation:{ duration:500 },
+    },
+  });
+
+  const zoneBandsPlugin = {
+    id:"zoneBands",
+    beforeDraw(chart) {
+      const { ctx, chartArea:ca, scales:{ x, y } } = chart;
+      if (!ca) return;
+      ctx.save();
+      PROMPT_ZONES.forEach(z => {
+        const x1=x.getPixelForValue(z.start), x2=x.getPixelForValue(z.end);
+        ctx.fillStyle=z.fill; ctx.fillRect(x1,ca.top,x2-x1,ca.bottom-ca.top);
+        ctx.strokeStyle=z.line; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(x2,ca.top); ctx.lineTo(x2,ca.bottom); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle=z.line; ctx.font="bold 9px Inter,system-ui,sans-serif"; ctx.textAlign="center";
+        z.name.split("\n").forEach((ln,li)=>ctx.fillText(ln,(x1+x2)/2,ca.top+11+li*11));
+      });
+      ctx.restore();
+    }
+  };
+  const dotLabelPlugin = {
+    id:"dotLabels",
+    afterDatasetsDraw(chart) {
+      const { ctx }=chart, ds=chart.data.datasets[0];
+      if (!ds?.data?.length) return;
+      const meta=chart.getDatasetMeta(0);
+      ctx.save(); ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.font="bold 9px Inter,system-ui,sans-serif";
+      ds.data.forEach((pt,i) => {
+        const el=meta.data[i]; if(!el) return;
+        const {x,y}=el.getProps(["x","y"],true);
+        ctx.fillStyle="rgba(0,0,0,0.85)"; ctx.fillText(pt.it,x,y);
+      });
+      ctx.restore();
+    }
+  };
+
+  maboChart = new Chart(document.getElementById("maboChart").getContext("2d"), {
+    type:"scatter", plugins:[zoneBandsPlugin,dotLabelPlugin],
+    data:{ datasets:[{ label:"Iterations", data:[],
+      backgroundColor:(ctx)=>{ const p=ctx.raw; if(!p) return "rgba(124,106,252,0.7)"; return p.reward>=0.80?"rgba(31,217,110,.85)":p.reward>=0.65?"rgba(255,193,26,.85)":"rgba(255,116,52,.85)"; },
+      borderColor:(ctx)=>{ const p=ctx.raw; if(!p) return ACCENT; return p.reward>=0.80?"#16a34a":p.reward>=0.65?"#b45309":"#c2410c"; },
+      borderWidth:2,
+      pointRadius:(ctx)=>{ const p=ctx.raw; return p?.reward?Math.round(8+p.reward*10):10; },
+      pointHoverRadius:(ctx)=>{ const p=ctx.raw; return p?.reward?Math.round(10+p.reward*10):13; },
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:true, layout:{ padding:{ top:28 } },
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{
+          title:(items)=>"Iteration "+items[0].raw.it,
+          label:(ctx)=>{ const p=ctx.raw,zn=PROMPT_ZONES.find(z=>p.x>=z.start&&p.x<z.end)?.short||"?",tag=p.reward>=0.80?"High":p.reward>=0.65?"Medium":"Low";
+            return ["Template: "+p.prompt,"Zone: "+zn,"Reward: "+p.reward.toFixed(4)+" ("+tag+")","Tone: "+p.y.toFixed(2),"Length dim: "+(p.z?p.z.toFixed(2):"--")]; }
+        }}
+      },
+      scales:{
+        x:{ title:{display:true,text:"Prompt Style Zone  (0 = Benefit CTA  to  1 = Question Hook)"},min:0,max:1,grid:{color:"rgba(255,255,255,0.04)"},ticks:{display:false} },
+        y:{ title:{display:true,text:"Tone  (0 = soft  to  1 = bold)"},min:0,max:1,grid:{color:"rgba(255,255,255,0.05)"} },
+      },
+    }
+  });
+
+  convergenceChart = new Chart(document.getElementById("convergenceChart").getContext("2d"), {
+    type:"line", data:{ labels:[], datasets:[
+      { label:"GP Variance (exploration)", data:[], yAxisID:"yVar", borderColor:ACCENT2, backgroundColor:ACCENT2+"22", borderWidth:2.5, pointRadius:5, fill:true, tension:0.4 },
+      { label:"Best Reward so far",        data:[], yAxisID:"yRew", borderColor:YELLOW,  backgroundColor:"transparent", borderWidth:2.5, pointRadius:4, borderDash:[6,3], tension:0.3 },
+      { label:"\u03ba (exploration bonus)",       data:[], yAxisID:"yKap", borderColor:PINK,   backgroundColor:"transparent", borderWidth:2,  pointRadius:3, borderDash:[3,3], tension:0.3 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ position:"bottom", labels:{ boxWidth:12, padding:16 } } },
+      scales:{
+        yVar:{ type:"linear", position:"left",  min:0, max:1.05, title:{display:true,text:"GP Variance"}, grid:{color:"rgba(255,255,255,0.05)"} },
+        yRew:{ type:"linear", position:"right", min:0, max:1,    title:{display:true,text:"Best Reward"}, grid:{display:false} },
+        yKap:{ type:"linear", position:"right", min:0, max:3,    title:{display:true,text:"\u03ba",color:PINK}, grid:{display:false},
+               ticks:{color:PINK, callback: v=>v.toFixed(1)}, display:true },
+        x:{ grid:{display:false}, ticks:{maxRotation:0} },
+      },
+      animation:{ duration:500 },
+    }
+  });
+
+  regretChart = new Chart(document.getElementById("regretChart").getContext("2d"), {
+    type:"line", data:{ labels:[], datasets:[
+      { label:"Instantaneous Regret", data:[], borderColor:ORANGE, backgroundColor:ORANGE+"22", borderWidth:2.5, pointRadius:5, fill:true, tension:0.4 },
+      { label:"Avg Cumulative Regret",data:[], borderColor:PINK,   backgroundColor:"transparent", borderWidth:2,  pointRadius:3, borderDash:[5,4], tension:0.4 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ position:"bottom", labels:{ boxWidth:12, padding:16 } } },
+      scales:{ y:{ min:0, grid:{color:"rgba(255,255,255,0.05)"} }, x:{ grid:{display:false} } },
+      animation:{ duration:500 },
+    }
+  });
+}
+buildCharts();
+
+// Push data to a chart
+function pushChart(chart, label) {
+  chart.data.labels.push(label);
+  for (let i = 2; i < arguments.length; i++) {
+    const [dsIdx, val] = arguments[i];
+    chart.data.datasets[dsIdx].data.push(val);
+  }
+  chart.update("none");
+}
+
+// Score bar
+function setBar(valId, barId, score, defaultColor) {
+  document.getElementById(valId).textContent = (score*100).toFixed(0)+"%";
+  document.getElementById(barId).style.width = (score*100)+"%";
+  document.getElementById(barId).style.background =
+    score>=0.85?"var(--green)":score>=0.70?defaultColor:score>=0.55?"var(--yellow)":"var(--red)";
+}
+
+function rColor(r) { return r>=0.80?GREEN:r>=0.65?YELLOW:ORANGE; }
+
+// Populate latest detail panel
+function populateDetail(data) {
+  const critic=data.critic, mp=data.mabo_point;
+  document.getElementById("detailItBadge").textContent   = "Iteration "+data.iteration;
+  document.getElementById("detailPromptName").textContent = data.prompt.name;
+  document.getElementById("detailPromptDesc").textContent = "What this style does: "+(PROMPT_DESCRIPTIONS[data.prompt.name]||"--");
+  document.getElementById("detailPromptText").textContent = data.prompt.text.replace("{topic}",'"'+data.prompt.name+'"');
+  document.getElementById("detailActionPt").textContent   = "[style="+mp[0].toFixed(2)+", tone="+mp[1].toFixed(2)+", length="+mp[2].toFixed(2)+"]";
+  document.getElementById("detailContent").textContent    = data.content;
+  const fkEl=document.getElementById("detailFK");
+  fkEl.textContent = critic.fk_grade;
+  fkEl.style.color  = (critic.fk_grade>=6&&critic.fk_grade<=12)?"var(--green)":"var(--orange)";
+  document.getElementById("detailWC").textContent  = critic.word_count+" words";
+  const tEl=document.getElementById("detailTTR");
+  tEl.textContent=(critic.ttr*100).toFixed(0)+"% unique"; tEl.style.color=critic.ttr>=0.5?"var(--green)":"var(--yellow)";
+  setBar("detailIntentVal","detailIntentBar",  critic.intent_score,  "var(--accent)");
+  setBar("detailBrandVal", "detailBrandBar",   critic.brand_score,   "var(--pink)");
+  setBar("detailQualVal",  "detailQualBar",    critic.quality_score, "var(--yellow)");
+  setBar("detailOverallVal","detailOverallBar",critic.overall_score, "var(--accent2)");
+  document.getElementById("detailCritiqueText").textContent = critic.critique_text||"--";
+  const sl=document.getElementById("detailSuggestions"); sl.innerHTML="";
+  (critic.suggestions||[]).forEach(s=>{
+    const li=document.createElement("li"); const ok=s.startsWith("No major");
+    li.className="sug-item "+(ok?"sug-ok":"sug-tip"); li.textContent=(ok?"✅ ":"💡 ")+s; sl.appendChild(li);
+  });
+}
+
+// Build a history row element
+function buildHistRow(data) {
+  const c=data.critic, ig=data.ig_metrics, r=data.reward, mp=data.mabo_point, it=data.iteration;
+  const rc=rColor(r);
+  const prev=(data.content.replace(/\n/g," ").slice(0,130)+(data.content.length>130?"...":""));
+  function miniBar(sc,col){ return "<div class='sp-bar'><div class='sp-fill' style='width:"+(sc*100).toFixed(0)+"%;background:"+col+"'></div></div><span class='sp-val' style='color:"+col+"'>"+(sc*100).toFixed(0)+"%</span>"; }
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function scoreBarsHTML(critic2) {
+    return [["Intent",critic2.intent_score,ACCENT],["Brand",critic2.brand_score,PINK],["Quality",critic2.quality_score,YELLOW],["Overall",critic2.overall_score,GREEN]].map(([lbl,sc,col])=>`
+      <div style="margin-bottom:7px;">
+        <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:3px;">
+          <span style="color:var(--muted)">${lbl}</span><strong style="color:${col}">${(sc*100).toFixed(0)}%</strong>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;">
+          <div style="height:100%;width:${(sc*100).toFixed(0)}%;background:${col};border-radius:99px;"></div>
+        </div>
+      </div>`).join("");
+  }
+  const el=document.createElement("div"); el.className="hist-row";
+  el.innerHTML=`
+    <div class="hist-row-head" onclick="this.parentElement.classList.toggle('expanded')">
+      <div><div class="hist-num">${it}</div></div>
+      <div>
+        <div class="hist-pname">${esc(data.prompt.name)}</div>
+        <div class="hist-psub">${esc((PROMPT_DESCRIPTIONS[data.prompt.name]||"").slice(0,60))}...</div>
+      </div>
+      <div class="hist-prev">${esc(prev)}</div>
+      <div>
+        <div class="score-pills">
+          <div class="sp-row"><span class="sp-lbl">Intent</span>${miniBar(c.intent_score,ACCENT)}</div>
+          <div class="sp-row"><span class="sp-lbl">Brand</span>${miniBar(c.brand_score,PINK)}</div>
+          <div class="sp-row"><span class="sp-lbl">Quality</span>${miniBar(c.quality_score,YELLOW)}</div>
+          <div class="sp-row"><span class="sp-lbl">Overall</span>${miniBar(c.overall_score,GREEN)}</div>
+        </div>
+      </div>
+      <div style="font-size:.82rem;color:var(--muted);">
+        &hearts; ${ig.likes} likes<br>
+        &#x1F4CC; ${ig.saves} saves<br>
+        &#x1F4CA; ${ig.engagement_rate}% eng.
+      </div>
+      <div><div class="reward-big" style="color:${rc};">${r.toFixed(4)}</div></div>
+      <div><button class="expand-btn" tabindex="-1">&#9660;</button></div>
+    </div>
+    <div class="hist-detail">
+      <div class="hist-detail-grid">
+        <div>
+          <h3>Prompt Used</h3>
+          <div style="display:inline-flex;align-items:center;padding:4px 12px;border-radius:99px;font-size:.83rem;font-weight:600;background:rgba(0,194,203,.12);color:var(--accent2);border:1px solid rgba(0,194,203,.25);margin-bottom:10px;">${esc(data.prompt.name)}</div>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:10px;line-height:1.55;">${esc(PROMPT_DESCRIPTIONS[data.prompt.name]||"--")}</div>
+          <div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:13px 15px;font-size:.86rem;line-height:1.75;color:rgba(232,234,240,.72);font-style:italic;">${esc(data.prompt.text)}</div>
+          <div style="display:inline-block;margin-top:10px;padding:4px 11px;border-radius:6px;font-size:.78rem;font-family:monospace;background:rgba(0,194,203,.1);color:var(--accent2);border:1px solid rgba(0,194,203,.2);">style=${mp[0].toFixed(2)}, tone=${mp[1].toFixed(2)}, length=${mp[2].toFixed(2)}</div>
+        </div>
+        <div>
+          <h3>Generated Caption</h3>
+          <div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:15px 17px;font-size:.94rem;line-height:1.82;color:var(--text);white-space:pre-wrap;word-break:break-word;min-height:120px;">${esc(data.content)}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:11px;font-size:.81rem;color:var(--muted);">
+            <span>FK Grade: <strong style="color:${(c.fk_grade>=6&&c.fk_grade<=12)?GREEN:ORANGE};">${c.fk_grade}</strong></span>
+            <span>Words: <strong style="color:var(--text);">${c.word_count}</strong></span>
+            <span>Vocab: <strong style="color:${c.ttr>=0.5?GREEN:YELLOW};">${(c.ttr*100).toFixed(0)}%</strong></span>
+          </div>
+        </div>
+        <div>
+          <h3>Critic Report</h3>
+          ${scoreBarsHTML(c)}
+          <div style="font-size:.84rem;line-height:1.65;color:rgba(232,234,240,.6);background:rgba(255,255,255,.02);border:1px solid var(--border2);border-radius:8px;padding:11px 13px;margin-bottom:10px;">${esc(c.critique_text||"--")}</div>
+          <ul class="sug-list">${(c.suggestions||[]).map(s=>"<li class='sug-item "+(s.startsWith("No major")?"sug-ok":"sug-tip")+"'>"+(s.startsWith("No major")?"✅ ":"💡 ")+esc(s)+"</li>").join("")}</ul>
+        </div>
+      </div>
+    </div>`;
+  return el;
+}
+
+function addToHistory(data) {
+  iterationHistory.unshift(data);
+  const container=document.getElementById("historyRows");
+  const empty=container.querySelector(".empty-hist");
+  if (empty) empty.remove();
+  const row=buildHistRow(data);
+  row.style.transition="background .6s";
+  row.style.background="rgba(124,106,252,0.09)";
+  container.prepend(row);
+  setTimeout(()=>{ row.style.background=""; },1200);
+  document.getElementById("historyCount").textContent=iterationHistory.length+" iteration"+(iterationHistory.length!==1?"s":"");
+}
+
+// Main iteration handler
+function processIteration(data) {
+  const it=data.iteration, c=data.critic, ig=data.ig_metrics, r=data.reward, mp=data.mabo_point, bo=data.bo_snapshot;
+  if (firstReward===null) firstReward=r;
+  if (r>bestReward){ bestReward=r; bestIter=it; }
+  activateStage(STAGES.length-1);
+
+  setStat("statIter",   it);
+  setStat("statBest",   bestReward.toFixed(3));
+  setStat("statBestIt", "iteration "+bestIter);
+  setStat("statCritic", c.overall_score.toFixed(3));
+  setStat("statEng",    ig.engagement_rate.toFixed(1)+"%");
+  setStat("statImprove", firstReward>0?"+"+((( bestReward-firstReward)/firstReward)*100).toFixed(1)+"%":"--");
+
+  const lbl="It. "+it;
+  pushChart(rewardChart, lbl, [0,r],[1,bestReward]);
+  pushChart(criticChart, lbl, [0,c.intent_score],[1,c.brand_score],[2,c.quality_score],[3,c.overall_score]);
+  pushChart(igChart,     lbl, [0,ig.likes],[1,ig.saves],[2,ig.engagement_rate]);
+  maboChart.data.datasets[0].data.push({ x:mp[0], y:mp[1], z:mp[2], it, reward:r, prompt:data.prompt.name });
+  maboChart.update("none");
+  gp3dPoints.push({ x:mp[0], y:mp[1], z:mp[2], it, reward:r, prompt:data.prompt.name });
+  update3DChart();
+  pushChart(convergenceChart, lbl, [0,data.gp_variance],[1,bo.best_reward],[2,data.kappa??bo.kappa??1.2]);
+  const rh=bo.regret_history||[], avg=rh.length?Math.round(rh.reduce((a,b)=>a+b,0)/rh.length*10000)/10000:0;
+  pushChart(regretChart, lbl, [0,data.regret],[1,avg]);
+
+  populateDetail(data);
+  addToHistory(data);
+  setStatus("Iteration "+it+" complete — reward "+r.toFixed(4)+"  |  best: "+bestReward.toFixed(4)+" @ it."+bestIter, "running");
+}
+
+// Reset
+function resetAll(iters) {
+  firstReward=null; bestReward=-Infinity; bestIter=1; iterationHistory=[];
+  setStat("statTotal","of "+iters); setStat("statIter","--"); setStat("statBest","--");
+  setStat("statBestIt","iteration --"); setStat("statCritic","--"); setStat("statEng","--"); setStat("statImprove","--");
+  ["detailItBadge","detailPromptName","detailFK","detailWC","detailTTR","detailIntentVal","detailBrandVal","detailQualVal","detailOverallVal"].forEach(id=>document.getElementById(id).textContent="--");
+  document.getElementById("detailPromptDesc").textContent="What this style does: --";
+  document.getElementById("detailPromptText").textContent="Run the demo...";
+  document.getElementById("detailActionPt").textContent="--";
+  document.getElementById("detailContent").textContent="Run the demo to see the generated Instagram caption here...";
+  document.getElementById("detailCritiqueText").textContent="--";
+  document.getElementById("detailSuggestions").innerHTML="";
+  ["detailIntentBar","detailBrandBar","detailQualBar","detailOverallBar"].forEach(id=>document.getElementById(id).style.width="0%");
+  document.getElementById("historyRows").innerHTML='<div class="empty-hist"><div class="icon">&#128300;</div><p>Running demo &mdash; iterations will appear here as they complete.</p></div>';
+  document.getElementById("historyCount").textContent="0 iterations";
+  [rewardChart,criticChart,igChart,convergenceChart,regretChart].forEach(ch=>{ ch.data.labels=[]; ch.data.datasets.forEach(d=>d.data=[]); ch.update("none"); });
+  maboChart.data.datasets[0].data=[]; maboChart.update("none");
+  gp3dPoints=[]; Plotly.react('mabo3d',[],GP3D_LAYOUT,{responsive:true,displayModeBar:false});
+  buildPipeline();
+}
+
+// Health check
+window.addEventListener("load", async () => {
+  try {
+    const resp = await fetch("/health");
+    if (!resp.ok) throw new Error();
+    setStatus("Backend connected — ready to run","");
+    document.getElementById("statusDot").style.background=GREEN;    init3DChart();  } catch(_) {
+    document.getElementById("connBanner").style.display="block";
+    setStatus("Cannot reach demo_runner on port 8020","");
+    document.getElementById("startBtn").disabled=true;
+  }
+});
+
+// Start demo
+async function startDemo() {
+  const btn=document.getElementById("startBtn");
+  const topic=document.getElementById("topicInput").value.trim();
+  const brand=document.getElementById("brandInput").value.trim();
+  const iters=parseInt(document.getElementById("itersSelect").value);
+  btn.disabled=true;
+  resetAll(iters);
+  setStatus("Starting run...","running");
+  activateStage(0);
+
+  let runId;
+  try {
+    const res=await fetch("/run",{ method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ topic, brand, intent:"Create an engaging Instagram post about "+topic, iterations:iters }) });
+    runId=(await res.json()).run_id;
+  } catch(e) {
+    setStatus("Could not connect to demo_runner. Is it running on port 8020?","");
+    btn.disabled=false; return;
+  }
+
+  let si=0;
+  const timer=setInterval(()=>{ if(si<STAGES.length-1){ si++; activateStage(si); } },400);
+  const es=new EventSource("/stream/"+runId);
+  es.onmessage=(event)=>{
+    clearInterval(timer);
+    const msg=JSON.parse(event.data);
+    if (msg.type==="iteration") processIteration(msg.data);
+    else if (msg.type==="completed"){
+      es.close(); allStagesDone();
+      setStatus("Demo complete — "+msg.total+" iterations | Best reward: "+msg.best_reward+" @ iteration "+msg.best_iteration,"done");
+      btn.disabled=false;
+    }
+  };
+  es.onerror=()=>{ es.close(); clearInterval(timer); setStatus("Stream closed",""); btn.disabled=false; };
+}
+</script>
+</body>
+</html>

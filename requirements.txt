@@ -31,3 +31,5 @@ numpy>=1.23.5,<2.3.0
 scipy
 chromadb
 sentence-transformers
+httpx
+textstat

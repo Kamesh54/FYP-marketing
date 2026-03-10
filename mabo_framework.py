@@ -81,9 +81,11 @@ class RewardQueue:
     expected_delay_hours: float
     reward: Optional[float] = None
     engagement_rate: Optional[float] = None
-    cost: Optional[float] = None
+    cost: Optional[float] = None          # kept for ADMM budget tracking, NOT used in reward
     execution_time: Optional[float] = None
     content_approved: Optional[bool] = None
+    critic_score: Optional[float] = None  # LLM critic / readability score  [0, 1]
+    keyword_relevance: Optional[float] = None  # keyword alignment score     [0, 1]
     created_at: datetime = None
     stabilized_at: Optional[datetime] = None
     is_stabilized: bool = False
@@ -506,7 +508,9 @@ class RewardStabilizer:
         engagement_rate: Optional[float] = None,
         cost: Optional[float] = None,
         execution_time: Optional[float] = None,
-        content_approved: Optional[bool] = None
+        content_approved: Optional[bool] = None,
+        critic_score: Optional[float] = None,
+        keyword_relevance: Optional[float] = None
     ):
         """Update reward data for a queued item."""
         for item in self.reward_queue:
@@ -514,22 +518,27 @@ class RewardStabilizer:
                 if engagement_rate is not None:
                     item.engagement_rate = engagement_rate
                 if cost is not None:
-                    item.cost = cost
+                    item.cost = cost  # stored for ADMM budget tracking only
                 if execution_time is not None:
                     item.execution_time = execution_time
                 if content_approved is not None:
                     item.content_approved = content_approved
-                
-                # Calculate reward if all components available
-                if all([item.engagement_rate is not None,
-                       item.cost is not None,
-                       item.execution_time is not None,
-                       item.content_approved is not None]):
+                if critic_score is not None:
+                    item.critic_score = critic_score
+                if keyword_relevance is not None:
+                    item.keyword_relevance = keyword_relevance
+
+                # Calculate reward when the minimum required signal is available.
+                # engagement_rate and content_approved are required;
+                # critic_score and keyword_relevance default to 0.5 if not yet received.
+                if item.engagement_rate is not None and item.content_approved is not None:
                     item.reward = self._calculate_reward(
                         item.engagement_rate,
-                        item.cost,
-                        item.execution_time,
-                        item.content_approved
+                        item.cost or 0.0,
+                        item.execution_time or 0.0,
+                        item.content_approved,
+                        critic_score=item.critic_score if item.critic_score is not None else 0.5,
+                        keyword_relevance=item.keyword_relevance if item.keyword_relevance is not None else 0.5,
                     )
                 break
     
@@ -538,16 +547,43 @@ class RewardStabilizer:
         engagement_rate: float,
         cost: float,
         execution_time: float,
-        content_approved: bool
+        content_approved: bool,
+        critic_score: float = 0.5,
+        keyword_relevance: float = 0.5
     ) -> float:
-        """Calculate reward from components."""
-        engagement_reward = engagement_rate * 100
-        cost_penalty = cost * 10
-        time_saved = max(0, 5 - execution_time / 60)  # Convert to minutes
-        time_bonus = time_saved * 0.5
-        approval_bonus = 10 if content_approved else -5
-        
-        return engagement_reward - cost_penalty + time_bonus + approval_bonus
+        """
+        Calculate normalised content quality reward.
+
+        Design principle
+        ----------------
+        Cost is NOT part of the reward — it is a hard constraint enforced
+        by ADMM via Lagrange multipliers (see GlobalCoordinator.update_coordination).
+        Including cost here as well would double-penalise spending and cause
+        the GP to converge to zero-budget configurations regardless of quality.
+
+        Reward components (all in [0, 1]):
+          0.50 × engagement_rate_norm  — direct audience response signal
+          0.30 × critic_score          — LLM critic / readability / SEO quality gate
+          0.20 × keyword_relevance     — alignment with extracted target keywords
+
+        Optional approval gate: if content is not approved, apply a −0.15 penalty
+        to discourage low-quality outputs without completely zeroing the signal.
+        """
+        # Normalise engagement: typical IG rate 1-5%; treat 10%+ as perfect score
+        engagement_norm = min(1.0, engagement_rate / 0.10)
+
+        # Weighted quality composite
+        reward = (
+            0.50 * engagement_norm
+            + 0.30 * min(1.0, max(0.0, critic_score))
+            + 0.20 * min(1.0, max(0.0, keyword_relevance))
+        )
+
+        # Approval gate penalty (soft — does not zero the reward)
+        if not content_approved:
+            reward = max(0.0, reward - 0.15)
+
+        return float(reward)
     
     def get_stabilized_rewards(self) -> List[RewardQueue]:
         """Get all stabilized rewards ready for batch update."""

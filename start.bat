@@ -3,7 +3,7 @@ SET PY=%~dp0venv\Scripts\python.exe
 
 ECHO Killing old processes...
 netstat -aon | findstr " LISTENING" > "%TEMP%\ag_ports.txt"
-FOR %%P IN (5000 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010) DO (
+FOR %%P IN (5000 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010 8020) DO (
     FOR /F "tokens=5" %%T IN ('findstr ":%%P " "%TEMP%\ag_ports.txt"') DO (
         taskkill /F /PID %%T >nul 2>&1
     )
@@ -23,5 +23,6 @@ START "Research:8009"      cmd /k "%PY%" research_agent.py
 START "SEO:5000"           cmd /k "%PY%" seo_agent.py
 START "Reddit:8010"        cmd /k "%PY%" reddit_agent.py
 START "Orchestrator:8004"  cmd /k "%PY%" orchestrator.py
+START "DemoRunner:8020"    cmd /k "%PY%" demo_runner.py
 
-ECHO Done. All 12 agents launched.
+ECHO Done. All 13 agents launched.

@@ -20,7 +20,14 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # ── Embedding-based intent classifier (loaded once, zero tokens at request time) ──
-_st_model = SentenceTransformer("all-MiniLM-L6-v2")
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+import contextlib, io as _io
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+with contextlib.redirect_stderr(_io.StringIO()):
+    _st_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # One representative sentence per intent — the model encodes these at import time.
 INTENT_EXAMPLES: Dict[str, str] = {

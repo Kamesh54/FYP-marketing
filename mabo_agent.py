@@ -26,14 +26,17 @@ from memory import find_similar_by_text, find_similar_by_visual
 
 logger = logging.getLogger(__name__)
 
-# Agent definitions (matching RL agent structure)
+# Agent definitions
+# Content agents use 5D action space — see CONTENT_AGENT_ACTION_DIMS for details.
+# All other agents use 2D: [quality_weight (0-1), budget_$ (0-cap)].
 AGENTS = {
     "webcrawler":          {"dim": 2, "bounds": [(0, 1), (0, 10)]},
     "seo_agent":           {"dim": 2, "bounds": [(0, 1), (0, 30)]},
     "keyword_extractor":   {"dim": 2, "bounds": [(0, 1), (0, 15)]},
     "gap_analyzer":        {"dim": 2, "bounds": [(0, 1), (0, 20)]},
-    "content_agent_blog":  {"dim": 2, "bounds": [(0, 1), (0, 25)]},
-    "content_agent_social":{"dim": 2, "bounds": [(0, 1), (0, 10)]},
+    # 5D: [quality_weight, tone, template_style, content_length, budget_$]
+    "content_agent_blog":  {"dim": 5, "bounds": [(0, 1), (0, 1), (0, 1), (0, 1), (0, 25)]},
+    "content_agent_social":{"dim": 5, "bounds": [(0, 1), (0, 1), (0, 1), (0, 1), (0, 10)]},
     "image_generator":     {"dim": 2, "bounds": [(0, 1), (0, 45)]},
     "social_poster":       {"dim": 2, "bounds": [(0, 1), (0, 5)]},
     # New agents
@@ -42,6 +45,49 @@ AGENTS = {
     "critic_agent":        {"dim": 2, "bounds": [(0, 1), (0, 8)]},
     "campaign_agent":      {"dim": 2, "bounds": [(0, 1), (0, 15)]},
 }
+
+# ---- Content agent 5D action space documentation ----
+# dim 0 — quality_weight    : 0=fast/cheap generation,  1=thorough/high-quality  [0, 1]
+# dim 1 — tone_aggressiveness: 0=soft/nurturing tone,    1=bold/urgent CTA        [0, 1]
+#                               optimal zone 0.35-0.65 for wellness/lifestyle brands
+# dim 2 — template_style    : maps [0,1] → 5 named templates (see below)          [0, 1]
+# dim 3 — content_length    : 0=short (tweet/caption),  1=long (full blog post)   [0, 1]
+# dim 4 — budget_$          : API spend cap for this content generation run        [0, cap]
+CONTENT_AGENT_TEMPLATES = [
+    "informational",   # 0 — data-led how-to, facts, step-by-step
+    "emotional",       # 1 — storytelling, empathy, personal connection
+    "social_proof",    # 2 — testimonials, statistics, credibility signals
+    "urgency",         # 3 — limited-time, FOMO, strong CTA
+    "narrative",       # 4 — brand journey, values, founder story
+]
+
+
+def extract_content_params(action: np.ndarray) -> Dict[str, Any]:
+    """
+    Convert a 5D MABO action vector for a content agent into named parameters
+    that can be passed directly to the Groq prompt builder.
+
+    Works with old 2D actions too (backward-compatible fallback).
+    """
+    if len(action) < 5:
+        # Legacy 2D fallback
+        return {
+            "quality_weight": float(action[0]),
+            "tone": 0.5,
+            "template_idx": 2,
+            "template_name": CONTENT_AGENT_TEMPLATES[2],
+            "length_pref": 0.5,
+            "budget": float(action[1]) if len(action) > 1 else 10.0,
+        }
+    template_idx = int(min(action[2] * 4.9999, 4))  # [0,1] → {0,1,2,3,4}
+    return {
+        "quality_weight":  float(action[0]),          # GP optimises this
+        "tone":            float(action[1]),          # GP optimises this
+        "template_idx":    template_idx,              # GP optimises this
+        "template_name":   CONTENT_AGENT_TEMPLATES[template_idx],
+        "length_pref":     float(action[3]),          # GP optimises this
+        "budget":          float(action[4]),          # ADMM constrains this
+    }
 
 # Workflow definitions (matching RL agent)
 WORKFLOWS = {
@@ -396,15 +442,33 @@ class MABOAgent:
         intent: str
     ) -> str:
         """
-        Map action vector to workflow name.
-        Simplified - would use learned mapping.
+        Map action vector to workflow name using the MABO-selected parameters.
+
+        For content agents (5D action space):
+          - quality_weight (dim 0) drives workflow depth:
+              ≥ 0.65 → comprehensive_blog (research + gap analysis + critic)
+              0.35-0.65 → quick_blog (keyword + content + critic)
+              < 0.35 → content_only (content + critic, cheapest)
+          - template_style (dim 2) and tone (dim 1) are passed to the
+            prompt builder via extract_content_params().
+
+        For other agents the mapping is intent-based as before.
         """
-        # Use heuristic for now, but could learn this mapping
         if intent == "blog_generation":
-            if agent == "content_agent_blog":
-                return "comprehensive_blog"
+            if agent == "content_agent_blog" and len(action_vector) >= 5:
+                params = extract_content_params(action_vector)
+                qw = params["quality_weight"]
+                if qw >= 0.65:
+                    return "comprehensive_blog"
+                elif qw >= 0.35:
+                    return "quick_blog"
+                else:
+                    return "content_only"
             return "quick_blog"
         elif intent == "social_post":
+            if agent == "content_agent_social" and len(action_vector) >= 5:
+                params = extract_content_params(action_vector)
+                return "social_full" if params["quality_weight"] >= 0.5 else "social_basic"
             return "social_full"
         elif intent == "seo_analysis":
             return "seo_only"
