@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What makes a brand trustworthy? For 50+ years, Bisleri has delivered safe, pure & healthy drinking water with 130 operational plants & a robust distribution network! #Bisleri #Trust #PureWater",
+      "length": 280,
+      "call_to_action": "Choose Bisleri for your drinking water needs",
+      "hashtags": [
+        "#RelevantHashtag",
+        "#DemoBrand",
+        "#Business"
+      ]
+    },
+    "instagram": {
+      "copy": "What do you look for in a water brand? At Bisleri, we've been a symbol of trust, purity, and reliability for over 50 years! With 130 operational plants, 13 owned facilities, and a robust distribution network of 5980 distributors and 8270 distribution trucks, we ensure safe, pure, and healthy drinking water for all. Join the movement towards a healthier lifestyle! #Bisleri #DemoBrand #HealthyDrinkingWater #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Make the switch to Bisleri today!",
+      "hashtags": [
+        "#RelevantHashtag",
+        "#DemoBrand",
+        "#Bisleri",
+        "#Business"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a Bisleri water bottle with a green background, symbolizing health and nature",
+    "Photorealistic image of a Bisleri water plant with a robust distribution network in the background, highlighting the brand's operational strength"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:26.046043Z"
+  }
+}

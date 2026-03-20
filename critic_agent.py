@@ -15,6 +15,8 @@ import os
 import json
 import uuid
 import logging
+import hashlib
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -53,8 +55,57 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import contextlib, io as _io
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-with contextlib.redirect_stderr(_io.StringIO()):
-    _critic_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+class _HashingSentenceEncoder:
+    """Lightweight local fallback when the transformer model is unavailable."""
+
+    def __init__(self, dim: int = 384):
+        self.dim = dim
+
+    def encode(self, text: str, normalize_embeddings: bool = True):
+        vec = np.zeros(self.dim, dtype=np.float32)
+        tokens = re.findall(r"\w+", (text or "").lower())
+        if not tokens:
+            return vec
+
+        for token in tokens:
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            idx = int.from_bytes(digest[:4], "big") % self.dim
+            sign = 1.0 if (digest[4] % 2 == 0) else -1.0
+            vec[idx] += sign
+
+        if normalize_embeddings:
+            norm = np.linalg.norm(vec)
+            if norm > 1e-8:
+                vec = vec / norm
+        return vec
+
+
+def _load_critic_model():
+    """Load a cached transformer if available; otherwise degrade gracefully."""
+    try:
+        with contextlib.redirect_stderr(_io.StringIO()):
+            model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
+        logger.info("Critic embedding model loaded from local cache")
+        return model
+    except Exception as cached_exc:
+        logger.warning("Cached critic embedding model unavailable: %s", cached_exc)
+
+    try:
+        with contextlib.redirect_stderr(_io.StringIO()):
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+        logger.info("Critic embedding model downloaded successfully")
+        return model
+    except Exception as download_exc:
+        logger.warning(
+            "Falling back to local hashing encoder because SentenceTransformer could not be loaded: %s",
+            download_exc,
+        )
+        return _HashingSentenceEncoder()
+
+
+_critic_model = _load_critic_model()
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine similarity between two vectors."""
@@ -221,16 +272,7 @@ def list_logs(limit: int = 100):
 
 @trace_llm(name="critic_evaluation", tags=["critic_agent", "embedding"])
 async def _evaluate(req: CriticRequest, brand_context: str):
-    """
-    Evaluates content using sentence-transformer cosine similarity + textstat readability.
-    No API tokens consumed.  Runs on CPU in ~5 ms.
-
-    Axes
-    ----
-    intent_score  — cosine(encode(original_intent), encode(content))  × scale
-    brand_score   — cosine(encode(brand_profile),   encode(content))  × scale
-    quality_score — Flesch-Kincaid grade + Type–Token Ratio + length bonus
-    """
+   
     content = req.content_text[:4000]
     content_emb = _critic_model.encode(content, normalize_embeddings=True)
 

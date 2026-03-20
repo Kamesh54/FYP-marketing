@@ -17,7 +17,7 @@ import logging
 from dotenv import load_dotenv
 from datetime import datetime
 import unicodedata
-from groq import Groq
+from llm_client import llm_chat_json, groq_client
 
 # ---------------- Utility ----------------
 def clean_text(text: str) -> str:
@@ -51,7 +51,7 @@ if not SERPAPI_API_KEY:
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY not set.")
-groq_client = Groq(api_key=GROQ_API_KEY)
+# groq_client imported from llm_client (3-model fallback chain)
 
 CACHE_DIR = "cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -110,27 +110,25 @@ load_job_status()
 # ---------------- Groq Domain Normalizer ----------------
 def extract_domains_with_groq(statement: str) -> List[str]:
     print("statement", statement)
-    """Use Groq to identify product/market domains from customer statement."""
+    """Use LLM to identify product/market domains from customer statement.
+    Uses 3-model fallback chain from llm_client.
+    """
     prompt = f"""
     Analyze the customer statement: "{statement}".
     Identify the relevant product/market domains with location (like cloud kitchen, online grocery, etc).
     Return ONLY a JSON list of strings (domains).
-    Example: ["CRM chennai", "ERP chennai"]
+    Example: {{"domains": ["CRM chennai", "ERP chennai"]}}
     """
-
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}
-    )
-
     try:
-        parsed = json.loads(response.choices[0].message.content)
-        domains = parsed.get("domains", []) if isinstance(parsed, dict) else parsed
-        logger.info(f"Groq extracted domains: {domains}")
+        data, model_used = llm_chat_json(
+            [{"role": "user", "content": prompt}]
+        )
+        logger.info("Domain extraction via model: %s", model_used)
+        domains = data.get("domains", []) if isinstance(data, dict) else data
+        logger.info(f"Extracted domains: {domains}")
         return domains
     except Exception as e:
-        logger.error(f"Failed to parse Groq response: {e}")
+        logger.error(f"LLM domain extraction failed: {e}")
         return []
 
 # ---------------- SerpAPI ----------------

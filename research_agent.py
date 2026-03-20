@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from groq import Groq
+from llm_client import llm_chat, groq_client
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -36,8 +36,7 @@ from database import get_research_cache, save_research_cache
 
 # ── Groq client ───────────────────────────────────────────────────────────────
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+# groq_client and model fallback chain imported from llm_client
 
 # ── Service ports ─────────────────────────────────────────────────────────────
 WEBCRAWLER_URL  = os.getenv("WEBCRAWLER_URL",  "http://localhost:8000")
@@ -293,13 +292,13 @@ Write a structured brief covering:
 Keep it concise and actionable."""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+        text, model_used = llm_chat(
+            [{"role": "user", "content": prompt}],
             temperature=0.5,
             max_tokens=1200,
         )
-        return resp.choices[0].message.content.strip()
+        logger.info("Research synthesis via model: %s", model_used)
+        return text.strip()
     except Exception as e:
         logger.error(f"LLM synthesis error: {e}")
         return f"Synthesis failed: {e}"

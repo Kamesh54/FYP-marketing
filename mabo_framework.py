@@ -1,14 +1,3 @@
-"""
-Multi-Agent Bayesian Optimization (MABO) Framework
-Based on Decentralized Optimization with Coordination Variables
-
-Core Components:
-1. Global Coordinator: Manages coordination variables (p_k) and global optimization
-2. Local BO Agents: Each agent implements local Bayesian Optimization
-3. Lagrangian Decomposition: Enforces budget constraints via ADMM
-4. Reward Stabilization: Handles delayed rewards with queuing
-"""
-
 import numpy as np
 import json
 import logging
@@ -19,8 +8,6 @@ from scipy.optimize import minimize
 import hashlib
 
 logger = logging.getLogger(__name__)
-
-# ==================== CORE DATA STRUCTURES ====================
 
 @dataclass
 class CoordinationState:

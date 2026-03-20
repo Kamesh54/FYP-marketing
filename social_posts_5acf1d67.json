@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What makes a brand trustworthy? For us, it's quality & service! As a conscious consumer, you deserve the best. #DemoBrand #QualityMatters #ConsciousConsumers",
+      "length": 280,
+      "call_to_action": "Choose us for quality and service",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers"
+      ]
+    },
+    "instagram": {
+      "copy": "What do you look for in a trusted brand? Is it quality, service, or something more? At Demo Brand, we believe it's all about delivering safe, pure, and healthy products. With a strong footprint and robust distribution network, we're committed to staying true to our promise. Key benefits include: pure products, reliable service, and a strong commitment to quality. Join us in our mission to deliver the best! #DemoBrand #QualityAndService #ConsciousConsumers #HealthyLiving",
+      "length": 300,
+      "call_to_action": "Join us in our mission to deliver the best",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers",
+        "#HealthyLiving"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of water with a green background, symbolizing health and nature, with the Demo Brand logo prominently displayed",
+    "A photorealistic image of a factory with a strong emphasis on quality control and a robust distribution network, with the Demo Brand logo and a map of India in the background"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:38:48.603890Z"
+  }
+}

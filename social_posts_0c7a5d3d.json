@@ -1,0 +1,11 @@
+{
+  "posts": {},
+  "image_prompts": [],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "generated_at": "2026-03-12T04:41:24.258394"
+  },
+  "raw": {
+    "raw_text": "All LLM models failed to return valid JSON. Last error: Connection error.\nModels tried: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it']"
+  }
+}

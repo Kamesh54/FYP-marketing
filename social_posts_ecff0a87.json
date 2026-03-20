@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What makes a brand trustworthy? For over 50 years, Bisleri has delivered safe, pure, and healthy drinking water. Experience the quality and service with Demo Brand! #DemoBrand #QualityMatters #HealthyDrinkingWater",
+      "length": 280,
+      "call_to_action": "Try Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#HealthyDrinkingWater"
+      ]
+    },
+    "instagram": {
+      "copy": "Are you looking for a symbol of trust, purity, and reliability in your drinking water? With over 50 years of experience, Bisleri leads the way! At Demo Brand, we prioritize quality and service, ensuring you get the best. Key benefits include: safe, pure, and healthy drinking water, a strong footprint of 130 operational plants, and a robust distribution network. Join the movement towards conscious consumption with Demo Brand! #DemoBrand #ConsciousConsumers #QualityAndService",
+      "length": 300,
+      "call_to_action": "Choose Demo Brand for your drinking water needs!",
+      "hashtags": [
+        "#DemoBrand",
+        "#ConsciousConsumers",
+        "#QualityAndService",
+        "#Business"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of Demo Brand water, with a cityscape in the background, highlighting the brand's strong distribution network.",
+    "A photorealistic image of a family enjoying Demo Brand water together, emphasizing the brand's commitment to delivering safe, pure, and healthy drinking water."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:30.248400Z"
+  }
+}

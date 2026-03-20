@@ -37,9 +37,12 @@ try:
     _RUNWAY_AVAILABLE = True
 except ImportError:
     _RUNWAY_AVAILABLE = False
-    logger.warning("runwayml package not installed. Install with: pip install runwayml")
+    logger.debug("runwayml package not installed — will use HuggingFace or demo placeholder")
 
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY", "")
+HF_TOKEN       = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_KEY", "")
+# Model to use for HuggingFace text-to-image (change via HF_IMAGE_MODEL env var)
+HF_IMAGE_MODEL = os.getenv("HF_IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
 IMAGES_DIR     = "generated_images"
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
@@ -84,6 +87,13 @@ def health():
     return {
         "service": "image_agent", "port": 8005, "version": "1.0.0",
         "runway_available": _RUNWAY_AVAILABLE and bool(RUNWAY_API_KEY),
+        "huggingface_available": bool(HF_TOKEN),
+        "hf_model": HF_IMAGE_MODEL if HF_TOKEN else None,
+        "active_backend": (
+            "runway" if (_RUNWAY_AVAILABLE and RUNWAY_API_KEY)
+            else "huggingface" if HF_TOKEN
+            else "demo_placeholder"
+        ),
         "status": "ok"
     }
 
@@ -161,16 +171,18 @@ async def _run_generation(job_id: str, req: ImageRequest):
         enriched += f" Avoid: {req.negative_prompt}"
 
     try:
+        local_path = None
         if _RUNWAY_AVAILABLE and RUNWAY_API_KEY:
             url, runway_id = await _runway_generate(enriched, req)
+            if url and url.startswith("http"):
+                local_path = await _download_asset(url, job_id)
+        elif HF_TOKEN:
+            logger.info(f"[{job_id}] Runway unavailable — using HuggingFace ({HF_IMAGE_MODEL})")
+            local_path = await _huggingface_generate(enriched, req, job_id)
+            url, runway_id = local_path, "huggingface"
         else:
             # Fallback: return a placeholder / unsplash search URL for demo
             url, runway_id = await _demo_placeholder(enriched, req), "demo"
-
-        # Optionally download and save locally
-        local_path = None
-        if url and url.startswith("http") and runway_id != "demo":
-            local_path = await _download_asset(url, job_id)
 
         job.update({
             "status": "completed",
@@ -222,6 +234,35 @@ async def _runway_generate(prompt: str, req: ImageRequest):
             raise RuntimeError(f"Runway task {task_id} status: {task.status}")
 
     raise TimeoutError(f"Runway task {task_id} timed out after 5 minutes")
+
+
+async def _huggingface_generate(prompt: str, req: ImageRequest, job_id: str) -> str:
+    """Call HuggingFace Inference API for text-to-image, save locally, return path."""
+    api_url = f"https://api-inference.huggingface.co/models/{HF_IMAGE_MODEL}"
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {"inputs": prompt}
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        # HuggingFace may return 503 while the model is loading — retry up to 3x
+        for attempt in range(3):
+            resp = await client.post(api_url, headers=headers, json=payload)
+            if resp.status_code == 503:
+                wait = int(resp.headers.get("Retry-After", 20))
+                logger.info(f"[{job_id}] HF model loading, retrying in {wait}s (attempt {attempt+1})")
+                await asyncio.sleep(wait)
+                continue
+            if resp.status_code != 200:
+                raise RuntimeError(f"HuggingFace API error {resp.status_code}: {resp.text[:200]}")
+            # Response is raw image bytes
+            path = os.path.join(IMAGES_DIR, f"{job_id}.png")
+            with open(path, "wb") as f:
+                f.write(resp.content)
+            logger.info(f"[{job_id}] HuggingFace image saved: {path}")
+            return path
+        raise RuntimeError("HuggingFace model still loading after 3 retries")
 
 
 async def _demo_placeholder(prompt: str, req: ImageRequest) -> str:

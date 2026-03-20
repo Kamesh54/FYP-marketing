@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What makes a brand trustworthy? For 50+ years, Bisleri has delivered safe, pure & healthy water with 130 operational plants & 5980 distributors! #Bisleri #Trust #Quality",
+      "length": 280,
+      "call_to_action": "Learn More",
+      "hashtags": [
+        "#Bisleri",
+        "#WaterYouWaitingFor",
+        "#StayHydrated"
+      ]
+    },
+    "instagram": {
+      "copy": "What does it take to be a symbol of trust, purity, and reliability? For decades, Bisleri has been a household name in India, leading the packaged drinking water category with a strong footprint of 130 operational plants, including 13 owned facilities, and a robust distribution network of 5980 distributors and 8270 distribution trucks. Key benefits include: safe drinking water, robust distribution network, and a strong commitment to quality. Join the millions who trust Bisleri for their daily hydration needs! Learn More #Bisleri #WaterYouWaitingFor #StayHydrated",
+      "length": 300,
+      "call_to_action": "Learn More",
+      "hashtags": [
+        "#Bisleri",
+        "#WaterYouWaitingFor",
+        "#StayHydrated",
+        "#TrustTheBest"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a Bisleri water bottle with a cityscape in the background, highlighting the brand's wide reach and distribution network.",
+    "A photorealistic image of a Bisleri water plant with a caption 'Quality at its core', showcasing the brand's commitment to quality and purity."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:47.485654Z"
+  }
+}

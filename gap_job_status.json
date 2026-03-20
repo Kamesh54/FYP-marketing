@@ -118,5 +118,69 @@
         "competitors_analyzed": 3,
         "total_keywords": 100,
         "end_time": "2026-03-07T21:10:19.057013"
+    },
+    "723f477c-098e-4bf6-b93e-63c4e405b4bb": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_723f477c.json",
+        "competitors_analyzed": 4,
+        "total_keywords": 200,
+        "end_time": "2026-03-11T20:52:41.407874"
+    },
+    "4ea5c7d6-fa87-4373-8110-ed91f13d9965": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_4ea5c7d6.json",
+        "competitors_analyzed": 5,
+        "total_keywords": 224,
+        "end_time": "2026-03-11T21:24:00.488470"
+    },
+    "48aa085d-2d6b-4ff7-aa5d-7c266cf7ffcc": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_48aa085d.json",
+        "competitors_analyzed": 8,
+        "total_keywords": 325,
+        "end_time": "2026-03-11T22:10:04.472621"
+    },
+    "70c5ef36-dd38-40d0-a7fd-e26bb3883b0d": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_70c5ef36.json",
+        "competitors_analyzed": 5,
+        "total_keywords": 231,
+        "end_time": "2026-03-12T05:28:17.190322"
+    },
+    "6311b1b8-25c6-47ba-9334-fdecd1981544": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_6311b1b8.json",
+        "competitors_analyzed": 5,
+        "total_keywords": 242,
+        "end_time": "2026-03-12T05:38:01.270232"
+    },
+    "dec657ba-2bdb-419a-aa04-1f6eb5e7f9ed": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_dec657ba.json",
+        "competitors_analyzed": 5,
+        "total_keywords": 220,
+        "end_time": "2026-03-12T05:55:40.466520"
+    },
+    "4e6f88d3-7ea9-4167-a9d0-e857f0b3c3ec": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_4e6f88d3.json",
+        "competitors_analyzed": 5,
+        "total_keywords": 234,
+        "end_time": "2026-03-12T06:07:57.001990"
+    },
+    "5c84d47f-5065-42ab-adbb-fcbacf887ff8": {
+        "status": "completed",
+        "message": "Keyword gap analysis completed successfully",
+        "results_file": "gap_analysis_5c84d47f.json",
+        "competitors_analyzed": 5,
+        "total_keywords": 173,
+        "end_time": "2026-03-12T10:04:34.510457"
     }
 }

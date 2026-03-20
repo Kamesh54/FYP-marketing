@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "💧🌟 Discover the secret to staying hydrated with Demo Brand! 🌎 With a focus on quality and service, we're the perfect choice for conscious consumers. #DemoBrand #QualityMatters #Sustainability",
+      "length": 280,
+      "call_to_action": "Learn More",
+      "hashtags": [
+        "#DemoBrand",
+        "#ConsciousConsumers",
+        "#HydrationMatters"
+      ]
+    },
+    "instagram": {
+      "copy": "🌟💧 For decades, Bisleri has been a symbol of trust, purity, and reliability in India 🌎. As a household name, they've stayed true to their promise of delivering safe, pure, and healthy drinking water 💧. At Demo Brand, we admire their commitment to quality and service 🙌. Join us in prioritizing your health and the planet's well-being 🌎 #DemoBrand #Bisleri #Sustainability #ConsciousConsumers #QualityMatters #HydrationMatters",
+      "length": 300,
+      "call_to_action": "Stay Hydrated, Stay Conscious",
+      "hashtags": [
+        "#DemoBrand",
+        "#Bisleri",
+        "#ConsciousConsumers",
+        "#Sustainability"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a bottle of water with a green background, symbolizing health and sustainability for Demo Brand",
+    "Photorealistic image of a water filtration plant with a caption 'Quality and Service' for Demo Brand"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:08.696465Z"
+  }
+}

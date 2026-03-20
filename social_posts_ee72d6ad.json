@@ -1,0 +1,34 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with trust! For 50+ yrs, Bisleri has delivered safe, pure & healthy water. Quality & service you can count on! #Bisleri #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Try Bisleri today!",
+      "hashtags": [
+        "#Bisleri",
+        "#QualityMatters",
+        "#StayHydrated"
+      ]
+    },
+    "instagram": {
+      "copy": "At Bisleri, we're not just a brand, we're a promise of trust, purity, and reliability. With 130+ operational plants and a robust distribution network, we've been delivering safe, pure, and healthy drinking water to millions for over 50 years. Join the movement towards a healthier tomorrow! #Bisleri #HealthyHydration #QualityAndService",
+      "length": 300,
+      "call_to_action": "Join the Bisleri family today!",
+      "hashtags": [
+        "#Bisleri",
+        "#HealthyHydration",
+        "#QualityAndService"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of Bisleri water, with a green and natural background, symbolizing health and purity.",
+    "A photorealistic image of a Bisleri water bottle on a table, with a cityscape or a natural landscape in the background, highlighting the brand's presence and reach."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:04.575081Z"
+  }
+}

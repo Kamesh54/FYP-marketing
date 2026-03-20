@@ -1,0 +1,34 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand! Quality & service you can trust. Join the journey to pure drinking water! #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Try Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#GeneralIndustry"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we believe in delivering more than just drinking water - we deliver trust, purity, and reliability! With a strong footprint and robust distribution network, we've been the household name in India for decades. Join our mission to provide safe, pure, and healthy drinking water for all! #DemoBrand #QualityAndService #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Make the switch to Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#GeneralIndustry",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person enjoying a glass of pure drinking water from Demo Brand, with a subtle background of Indian scenery",
+    "A photorealistic image of a Demo Brand water bottle with a green checkmark, symbolizing quality and trust, on a clean and minimalist background"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "Not specified",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:55:04.474721Z"
+  }
+}

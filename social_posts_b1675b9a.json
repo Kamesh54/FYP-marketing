@@ -1,0 +1,34 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand! Quality, service & trust, the pillars we stand on. Join the conscious consumers' choice for pure drinking water #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Try Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#ConsciousConsumers"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we pride ourselves on being a symbol of trust, purity, and reliability. With a strong footprint and commitment to delivering safe, pure, and healthy drinking water, we're the go-to choice for conscious consumers. Join the movement and experience the Demo Brand difference! #DemoBrand #QualityAndService #Sustainability",
+      "length": 300,
+      "call_to_action": "Make the switch to Demo Brand today and taste the difference!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person enjoying a glass of Demo Brand water in a natural setting, highlighting the brand's commitment to quality and purity",
+    "Photorealistic image of the Demo Brand production facility, showcasing the brand's robust distribution network and dedication to service"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "Not specified",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:54:43.318343Z"
+  }
+}

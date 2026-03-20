@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand, your trusted partner for quality & service! #DemoBrand #QualityMatters #ConsciousConsumers",
+      "length": 280,
+      "call_to_action": "Follow us for more",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we believe in delivering more than just a product - we deliver trust, purity, and reliability. With a strong focus on quality and service, we've become a household name. Join us in our mission to provide safe, pure, and healthy experiences! #DemoBrand #QualityAndService #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Join the movement",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers",
+        "#Sustainability"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a Demo Brand product, with a green and natural background, conveying the idea of trust and purity",
+    "A photorealistic image of a Demo Brand production facility, highlighting the emphasis on quality and service"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:53:14.259009Z"
+  }
+}

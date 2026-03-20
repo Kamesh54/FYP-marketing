@@ -1,14 +1,3 @@
-"""
-Brand Agent — port 8006
-Manages brand profiles:
-  - CRUD via database.py
-  - Auto-extract brand signals from a website URL using webcrawler + Groq
-  - Merge learned performance signals back into the brand profile
-  - Sync new/updated brand data to Neo4j knowledge graph
-
-LangSmith traces every LLM extraction call.
-"""
-
 import os
 import uuid
 import json
@@ -23,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from groq import Groq
+from llm_client import llm_chat, groq_client
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -38,9 +27,8 @@ from database import (
 from graph.dual_write_helper import sync_new_brand
 
 GROQ_API_KEY  = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL    = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+# GROQ_MODEL / groq_client — 3-model fallback chain imported from llm_client
 WEBCRAWLER_URL = os.getenv("WEBCRAWLER_URL", "http://localhost:8000")
-groq_client   = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 app = FastAPI(title="Brand Agent", version="1.0.0")
 app.add_middleware(
@@ -61,15 +49,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         headers={"Access-Control-Allow-Origin": "*"},
     )
 
-
-# ── Health ────────────────────────────────────────────────────────────────────
-
 @app.get("/")
 def health():
     return {"service": "brand_agent", "port": 8006, "version": "1.0.0", "status": "ok"}
-
-
-# ── Pydantic models ───────────────────────────────────────────────────────────
 
 class BrandCreateRequest(BaseModel):
     user_id: int
@@ -107,7 +89,6 @@ class LearnedSignalsRequest(BaseModel):
     signals: Dict[str, Any]
 
 
-# ── CRUD endpoints ─────────────────────────────────────────────────────────────
 
 @app.get("/brands/{user_id}")
 def list_brands(user_id: int):
@@ -172,14 +153,9 @@ def add_signals(user_id: int, brand_name: str, req: LearnedSignalsRequest):
     return {"status": "merged", "signals_count": len(req.signals)}
 
 
-# ── Auto-extract endpoint ──────────────────────────────────────────────────────
-
 @app.post("/brand/extract", status_code=201)
 async def extract_and_create(req: BrandExtractRequest):
-    """
-    Crawl req.website_url, then use LLM to auto-populate brand fields.
-    Creates the brand profile and returns it.
-    """
+    
     raw_content, visual = await asyncio.gather(
         _crawl_site(req.website_url),
         _extract_visual_assets(req.website_url),
@@ -222,17 +198,11 @@ async def extract_and_create(req: BrandExtractRequest):
     }
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
-
 import re as _re
 from bs4 import BeautifulSoup as _BS
 
 async def _extract_visual_assets(url: str) -> dict:
-    """
-    Directly fetch the homepage HTML and extract:
-    - logo_url: best candidate logo image
-    - colors: brand colors from meta theme-color + CSS variables + og:image bg hints
-    """
+    
     logo_url = ""
     colors: list = []
     try:
@@ -366,7 +336,6 @@ async def _crawl_site(url: str) -> str:
 
 @trace_llm(name="brand_extraction", tags=["brand_agent", "llm"])
 async def _extract_brand_signals(brand_name: str, url: str, content: str) -> Dict[str, Any]:
-    """Use Groq to extract structured brand information from crawled content."""
     if not groq_client:
         return {}
 
@@ -403,14 +372,14 @@ Return a JSON object with exactly these keys (no extras):
 Respond ONLY with valid JSON. No markdown, no explanation."""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+        raw, model_used = llm_chat(
+            [{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=800,
         )
-        raw = resp.choices[0].message.content.strip()
+        logger.info("Brand extraction via model: %s", model_used)
         # Strip markdown fences if present
+        raw = raw.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):

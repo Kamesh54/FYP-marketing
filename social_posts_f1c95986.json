@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What's the secret to Bisleri's success? 130 operational plants, 13 owned facilities, and 5980 distributors across India & neighbouring countries! #Bisleri #TrustedDrinkingWater #QualityAndService",
+      "length": 280,
+      "call_to_action": "Learn more about Bisleri's commitment to quality and service",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedDrinkingWater",
+        "#QualityAndService"
+      ]
+    },
+    "instagram": {
+      "copy": "A symbol of trust, purity, and reliability, Bisleri has been a household name in India for decades. With a strong footprint of 130 operational plants, 13 owned facilities, and a robust distribution network of 5980 distributors and 8270 distribution trucks across India and neighbouring countries, Bisleri leads its category with a promise of delivering safe, pure, and healthy drinking water. What's the secret to Bisleri's success? Discover the key benefits of choosing Bisleri and experience the difference for yourself! #Bisleri #TrustedDrinkingWater #QualityAndService",
+      "length": 300,
+      "call_to_action": "Learn more about Bisleri's commitment to quality and service",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedDrinkingWater",
+        "#QualityAndService",
+        "#Business"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a Bisleri water bottle with a green background and a few leaves around it, highlighting the brand's commitment to quality and service.",
+    "A photorealistic image of a Bisleri factory with a few workers in the background, showcasing the brand's strong footprint and robust distribution network."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:35:32.284443Z"
+  }
+}

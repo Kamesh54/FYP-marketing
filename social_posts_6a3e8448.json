@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What makes Bisleri the most trusted packaged drinking water brand in India? Safe, pure, and healthy drinking water for over 50 years! #Bisleri #TrustedBrand #India",
+      "length": 280,
+      "call_to_action": "Learn more about Bisleri's commitment to quality",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedBrand",
+        "#India"
+      ]
+    },
+    "instagram": {
+      "copy": "Are you looking for a drinking water brand that you can trust? Bisleri has been a household name in India for decades, delivering safe, pure, and healthy drinking water for over 50 years! With a strong footprint of 130 operational plants and a robust distribution network, Bisleri is the perfect choice for conscious consumers. Try Bisleri today and taste the difference for yourself! #Bisleri #TrustedBrand #India #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Try Bisleri today and taste the difference for yourself",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedBrand",
+        "#India",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a Bisleri water bottle with a green background and a few leaves around it",
+    "A photorealistic image of a Bisleri water plant with a few workers in the background and a few bottles being filled"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:40:31.995082Z"
+  }
+}

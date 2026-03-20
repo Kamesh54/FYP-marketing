@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with trusted quality! Demo Brand prioritizes your health with safe, pure, and healthy drinking water. #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Try Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityDrinkingWater",
+        "#ConsciousConsumers"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we believe in delivering the best quality drinking water, inspired by brands like Bisleri who have set a high standard for trust, purity, and reliability. With a strong footprint of operations and a commitment to health, we're dedicated to providing you with safe and healthy options. Join the movement towards conscious consumption! #DemoBrand #QualityDrinkingWater #ConsciousConsumers #Sustainability",
+      "length": 300,
+      "call_to_action": "Make the switch to Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityDrinkingWater",
+        "#ConsciousConsumers",
+        "#GeneralIndustry"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of Demo Brand drinking water, with a green and natural background to represent health and sustainability.",
+    "A photorealistic image of the Demo Brand production facility, showcasing the company's commitment to quality and safety in the production process."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:55:11.757099Z"
+  }
+}

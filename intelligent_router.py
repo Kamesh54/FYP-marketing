@@ -11,6 +11,7 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from groq import Groq
+from llm_client import llm_chat as _llm_chat
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,17 +20,23 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# ── Embedding-based intent classifier (loaded once, zero tokens at request time) ──
+# ── Embedding-based intent classifier (lazy-loaded on first use) ───────────────
+# Defer loading until first request so that all processes started by start.bat
+# do NOT all load the ~90 MB model simultaneously, which exhausts the Windows
+# paging file (OSError: The paging file is too small).
 os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")   # use cached model only
+os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
 import contextlib, io as _io
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-with contextlib.redirect_stderr(_io.StringIO()):
-    _st_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# One representative sentence per intent — the model encodes these at import time.
+_st_model           = None   # populated on first call to _ensure_model()
+_intent_embeddings  = None   # populated on first call to _ensure_model()
+
+# One representative sentence per intent
 INTENT_EXAMPLES: Dict[str, str] = {
     "general_chat":        "hello what can you do help me understand this",
     "seo_analysis":        "analyse my website SEO audit check page optimisation",
@@ -46,12 +53,23 @@ INTENT_EXAMPLES: Dict[str, str] = {
     "campaign_post":       "post content immediately to instagram publish now",
 }
 
-# Pre-compute intent embeddings once — O(1) at request time.
-_intent_embeddings: Dict[str, Any] = {
-    intent: _st_model.encode(example, normalize_embeddings=True)
-    for intent, example in INTENT_EXAMPLES.items()
-}
-logger.info("Embedding-based intent classifier ready (%d intents)", len(_intent_embeddings))
+def _ensure_model() -> None:
+    """Lazy-load the SentenceTransformer model on first use."""
+    global _st_model, _intent_embeddings
+    if _st_model is not None:
+        return
+    try:
+        with contextlib.redirect_stderr(_io.StringIO()):
+            _st_model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
+    except Exception:
+        # If the cached model is missing, allow a one-time download
+        with contextlib.redirect_stderr(_io.StringIO()):
+            _st_model = SentenceTransformer("all-MiniLM-L6-v2")
+    _intent_embeddings = {
+        intent: _st_model.encode(example, normalize_embeddings=True)
+        for intent, example in INTENT_EXAMPLES.items()
+    }
+    logger.info("Embedding-based intent classifier ready (%d intents)", len(_intent_embeddings))
 
 # Intent categories
 INTENTS = {
@@ -218,6 +236,7 @@ async def route_user_query(user_message: str, conversation_history: List[Dict[st
     No API tokens consumed — runs fully on CPU in ~5 ms.
     """
     try:
+        _ensure_model()  # lazy-load on first request
         user_emb = _st_model.encode(user_message, normalize_embeddings=True)
 
         # Cosine similarity = dot product when both vectors are L2-normalised
@@ -317,14 +336,13 @@ Keep responses under 150 words unless explaining something complex."""
         messages.insert(0, {"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_message})
         
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
+        response_text, model_used = _llm_chat(
+            messages,
             temperature=0.7,
-            max_tokens=400
+            max_tokens=400,
         )
-        
-        return response.choices[0].message.content
+        logger.debug("Conversational response via model: %s", model_used)
+        return response_text
         
     except Exception as e:
         logger.error(f"Conversational response error: {e}")

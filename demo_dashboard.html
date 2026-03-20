@@ -307,6 +307,10 @@ h2 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
     <input id="brandInput" value="Sustainable wellness brand &mdash; warm, empowering tone for conscious consumers" />
   </div>
   <div class="ctrl-group">
+    <label>Website URL <span style="font-size:.75rem;opacity:.6">(for SEO agent)</span></label>
+    <input id="websiteInput" value="https://www.sephora.in" placeholder="https://your-site.com" />
+  </div>
+  <div class="ctrl-group">
     <label>Iterations</label>
     <input id="itersSelect" type="number" value="8" min="1" max="100" placeholder="e.g. 8" />
   </div>
@@ -429,6 +433,38 @@ h2 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
   </div>
 </div>
 
+<!-- MULTI-AGENT: Per-Agent Reward Learning -->
+<div class="mb-5">
+  <div class="chart-card">
+    <h2>Per-Agent Reward Learning</h2>
+    <p class="chart-sub">Each agent has its own GP that independently discovers its optimal quality setting. All 6 curves trend upward as MABO converges &mdash; faster for agents with wider optimal zones.</p>
+    <canvas id="agentRewardChart"></canvas>
+  </div>
+</div>
+
+<!-- MULTI-AGENT: ADMM Budget + Cost vs Reward -->
+<div class="mb-6">
+  <div class="chart-card">
+    <h2>ADMM Budget Allocation</h2>
+    <p class="chart-sub">Lagrange multipliers (shadow prices) redistribute the $<span id="totalBudget">45</span> per-iteration budget toward higher-ROI agents each round. Watch the content agent claim a larger share as its reward improves.</p>
+    <canvas id="admmChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <h2>Per-Agent Cost vs Reward</h2>
+    <p class="chart-sub">Solid = reward, dashed = cost (normalised). MABO learns to increase reward while ADMM keeps cost within allocation &mdash; the two objectives stay decoupled by design.</p>
+    <canvas id="agentCostChart"></canvas>
+  </div>
+</div>
+
+<!-- ADMM CONVERGENCE PROOF -->
+<div class="mb-6">
+  <div class="chart-card">
+    <h2>ADMM Convergence Proof</h2>
+    <p class="chart-sub">Both residuals must converge to 0 to prove ADMM has solved the resource allocation problem. <span style="color:#f04baf">Primal residual</span> = &Vert;alloc<sup>k+1</sup>&minus;alloc<sup>k</sup>&Vert;&nbsp;&mdash;&nbsp;how much each agent&rsquo;s budget allocation is still changing. <span style="color:#00c2cb">Dual residual</span> = &rho;&Vert;&lambda;<sub>k+1</sub>&minus;&lambda;<sub>k</sub>&Vert;&nbsp;&mdash;&nbsp;how much shadow prices &lambda; are still moving. When both &rarr; 0, the system has reached the constrained optimum &mdash; as proved in Krishnamoorthy (2025) Theorem 2.</p>
+    <canvas id="admmResidualChart"></canvas>
+  </div>
+</div>
+
 <!-- LATEST ITERATION DETAIL -->
 <div class="chart-card mb-6">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
@@ -543,7 +579,13 @@ const STAGES = [
 
 // State
 let rewardChart, criticChart, igChart, maboChart, convergenceChart, regretChart;
+let agentRewardChart, admmChart, agentCostChart, admmResidualChart;  // multi-agent charts
 let gp3dPoints = [];  // accumulates all GP observation points for the 3D chart
+
+// Multi-agent config (mirrors demo_runner.py DEMO_AGENTS)
+const AGENT_NAMES  = ["keyword_extractor","seo_agent","gap_analyzer","content_agent","critic_agent","image_generator"];
+const AGENT_LABELS = ["Keyword Extractor","SEO Agent","Gap Analyzer","Content Agent","Critic Agent","Image Generator"];
+const AGENT_COLORS = ["#7c6afc","#00c2cb","#ffc11a","#1fd96e","#f04baf","#ff7434"];
 
 const GP3D_LAYOUT = {
   paper_bgcolor: '#16161e',
@@ -780,6 +822,77 @@ function buildCharts() {
       animation:{ duration:500 },
     }
   });
+
+  // ── Per-Agent Reward Learning ────────────────────────────────
+  agentRewardChart = new Chart(document.getElementById("agentRewardChart").getContext("2d"), {
+    type:"line",
+    data:{ labels:[], datasets: AGENT_NAMES.map((name,i)=>({ label:AGENT_LABELS[i], data:[], borderColor:AGENT_COLORS[i], backgroundColor:AGENT_COLORS[i]+"18", borderWidth:2.5, pointRadius:4, fill:false, tension:0.4 })) },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ position:"bottom", labels:{ boxWidth:10, padding:12 } } },
+      scales:{
+        y:{ min:0, max:1, title:{display:true,text:"Reward (0–1)"}, grid:{color:"rgba(255,255,255,0.05)"} },
+        x:{ grid:{display:false}, ticks:{maxRotation:0} },
+      },
+      animation:{ duration:400 },
+    }
+  });
+
+  // ── ADMM Budget Allocation (stacked area per agent) ──────────────
+  admmChart = new Chart(document.getElementById("admmChart").getContext("2d"), {
+    type:"line",
+    data:{ labels:[], datasets: AGENT_NAMES.map((name,i)=>({ label:AGENT_LABELS[i], data:[], borderColor:AGENT_COLORS[i], backgroundColor:AGENT_COLORS[i]+"30", borderWidth:2, pointRadius:3, fill:true, tension:0.4 })) },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ position:"bottom", labels:{ boxWidth:10, padding:12 } }, tooltip:{ callbacks:{ label: ctx=>" "+ctx.dataset.label+": $"+ctx.parsed.y.toFixed(2) } } },
+      scales:{
+        y:{ stacked:true, title:{display:true,text:"Budget Allocation ($)"}, grid:{color:"rgba(255,255,255,0.05)"} },
+        x:{ grid:{display:false}, ticks:{maxRotation:0} },
+      },
+      animation:{ duration:400 },
+    }
+  });
+
+  // ── Per-Agent Cost vs Reward ───────────────────────────────
+  agentCostChart = new Chart(document.getElementById("agentCostChart").getContext("2d"), {
+    type:"line",
+    data:{ labels:[], datasets: AGENT_NAMES.flatMap((name,i)=>[
+        { label:AGENT_LABELS[i]+" reward", data:[], borderColor:AGENT_COLORS[i], backgroundColor:"transparent", borderWidth:2.5, pointRadius:3, borderDash:[], tension:0.4 },
+        { label:AGENT_LABELS[i]+" cost",   data:[], borderColor:AGENT_COLORS[i], backgroundColor:"transparent", borderWidth:1.5, pointRadius:2, borderDash:[4,3], tension:0.4, yAxisID:"yCost" },
+    ]) },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        y:{ min:0, max:1, position:"left",  title:{display:true,text:"Reward (0–1)"}, grid:{color:"rgba(255,255,255,0.05)"} },
+        yCost:{ min:0, position:"right", title:{display:true,text:"Cost ($)"}, grid:{display:false} },
+        x:{ grid:{display:false}, ticks:{maxRotation:0} },
+      },
+      animation:{ duration:400 },
+    }
+  });
+
+  // ── ADMM Convergence: Primal + Dual Residuals ──────────────────────────────
+  admmResidualChart = new Chart(document.getElementById("admmResidualChart").getContext("2d"), {
+    type:"line",
+    data:{ labels:[], datasets:[
+      { label:"Primal Residual \u2225alloc\u1d4f\u207a\u00b9\u2212alloc\u1d4f\u2225", data:[], borderColor:"#f04baf", backgroundColor:"rgba(240,75,175,0.08)", borderWidth:2.5, pointRadius:4, fill:true, tension:0.4 },
+      { label:"Dual Residual \u03c1\u2225\u03bb\u2096\u208a\u2081\u2212\u03bb\u2096\u2225",       data:[], borderColor:"#00c2cb", backgroundColor:"rgba(0,194,203,0.08)",    borderWidth:2.5, pointRadius:4, fill:true, tension:0.4 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ boxWidth:12, padding:14 } },
+        tooltip:{ callbacks:{ label: ctx=>" "+ctx.dataset.label+": "+ctx.parsed.y.toFixed(5) } }
+      },
+      scales:{
+        y:{ min:0, title:{display:true,text:"Residual magnitude (\u2192 0 = converged)"}, grid:{color:"rgba(255,255,255,0.05)"},
+            ticks:{ callback: v=>v.toFixed(3) } },
+        x:{ grid:{display:false}, ticks:{maxRotation:0} },
+      },
+      animation:{ duration:400 },
+    }
+  });
 }
 buildCharts();
 
@@ -941,6 +1054,32 @@ function processIteration(data) {
   const rh=bo.regret_history||[], avg=rh.length?Math.round(rh.reduce((a,b)=>a+b,0)/rh.length*10000)/10000:0;
   pushChart(regretChart, lbl, [0,data.regret],[1,avg]);
 
+  // ── Multi-agent charts ─────────────────────────────────────────────────
+  if (data.agents) {
+    agentRewardChart.data.labels.push(lbl);
+    admmChart.data.labels.push(lbl);
+    agentCostChart.data.labels.push(lbl);
+    AGENT_NAMES.forEach((name, i) => {
+      const ag = data.agents[name];
+      if (!ag) return;
+      agentRewardChart.data.datasets[i].data.push(ag.reward);
+      admmChart.data.datasets[i].data.push(ag.budget_alloc);
+      agentCostChart.data.datasets[i*2].data.push(ag.reward);
+      agentCostChart.data.datasets[i*2+1].data.push(ag.cost);
+    });
+    agentRewardChart.update();
+    admmChart.update();
+    agentCostChart.update();
+  }
+
+  // ── ADMM residuals ─────────────────────────────────────────────────────
+  if (data.admm && admmResidualChart) {
+    admmResidualChart.data.labels.push(lbl);
+    admmResidualChart.data.datasets[0].data.push(data.admm.primal_residual ?? 0);
+    admmResidualChart.data.datasets[1].data.push(data.admm.dual_residual   ?? 0);
+    admmResidualChart.update();
+  }
+
   populateDetail(data);
   addToHistory(data);
   setStatus("Iteration "+it+" complete — reward "+r.toFixed(4)+"  |  best: "+bestReward.toFixed(4)+" @ it."+bestIter, "running");
@@ -964,6 +1103,7 @@ function resetAll(iters) {
   [rewardChart,criticChart,igChart,convergenceChart,regretChart].forEach(ch=>{ ch.data.labels=[]; ch.data.datasets.forEach(d=>d.data=[]); ch.update("none"); });
   maboChart.data.datasets[0].data=[]; maboChart.update("none");
   gp3dPoints=[]; Plotly.react('mabo3d',[],GP3D_LAYOUT,{responsive:true,displayModeBar:false});
+  [agentRewardChart, admmChart, agentCostChart, admmResidualChart].forEach(ch=>{ if(ch){ ch.data.labels=[]; ch.data.datasets.forEach(d=>d.data=[]); ch.update("none"); } });
   buildPipeline();
 }
 
@@ -982,39 +1122,68 @@ window.addEventListener("load", async () => {
 
 // Start demo
 async function startDemo() {
-  const btn=document.getElementById("startBtn");
-  const topic=document.getElementById("topicInput").value.trim();
-  const brand=document.getElementById("brandInput").value.trim();
-  const iters=parseInt(document.getElementById("itersSelect").value);
-  btn.disabled=true;
+  const btn        = document.getElementById("startBtn");
+  const topic      = document.getElementById("topicInput").value.trim();
+  const brand      = document.getElementById("brandInput").value.trim();
+  const websiteUrl = document.getElementById("websiteInput").value.trim();
+  const iters      = parseInt(document.getElementById("itersSelect").value);
+  btn.disabled = true;
   resetAll(iters);
-  setStatus("Starting run...","running");
-  activateStage(0);
+  setStatus("Starting run...", "running");
 
   let runId;
   try {
-    const res=await fetch("/run",{ method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ topic, brand, intent:"Create an engaging Instagram post about "+topic, iterations:iters }) });
-    runId=(await res.json()).run_id;
+    const res = await fetch("/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        topic, brand,
+        website_url: websiteUrl,
+        intent: "Create an engaging Instagram post about " + topic,
+        iterations: iters
+      })
+    });
+    runId = (await res.json()).run_id;
   } catch(e) {
-    setStatus("Could not connect to demo_runner. Is it running on port 8020?","");
-    btn.disabled=false; return;
+    setStatus("Could not connect to demo_runner. Is it running on port 8020?", "");
+    btn.disabled = false; return;
   }
 
-  let si=0;
-  const timer=setInterval(()=>{ if(si<STAGES.length-1){ si++; activateStage(si); } },400);
-  const es=new EventSource("/stream/"+runId);
-  es.onmessage=(event)=>{
+  // Poll until real-agent warm-up is done (keyword extractor, SEO, gap analyzer)
+  setStatus("Warming up real agents — keyword extractor • SEO analyzer • gap analyzer (this takes ~30s)…", "running");
+  await new Promise(resolve => {
+    const poll = setInterval(async () => {
+      try {
+        const s = await (await fetch("/status/" + runId)).json();
+        if (s.status !== "warming_up") {
+          // Show which agents used real services vs simulation
+          const bl = s.real_baseline || {};
+          const tags = Object.entries(bl).map(([k,v]) =>
+            `${k.replace("_"," ")}: <span style="color:${v.source==="real"?"#1fd96e":"#ffc11a"}">${v.source}</span>`
+          ).join(" &nbsp;&bull;&nbsp; ");
+          if (tags) document.getElementById("statusBar").innerHTML += " &nbsp;|&nbsp; " + tags;
+          clearInterval(poll); resolve();
+        }
+      } catch(e) { clearInterval(poll); resolve(); }
+    }, 2000);
+  });
+
+  setStatus("Running iterations with real agent data...", "running");
+  activateStage(0);
+  let si = 0;
+  const timer = setInterval(() => { if(si < STAGES.length-1){ si++; activateStage(si); } }, 400);
+  const es = new EventSource("/stream/" + runId);
+  es.onmessage = (event) => {
     clearInterval(timer);
-    const msg=JSON.parse(event.data);
-    if (msg.type==="iteration") processIteration(msg.data);
-    else if (msg.type==="completed"){
+    const msg = JSON.parse(event.data);
+    if (msg.type === "iteration") processIteration(msg.data);
+    else if (msg.type === "completed") {
       es.close(); allStagesDone();
-      setStatus("Demo complete — "+msg.total+" iterations | Best reward: "+msg.best_reward+" @ iteration "+msg.best_iteration,"done");
-      btn.disabled=false;
+      setStatus("Demo complete — "+msg.total+" iterations | Best reward: "+msg.best_reward+" @ iteration "+msg.best_iteration, "done");
+      btn.disabled = false;
     }
   };
-  es.onerror=()=>{ es.close(); clearInterval(timer); setStatus("Stream closed",""); btn.disabled=false; };
+  es.onerror = () => { es.close(); clearInterval(timer); setStatus("Stream closed", ""); btn.disabled = false; };
 }
 </script>
 </body>

@@ -1,0 +1,36 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Experience the power of trust with Demo Brand! With a strong focus on quality and service, we're the perfect choice for conscious consumers. #DemoBrand #QualityMatters #ConsciousConsumers",
+      "length": 280,
+      "call_to_action": "Learn More",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers"
+      ]
+    },
+    "instagram": {
+      "copy": "A symbol of trust, purity, and reliability - that's what Demo Brand stands for! As a household name, we've stayed true to our promise of delivering safe, pure, and healthy products. With 130 operational plants and a robust distribution network, you can trust us to deliver. Focus on your well-being, while we take care of the rest! #DemoBrand #Trust #Purity #Reliability #ConsciousConsumers #QualityAndService",
+      "length": 300,
+      "call_to_action": "Explore Our Products",
+      "hashtags": [
+        "#DemoBrand",
+        "#Trust",
+        "#Purity",
+        "#Reliability",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of water with the Demo Brand label, set against a backdrop of lush green trees and a clear blue sky, symbolizing purity and reliability",
+    "A photorealistic image of a family enjoying a meal together, with a Demo Brand bottle on the table, highlighting the importance of trust and quality in our daily lives"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:55:42.408423Z"
+  }
+}

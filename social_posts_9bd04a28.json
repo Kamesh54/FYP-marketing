@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with the most trusted brand! Bisleri leads with 130 plants & 5980 distributors. Get safe, pure & healthy water now! #Bisleri #Trust #Hydration",
+      "length": 280,
+      "call_to_action": "Get Bisleri now",
+      "hashtags": [
+        "#Hydration",
+        "#Bisleri",
+        "#Trust"
+      ]
+    },
+    "instagram": {
+      "copy": "For over 50 years, Bisleri has been a symbol of trust, purity, and reliability in India. With a strong footprint of 130 operational plants and a robust distribution network, we've stayed true to our promise of delivering safe, pure, and healthy drinking water. Join the millions who trust us! Get Bisleri now and stay hydrated! #Bisleri #Hydration #HealthyDrinkingWater",
+      "length": 300,
+      "call_to_action": "Get Bisleri now",
+      "hashtags": [
+        "#Hydration",
+        "#Bisleri",
+        "#HealthyDrinkingWater",
+        "#Trust"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a Bisleri water bottle with a green background, symbolizing health and hydration.",
+    "A photorealistic image of a Bisleri water plant with a robust distribution network in the background, highlighting the brand's strong footprint."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:33:23.447068Z"
+  }
+}

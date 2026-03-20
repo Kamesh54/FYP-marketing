@@ -1,0 +1,34 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What's the secret to staying hydrated? Discover the benefits of Bisleri's safe, pure, and healthy drinking water! #StayHydrated #DemoBrand",
+      "length": 280,
+      "call_to_action": "Learn more",
+      "hashtags": [
+        "#StayHydrated",
+        "#DemoBrand",
+        "#Business"
+      ]
+    },
+    "instagram": {
+      "copy": "Looking for a trusted drinking water brand? Bisleri has been a household name in India for decades, delivering safe, pure, and healthy drinking water with a strong footprint of 130 operational plants and a robust distribution network. Stay true to your promise of hydration with Bisleri! #StayHydrated #DemoBrand #Business",
+      "length": 300,
+      "call_to_action": "Learn more",
+      "hashtags": [
+        "#StayHydrated",
+        "#DemoBrand",
+        "#Business"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a Bisleri water bottle with a subtle background of a lush green forest.",
+    "A photorealistic image of a person holding a Bisleri water bottle with a refreshing and clean background."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:34:34.854808Z"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand! We prioritize quality & service, just like Bisleri, India's trusted packaged drinking water brand. #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Try Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#ConsciousConsumers"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we believe in providing the best for our community, just like Bisleri has been doing for decades in India! As a symbol of trust, purity, and reliability, Bisleri has set the standard for packaged drinking water. With a strong footprint and robust distribution network, they've stayed true to their promise of delivering safe, pure, and healthy drinking water. We strive to follow their lead, prioritizing quality and service. Join the movement towards a healthier lifestyle with Demo Brand! #DemoBrand #QualityAndService #ConsciousConsumers #HealthyDrinkingWater",
+      "length": 300,
+      "call_to_action": "Make the switch to Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers",
+        "#BisleriInspiration"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a bottle of Demo Brand water in front of a green, natural background, symbolizing the brand's commitment to quality and the environment",
+    "Photorealistic image of a map of India with Bisleri's operational plants and distribution network highlighted, next to a bottle of Demo Brand water, emphasizing the inspiration from Bisleri's success"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:55:35.098144Z"
+  }
+}

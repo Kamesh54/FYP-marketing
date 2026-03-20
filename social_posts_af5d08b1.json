@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand! As a symbol of trust, purity & reliability, we deliver safe, pure & healthy drinking water. Limited time offer: buy now and get 10% off! #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Buy now and get 10% off",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#StayHydrated"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we're committed to delivering high-quality products that you can trust! With a strong footprint and robust distribution network, we're dedicated to providing you with safe, pure, and healthy drinking water. Don't miss out on our limited time offer: buy now and get 10% off! #DemoBrand #QualityAndService #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Buy now and get 10% off",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#ConsciousConsumers",
+        "#HealthyDrinkingWater"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of Demo Brand drinking water with a green and natural background, emphasizing the brand's commitment to quality and the environment",
+    "A photorealistic image of a Demo Brand water bottle with a cityscape in the background, highlighting the brand's robust distribution network and accessibility"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "Not specified",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:52.192403Z"
+  }
+}

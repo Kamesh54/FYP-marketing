@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
 from groq import Groq
+from llm_client import llm_chat_json as _llm_json
 from contextlib import asynccontextmanager
 import tweepy
 from instagrapi import Client as InstaClient
@@ -248,6 +249,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
     active_brand: Optional[str] = None  # Brand name to use for this request
+    platform: Optional[str] = None  # Optional platform hint (instagram, twitter, etc.)
 
 class ChatResponse(BaseModel):
     session_id: str
@@ -626,43 +628,84 @@ def run_seo_agent(url: str) -> str:
 
 @traceable(run_type="tool", name="ðŸŽ¨ RunwayML Image Gen")
 def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]] = None) -> str:
-    """Generate image using Runway ML with S3 reference images."""
+    """Generate image using Runway ML, falling back to HuggingFace if Runway fails."""
+    if RUNWAY_API_KEY:
+        try:
+            return _runway_generate_sync(prompt, reference_images)
+        except Exception as e:
+            logger.warning(f"Runway failed ({e}), falling back to HuggingFace")
+
+    # HuggingFace fallback
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_KEY", "")
+    if hf_token:
+        return _huggingface_generate_sync(prompt, hf_token)
+
+    raise RuntimeError("No image backend available — set RUNWAY_API_KEY or HF_TOKEN")
+
+
+def _huggingface_generate_sync(prompt: str, hf_token: str) -> str:
+    """Synchronous HuggingFace Inference API call for text-to-image."""
+    hf_model = os.getenv("HF_IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
+    api_url  = f"https://api-inference.huggingface.co/models/{hf_model}"
+    headers  = {"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"}
+    for attempt in range(3):
+        resp = requests.post(api_url, headers=headers, json={"inputs": prompt}, timeout=120)
+        if resp.status_code == 503:
+            wait = int(resp.headers.get("Retry-After", 20))
+            logger.info(f"HF model loading, retrying in {wait}s (attempt {attempt+1})")
+            time.sleep(wait)
+            continue
+        if resp.status_code != 200:
+            raise RuntimeError(f"HuggingFace API error {resp.status_code}: {resp.text[:200]}")
+        unique_id = uuid.uuid4().hex[:10]
+        path = f"generated_images/hf_{unique_id}.png"
+        os.makedirs("generated_images", exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(resp.content)
+        logger.info(f"HuggingFace image saved: {path}")
+        return path
+    raise RuntimeError("HuggingFace model still loading after 3 retries")
+
+
+_SUPPORTED_IMG_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+
+def _runway_generate_sync(prompt: str, reference_images: Optional[List[str]] = None) -> str:
+    """Internal sync Runway ML call."""
     if not RUNWAY_API_KEY:
         raise ValueError("RUNWAY_API_KEY not set.")
     headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}", "Content-Type": "application/json", "X-Runway-Version": "2024-11-06"}
     payload = {"promptText": prompt, "ratio": "1920:1080", "seed": int(datetime.now().timestamp()) % 4294967295, "model": "gen4_image"}
-    if reference_images: 
-        # Process reference images - expect S3 URLs or HTTP/HTTPS URLs
+    if reference_images:
         processed_refs = []
         for img in reference_images:
             if not img:
                 continue
-            # Check if it's a URL (starts with http:// or https://)
+            # Skip SVG — Runway only accepts raster images
+            lower = img.lower().split("?")[0]  # strip query params for ext check
+            if lower.endswith(".svg"):
+                logger.warning(f"Skipping SVG reference image (not supported by Runway): {img}")
+                continue
             if img.startswith(('http://', 'https://')):
-                # It's already a URL (S3 or other), use it directly
+                # Only add if extension looks like a supported raster format (or unknown)
+                ext = os.path.splitext(lower)[1]
+                if ext and ext not in _SUPPORTED_IMG_EXTS:
+                    logger.warning(f"Skipping unsupported reference image format '{ext}': {img}")
+                    continue
                 processed_refs.append(img)
                 logger.info(f"Using reference image URL: {img}")
             elif os.path.exists(img) and os.path.isfile(img):
-                # Local file - upload to S3 first, then use S3 URL
                 try:
                     logger.info(f"Uploading local reference image to S3: {img}")
-                    # Generate S3 key
                     file_ext = os.path.splitext(img)[1]
                     unique_id = uuid.uuid4().hex[:8]
                     timestamp = datetime.now().strftime("%Y%m%d")
                     s3_key = f"reference-images/{timestamp}_{unique_id}{file_ext}"
-                    
-                    # Determine content type
                     content_type_map = {
-                        '.jpg': 'image/jpeg',
-                        '.jpeg': 'image/jpeg',
-                        '.png': 'image/png',
-                        '.gif': 'image/gif',
-                        '.webp': 'image/webp'
+                        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                        '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp'
                     }
                     content_type = content_type_map.get(file_ext.lower(), 'image/jpeg')
-                    
-                    # Upload to S3
                     if s3_client and AWS_S3_BUCKET_NAME:
                         s3_client.upload_file(img, AWS_S3_BUCKET_NAME, s3_key, ExtraArgs={'ContentType': content_type, 'ACL': 'public-read'})
                         s3_url = f"https://{AWS_S3_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
@@ -674,10 +717,11 @@ def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]
                     logger.warning(f"Failed to upload local image to S3: {upload_error}, skipping")
             else:
                 logger.warning(f"Invalid reference image (not a URL or local file): {img}, skipping")
-        
+
         if processed_refs:
             payload["referenceImages"] = [{"uri": img} for img in processed_refs]
             logger.info(f"Using {len(processed_refs)} reference image(s) for Runway generation")
+
     try:
         response = requests.post("https://api.dev.runwayml.com/v1/text_to_image", json=payload, headers=headers)
         response.raise_for_status()
@@ -699,16 +743,53 @@ def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]
         logger.error(f"Runway Error: {e}")
         raise
 
+
 @traceable(run_type="tool", name="Social Poster ({platform})")
 def post_to_social(platform: str, text: str, image_path: str) -> str:
     """Post to social media."""
+    # ------------------------------------------------------------------
+    # If no image was generated, build a simple branded fallback card
+    # (Instagram requires a photo; Twitter is fine text-only).
+    # ------------------------------------------------------------------
+    tmp_image = None
+    if image_path is None:
+        if platform == "instagram":
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                import textwrap, tempfile
+                img = Image.new("RGB", (1080, 1080), color=(30, 30, 30))
+                draw = ImageDraw.Draw(img)
+                try:
+                    font = ImageFont.truetype("arial.ttf", 48)
+                    small_font = ImageFont.truetype("arial.ttf", 32)
+                except:
+                    font = ImageFont.load_default()
+                    small_font = font
+                # Word-wrap the caption onto the image
+                lines = textwrap.wrap(text[:300], width=28)
+                y = 200
+                for line in lines[:10]:
+                    draw.text((80, y), line, fill=(255, 255, 255), font=font)
+                    y += 64
+                tmp_file = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, dir="generated_images")
+                img.save(tmp_file.name, "JPEG", quality=90)
+                image_path = tmp_file.name
+                tmp_image = tmp_file.name
+                logger.info(f"Created PIL fallback image for Instagram: {image_path}")
+            except Exception as pil_err:
+                logger.error(f"Could not create fallback image: {pil_err}")
+                raise ValueError("No image available for Instagram post and fallback image generation failed")
+
     try:
         if platform == "twitter":
             auth = tweepy.OAuth1UserHandler(TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
             api_v1 = tweepy.API(auth)
             client = tweepy.Client(consumer_key=TWITTER_API_KEY, consumer_secret=TWITTER_API_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_TOKEN_SECRET)
-            media = api_v1.media_upload(filename=image_path)
-            post_result = client.create_tweet(text=text, media_ids=[media.media_id_string])
+            if image_path:
+                media = api_v1.media_upload(filename=image_path)
+                post_result = client.create_tweet(text=text, media_ids=[media.media_id_string])
+            else:
+                post_result = client.create_tweet(text=text)
             post_url = f"https://twitter.com/user/status/{post_result.data['id']}"
         elif platform == "instagram":
             if not os.path.exists("instagram.json"):
@@ -723,6 +804,13 @@ def post_to_social(platform: str, text: str, image_path: str) -> str:
     except Exception as e:
         logger.error(f"Social Post Error ({platform}): {e}")
         raise
+    finally:
+        # Clean up temp fallback image
+        if tmp_image:
+            try:
+                os.remove(tmp_image)
+            except Exception:
+                pass
 
 @traceable(run_type="tool", name="â˜ï¸ AWS S3 Hoster")
 def host_on_s3(file_path: str, file_name: str, content_type: str = 'text/html') -> str:
@@ -937,15 +1025,11 @@ If this is a website, extract the brand name from the domain, title, or content.
 NEVER use placeholder text like "Not specified", "Unknown", "N/A" for any field â€” omit the field instead.
 Return ONLY valid JSON. Be thorough and extract all available information."""
 
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.3
+        extracted, _model = _llm_json(
+            [{"role": "user", "content": prompt}],
+            temperature=0.3,
         )
-        
-        extracted = json.loads(response.choices[0].message.content)
-        logger.info(f"Brand extraction result: {extracted}")
+        logger.info(f"Brand extraction result (via {_model}): {extracted}")
         
         # Ensure brand_name is not empty or a placeholder - use domain as fallback
         _PLACEHOLDER_VALUES = {
@@ -1795,7 +1879,7 @@ Tap a card to preview and lock in your preferred option. Once you choose, I'll t
             # --- Platform selection gate ---
             chosen_platform = (
                 extracted_params.get("platform")
-                or req.platform  # type: ignore[attr-defined]
+                or getattr(req, "platform", None)
                 or _detect_platform_from_text(req.message)
             )
             if chosen_platform:

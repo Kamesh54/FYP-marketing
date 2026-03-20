@@ -12,6 +12,7 @@ import re
 from collections import Counter
 from datetime import datetime
 from groq import Groq
+from llm_client import llm_chat_json as _llm_json
 from dotenv import load_dotenv
 import time
 try:
@@ -95,7 +96,7 @@ load_job_status()
 
 class GapAnalyzer:
     def __init__(self):
-        self.groq_client = Groq(api_key=GROQ_API_KEY)
+        pass  # groq_client replaced by llm_client 3-model fallback chain
 
     def _extract_keywords_from_text(self, text: str, max_keywords: int = 50) -> Dict:
         """Lightweight keyword extraction from raw text without external services.
@@ -322,17 +323,13 @@ class GapAnalyzer:
             - competitive_insights: list of insights
             """
 
-            response = self.groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}  # enforce JSON response
-            )
-
-            # Parse JSON safely
             try:
-                analysis_data = json.loads(response.choices[0].message.content)
+                analysis_data, _model = _llm_json(
+                    [{"role": "user", "content": prompt}]
+                )
+                logger.info("Gap analysis via model: %s", _model)
             except Exception as e:
-                logger.error(f"Failed to parse Groq response as JSON: {e}")
+                logger.error(f"LLM gap analysis failed: {e}")
                 analysis_data = {
                     "organic_opportunities": {"short": [], "long_tail": []},
                     "recommendations": [],

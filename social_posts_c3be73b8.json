@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Bisleri, a symbol of trust, purity & reliability for 50+ yrs! Delivering safe, pure & healthy drinking water across India with 130+ plants. #Bisleri #PackagedDrinkingWater #Trust",
+      "length": 280,
+      "call_to_action": "Stay hydrated with Bisleri!",
+      "hashtags": [
+        "#Bisleri",
+        "#PackagedDrinkingWater",
+        "#Trust"
+      ]
+    },
+    "instagram": {
+      "copy": "For over 50 years, Bisleri has been a household name in India, synonymous with trust, purity, and reliability. With a strong footprint of 130 operational plants and a robust distribution network, we've stayed true to our promise of delivering safe, pure, and healthy drinking water. Join the movement towards a healthier tomorrow with Bisleri! #Bisleri #PackagedDrinkingWater #HealthyHydration #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Make the switch to Bisleri today!",
+      "hashtags": [
+        "#Bisleri",
+        "#PackagedDrinkingWater",
+        "#HealthyHydration",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a Bisleri water bottle with a green background, symbolizing purity and nature.",
+    "A photorealistic image of a person enjoying a glass of Bisleri water in a natural setting, highlighting the brand's focus on health and wellness."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:55:49.678760Z"
+  }
+}

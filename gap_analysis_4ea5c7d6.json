@@ -1,0 +1,186 @@
+{
+    "company_info": {
+        "name": "Demo Brand",
+        "url": null,
+        "product_description": "A symbol of trust, purity, and reliability, Bisleri has been a household name in India for decades. As the country’s most trusted packaged drinking water brand, Bisleri leads its category with a strong footprint of 130 operational plants, including 13 owned facilities, and a robust distribution network of 5980 distributors and 8270 distribution trucks across India and neighbouring countries. For over 50 years, Bisleri has stayed true to its promise of delivering safe, pure, and healthy drinking water.. Sustainable wellness brand — warm, empowering tone encouraging mindful hydration and environmental responsibility."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "and",
+            "of",
+            "bisleri",
+            "bisleri has",
+            "drinking water",
+            "has",
+            "india",
+            "for",
+            "drinking",
+            "water",
+            "brand",
+            "its",
+            "distribution",
+            "symbol of",
+            "of trust",
+            "trust purity",
+            "purity and",
+            "and reliability",
+            "reliability bisleri",
+            "has been",
+            "been household",
+            "household name",
+            "name in",
+            "in india",
+            "india for"
+        ],
+        "long_tail_keywords": [
+            "symbol of trust purity",
+            "of trust purity and",
+            "trust purity and reliability",
+            "purity and reliability bisleri",
+            "and reliability bisleri has",
+            "reliability bisleri has been",
+            "bisleri has been household",
+            "has been household name",
+            "been household name in",
+            "household name in india",
+            "name in india for",
+            "in india for decades",
+            "india for decades as",
+            "for decades as the",
+            "decades as the country",
+            "as the country most",
+            "the country most trusted",
+            "country most trusted packaged",
+            "most trusted packaged drinking",
+            "trusted packaged drinking water",
+            "packaged drinking water brand",
+            "drinking water brand bisleri",
+            "water brand bisleri leads",
+            "brand bisleri leads its",
+            "bisleri leads its category"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "10 Best Ecommerce Platforms in 2026 (Reviewed, ...",
+                "url": "https://www.emailvendorselection.com/best-ecommerce-platforms-review/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Sharetribe - Marketplace Software for Founders",
+                "url": "https://www.google.com/goto?url=CAESVwE7q4ylk29-KWYbqjSDNtq1Ssmd5pXvwv1RBvb2FP6NYt0Qj-ccBh39aXyc49Pahfh5mafXRs7VR2zwlPaCSl0HN4NJ6sBo8srevHQQyK3s31YUP6Ur7g==",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Smartly | AI Advertising Platform",
+                "url": "https://www.smartly.io/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 14
+            },
+            {
+                "name": "Hootsuite: Social Media Marketing and Management Tool",
+                "url": "https://www.hootsuite.com/?srsltid=AfmBOorgKisc4jQ-IXyocggC1RGwPsZrbasL84lK90XFfH1Cdn6kqx0c",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "GRIN: The #1 Influencer Marketing Software",
+                "url": "https://grin.co/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 10
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "sentiment tracking",
+                "policies subscribe",
+                "newsletter grin",
+                "report scheduling",
+                "practical guides",
+                "risk demo",
+                "little power",
+                "review themes",
+                "rush starts",
+                "underlying principles"
+            ],
+            "long_tail": [
+                "smarter 2026 campaigns start",
+                "even without prior experience",
+                "update campaigns auto",
+                "one clear picture",
+                "manage social media faster",
+                "sell across several platforms",
+                "beat giants like amazon",
+                "unique concept usually takes",
+                "social media management platform",
+                "making marketplace technology accessible"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "and",
+                "of",
+                "bisleri",
+                "bisleri has",
+                "drinking water",
+                "has",
+                "india",
+                "for",
+                "drinking",
+                "water"
+            ],
+            "long_tail": [
+                "symbol of trust purity",
+                "of trust purity and",
+                "trust purity and reliability",
+                "purity and reliability bisleri",
+                "and reliability bisleri has",
+                "reliability bisleri has been",
+                "bisleri has been household",
+                "has been household name",
+                "been household name in",
+                "household name in india"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "sentiment tracking",
+                "policies subscribe",
+                "newsletter grin",
+                "report scheduling",
+                "practical guides"
+            ],
+            "long_tail": [
+                "smarter 2026 campaigns start",
+                "even without prior experience",
+                "update campaigns auto",
+                "one clear picture",
+                "manage social media faster"
+            ]
+        },
+        "recommendations": [
+            "Create content focused on sentiment tracking and analysis to attract customers looking for data-driven insights",
+            "Develop a subscription-based model for newsletters and policies to increase engagement and customer loyalty",
+            "Implement report scheduling and practical guides to help customers make informed decisions",
+            "Utilize risk demo and review themes to showcase product reliability and trustworthiness",
+            "Optimize website for little power and rush starts to improve user experience"
+        ],
+        "competitive_insights": [
+            "Competitors are leveraging sentiment tracking and analysis to gain a competitive edge",
+            "Subscription-based models are becoming increasingly popular in the industry",
+            "Customers are looking for practical guides and report scheduling to make informed decisions"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

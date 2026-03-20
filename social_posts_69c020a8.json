@@ -1,0 +1,38 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What's the secret to staying hydrated? Bisleri, a symbol of trust, purity & reliability! With 130+ plants & a strong distribution network, Bisleri leads the way in delivering safe, pure & healthy drinking water. #Bisleri #TrustInEverySip #StayHydrated",
+      "length": 280,
+      "call_to_action": "Choose Bisleri for your hydration needs",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustInEverySip",
+        "#StayHydrated",
+        "#HydrationPartner"
+      ]
+    },
+    "instagram": {
+      "copy": "What makes you trust a brand? For us, it's the promise of quality and service! As a household name in India for decades, Bisleri has been a symbol of trust, purity, and reliability. With a strong footprint of 130 operational plants and a robust distribution network, Bisleri leads its category in delivering safe, pure, and healthy drinking water. Key benefits include: Pure and healthy drinking water, Strong distribution network, and a commitment to quality and service. Choose Bisleri for your hydration needs and experience the difference! #Bisleri #TrustInEverySip #StayHydrated #DemoBrand",
+      "length": 300,
+      "call_to_action": "Experience the Bisleri difference today!",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustInEverySip",
+        "#StayHydrated",
+        "#DemoBrand",
+        "#HydrationPartner",
+        "#QualityMatters"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a Bisleri water bottle with a cityscape in the background, highlighting the brand's presence in India",
+    "Photorealistic image of a Bisleri water plant with a focus on the purification process, showcasing the brand's commitment to quality and service"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:21.850671Z"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "🚀 Trust, Purity, and Reliability since 1975! 🚀 Bisleri leads the pack with 130 operational plants and a robust distribution network across India and neighboring countries. #Bisleri #TrustedBrand #WaterYouWaitingFor",
+      "length": 280,
+      "call_to_action": "Learn more about Bisleri's commitment to quality and service",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedBrand",
+        "#WaterYouWaitingFor"
+      ]
+    },
+    "instagram": {
+      "copy": "🌎 A symbol of trust, purity, and reliability, Bisleri has been a household name in India for decades. 🌟 With a strong footprint of 130 operational plants, including 13 owned facilities, and a robust distribution network of 5980 distributors and 8270 distribution trucks across India and neighboring countries, Bisleri leads its category with a promise of delivering safe, pure, and healthy drinking water. 🌿 For over 50 years, Bisleri has stayed true to its commitment to quality and service. 💧 #Bisleri #TrustedBrand #WaterYouWaitingFor",
+      "length": 300,
+      "call_to_action": "Learn more about Bisleri's commitment to quality and service",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedBrand",
+        "#WaterYouWaitingFor",
+        "#Business"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of Bisleri's operational plants and distribution network",
+    "Photorealistic image of Bisleri's commitment to quality and service"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:36:50.294242Z"
+  }
+}

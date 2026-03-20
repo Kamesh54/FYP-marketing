@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with trust! Bisleri, a symbol of purity & reliability, delivers safe drinking water. 50+ years of promise kept! #Bisleri #WaterYouWaitingFor #StayHydrated",
+      "length": 280,
+      "call_to_action": "Drink Pure, Live Pure",
+      "hashtags": [
+        "#Bisleri",
+        "#WaterYouWaitingFor",
+        "#StayHydrated"
+      ]
+    },
+    "instagram": {
+      "copy": "A symbol of trust, purity, and reliability, Bisleri has been a household name for decades! With 130 operational plants, 13 owned facilities, and a robust distribution network, Bisleri leads the way in delivering safe, pure, and healthy drinking water. Join the movement towards a healthier tomorrow! #Bisleri #PureWater #HealthyLiving",
+      "length": 300,
+      "call_to_action": "Make the switch to Bisleri today!",
+      "hashtags": [
+        "#Bisleri",
+        "#PureWater",
+        "#HealthyLiving",
+        "#DemoBrand"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a Bisleri water bottle with a green and clean background, symbolizing purity and reliability",
+    "Photorealistic image of a Bisleri water plant with a robust distribution network, highlighting the brand's strong footprint and commitment to quality"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:40:00.246019Z"
+  }
+}

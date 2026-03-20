@@ -1,0 +1,186 @@
+{
+    "company_info": {
+        "name": "Beminimalist",
+        "url": "https://beminimalist.co/",
+        "product_description": "beauty in None. Beminimalist offers authentic and effective skincare solutions with a focus on scientific merit. Their products aim to provide transparency, efficacy, and affordability. The brand is committed to delivering high-quality personal care products."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "new",
+            "new launch",
+            "the",
+            "launch",
+            "anti",
+            "your",
+            "country",
+            "shop by",
+            "launch retinol",
+            "retinol serumour",
+            "serumour new",
+            "new anti",
+            "anti aging",
+            "aging powerhouse",
+            "powerhouse new",
+            "launch anti",
+            "anti dandruff",
+            "dandruff shampoo",
+            "our",
+            "best",
+            "shop",
+            "by",
+            "of",
+            "is",
+            "us"
+        ],
+        "long_tail_keywords": [
+            "new launch retinol serumour",
+            "launch retinol serumour new",
+            "retinol serumour new anti",
+            "serumour new anti aging",
+            "new anti aging powerhouse",
+            "anti aging powerhouse new",
+            "aging powerhouse new launch",
+            "powerhouse new launch anti",
+            "new launch anti dandruff",
+            "launch anti dandruff shampoo",
+            "new launch retinol",
+            "launch retinol serumour",
+            "retinol serumour new",
+            "serumour new anti",
+            "new anti aging",
+            "anti aging powerhouse",
+            "aging powerhouse new",
+            "powerhouse new launch",
+            "new launch anti",
+            "launch anti dandruff",
+            "anti dandruff shampoo",
+            "our best sellers shop",
+            "best sellers shop by",
+            "sellers shop by category",
+            "shop by category shop"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "Looking for very simple and minimal e-commerce platforms ...",
+                "url": "https://www.reddit.com/r/ecommerce/comments/pxttpt/looking_for_very_simple_and_minimal_ecommerce/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 7
+            },
+            {
+                "name": "Browzwear | #1 Digital Apparel Design & Development Software",
+                "url": "https://browzwear.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "10 Best Websites For Ethical Shopping In 2026",
+                "url": "https://www.thegoodtrade.com/features/online-ethical-marketplaces/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Ricochet POS: Ricochet Home | Best Consignment Shop ...",
+                "url": "https://www.ricoconsign.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 24
+            },
+            {
+                "name": "Scrapp | Zero-waste made simple",
+                "url": "https://www.scrappzero.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 14
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "support resources",
+                "unparalleled precision",
+                "world",
+                "thought pieces",
+                "communications officer",
+                "know",
+                "wellness products",
+                "girlfriend",
+                "toxic chemicals",
+                "print checks"
+            ],
+            "long_tail": [
+                "current shopifytm website",
+                "digital product creation",
+                "dream consignment store",
+                "assign commission splits",
+                "even certified b corps",
+                "less complex product groups",
+                "nearest healthy grocery store",
+                "view sales trends",
+                "ricochet paytm seamlessly",
+                "reach new heights"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "new",
+                "new launch",
+                "the",
+                "launch",
+                "anti",
+                "your",
+                "country",
+                "shop by",
+                "launch retinol",
+                "retinol serumour"
+            ],
+            "long_tail": [
+                "new launch retinol serumour",
+                "launch retinol serumour new",
+                "retinol serumour new anti",
+                "serumour new anti aging",
+                "new anti aging powerhouse",
+                "anti aging powerhouse new",
+                "aging powerhouse new launch",
+                "powerhouse new launch anti",
+                "new launch anti dandruff",
+                "launch anti dandruff shampoo"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "support resources",
+                "unparalleled precision",
+                "world",
+                "thought pieces",
+                "communications officer"
+            ],
+            "long_tail": [
+                "current shopifytm website",
+                "digital product creation",
+                "dream consignment store",
+                "assign commission splits",
+                "even certified b corps"
+            ]
+        },
+        "recommendations": [
+            "Create content around missing short and long-tail keywords to increase organic visibility",
+            "Develop a blog section for thought pieces and support resources",
+            "Highlight the brand's commitment to avoiding toxic chemicals in products",
+            "Optimize the current Shopify website for better user experience and search engine ranking",
+            "Explore partnerships with wellness products and healthy grocery stores for collaborations"
+        ],
+        "competitive_insights": [
+            "Competitors are using a wider range of keywords, including 'support resources' and 'unparalleled precision', which Beminimalist can incorporate into their content",
+            "Beminimalist has a unique opportunity to emphasize its scientific merit and transparency in product creation",
+            "The brand's focus on affordability and efficacy can be highlighted to attract price-conscious consumers"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

@@ -1,24 +1,9 @@
-"""
-Prompt Optimizer — importable module (no HTTP server)
-Integrates with the MABO framework to select, version, and evolve prompts.
-
-Key responsibilities:
-  1. get_best_prompt_for_agent(agent, context)  → best performing prompt text  
-  2. register_prompt(agent, context, text)       → save new version, return version_id
-  3. score_prompt(version_id, score)             → update performance_score in DB
-  4. evolve_prompt(agent, context, feedback)     → use LLM to mutate best prompt with
-                                                    feedback signal (MABO step)
-
-All DB interactions go through database.py helpers.
-All LLM calls are traced via LangSmith.
-"""
-
 import os
 import logging
 from typing import Optional
 
 from dotenv import load_dotenv
-from groq import Groq
+from llm_client import llm_chat, groq_client
 
 load_dotenv()
 logger = logging.getLogger("prompt_optimizer")
@@ -31,12 +16,6 @@ from database import (
 )
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-groq_client  = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
-
-# ── Default seed prompts per agent ────────────────────────────────────────────
-#   These are used the first time an agent has no scored versions yet.
 
 _SEED_PROMPTS: dict = {
     "content_agent": {
@@ -112,18 +91,7 @@ def score_prompt(version_id: str, score: float):
 @trace_llm(name="prompt_evolution", tags=["prompt_optimizer", "llm"])
 def evolve_prompt(agent_name: str, context_type: str,
                   feedback: str, current_score: float) -> str:
-    """
-    Use the LLM to mutate the best prompt based on feedback.
-    Registers the evolved version in the DB and returns its version_id.
-
-    Args:
-        feedback: Free-text description of what went wrong / could improve.
-        current_score: Score of the current best prompt (0-1).
-
-    Returns:
-        version_id of the new evolved prompt.
-    """
-    if not groq_client:
+    if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY not set — cannot evolve prompts")
 
     # Get current best to mutate
@@ -153,13 +121,13 @@ Rules:
 IMPROVED PROMPT:"""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[{"role": "user", "content": meta_prompt}],
+        evolved_text, model_used = llm_chat(
+            [{"role": "user", "content": meta_prompt}],
             temperature=0.4,
             max_tokens=1000,
         )
-        evolved_text = resp.choices[0].message.content.strip()
+        evolved_text = evolved_text.strip()
+        logger.info("[PromptOptimizer] Prompt evolution via model: %s", model_used)
         run_id = get_current_run_id()
         vid = register_prompt(agent_name, context_type, evolved_text, run_id)
         logger.info(f"[PromptOptimizer] Evolved prompt → {vid}")
@@ -170,11 +138,6 @@ IMPROVED PROMPT:"""
 
 
 def suggest_next_prompt(agent_name: str, context_type: str) -> dict:
-    """
-    Return metadata about what the optimizer recommends next:
-    whether to exploit (use best), explore (try a variant), or evolve.
-    Used by MABO agent to decide its next action.
-    """
     best = get_best_prompt(agent_name, context_type)
     if not best:
         return {"action": "seed", "reason": "No scored versions yet"}
@@ -193,11 +156,6 @@ def suggest_next_prompt(agent_name: str, context_type: str) -> dict:
 
 
 def score_latest_for_agent(agent_name: str, context_type: str, score: float) -> None:
-    """
-    Score the most recently registered (unscored) prompt version for this
-    agent / context.  Called by the orchestrator after critic evaluation so
-    that every generation round produces a training signal for the optimizer.
-    """
     try:
         from database import get_db_connection
         with get_db_connection() as conn:

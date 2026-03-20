@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "🌟👍 Stay hydrated with quality & service! 💧 #DemoBrand #ConsciousConsumers #QualityMatters",
+      "length": 280,
+      "call_to_action": "Drink Responsibly",
+      "hashtags": [
+        "#DemoBrand",
+        "#ConsciousConsumers",
+        "#QualityMatters"
+      ]
+    },
+    "instagram": {
+      "copy": "💧🌟 For decades, a symbol of trust, purity, and reliability has been leading the way in providing safe, pure, and healthy drinking water! 🌎 With a strong footprint and robust distribution network, quality and service are at the forefront. 💯 Join the movement towards conscious consumption! 🌟 #DemoBrand #ConsciousConsumers #StayHydrated #QualityAndService",
+      "length": 300,
+      "call_to_action": "Join the Movement",
+      "hashtags": [
+        "#DemoBrand",
+        "#ConsciousConsumers",
+        "#StayHydrated",
+        "#QualityAndService"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a bottle of water with a green background, highlighting the brand's commitment to quality and the environment",
+    "Photorealistic image of a water purification plant with a caption highlighting the brand's strong footprint and robust distribution network"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:53:33.634045Z"
+  }
+}

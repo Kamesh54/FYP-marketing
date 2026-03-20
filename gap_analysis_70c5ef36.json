@@ -1,0 +1,186 @@
+{
+    "company_info": {
+        "name": "Beminimalist",
+        "url": "https://beminimalist.co/",
+        "product_description": "beauty in None. Beminimalist offers authentic and effective skincare solutions with a focus on scientific merit. Their products aim to provide transparency, efficacy, and affordability. The brand is committed to delivering high-quality personal care products."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "new",
+            "new launch",
+            "the",
+            "launch",
+            "anti",
+            "your",
+            "country",
+            "shop by",
+            "launch retinol",
+            "retinol serumour",
+            "serumour new",
+            "new anti",
+            "anti aging",
+            "aging powerhouse",
+            "powerhouse new",
+            "launch anti",
+            "anti dandruff",
+            "dandruff shampoo",
+            "our",
+            "best",
+            "shop",
+            "by",
+            "of",
+            "is",
+            "us"
+        ],
+        "long_tail_keywords": [
+            "new launch retinol serumour",
+            "launch retinol serumour new",
+            "retinol serumour new anti",
+            "serumour new anti aging",
+            "new anti aging powerhouse",
+            "anti aging powerhouse new",
+            "aging powerhouse new launch",
+            "powerhouse new launch anti",
+            "new launch anti dandruff",
+            "launch anti dandruff shampoo",
+            "new launch retinol",
+            "launch retinol serumour",
+            "retinol serumour new",
+            "serumour new anti",
+            "new anti aging",
+            "anti aging powerhouse",
+            "aging powerhouse new",
+            "powerhouse new launch",
+            "new launch anti",
+            "launch anti dandruff",
+            "anti dandruff shampoo",
+            "our best sellers shop",
+            "best sellers shop by",
+            "sellers shop by category",
+            "shop by category shop"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "Homestyler-Interior Home design,House Floor planner 3D ...",
+                "url": "https://www.homestyler.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 17
+            },
+            {
+                "name": "Build a path to a sustainable home decor ecommerce ...",
+                "url": "https://www.loopreturns.com/blog/sustainable-home-decor-ecommerce-business/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "10 Best Websites For Ethical Shopping In 2026",
+                "url": "https://www.thegoodtrade.com/features/online-ethical-marketplaces/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Simple Blogging Platforms Nobody Talks About",
+                "url": "https://www.magherallylens.com/simple-blogging-platforms/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Weyify",
+                "url": "https://www.weyify.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 14
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "step instructions",
+                "provide everything",
+                "world",
+                "would get",
+                "youd hoped",
+                "united states",
+                "wellness products",
+                "strong candidate",
+                "2026 ().",
+                "self"
+            ],
+            "long_tail": [
+                "scribbles felt like publishing",
+                "customers simply scan",
+                "bear looks bare bones",
+                "exchanges instant exchanges risk",
+                "ecommerce home decor business",
+                "even certified b corps",
+                "loop experience get inspiration",
+                "nearest healthy grocery store",
+                "rights reserved 4",
+                "warranty claims turn exchange"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "new",
+                "new launch",
+                "the",
+                "launch",
+                "anti",
+                "your",
+                "country",
+                "shop by",
+                "launch retinol",
+                "retinol serumour"
+            ],
+            "long_tail": [
+                "new launch retinol serumour",
+                "launch retinol serumour new",
+                "retinol serumour new anti",
+                "serumour new anti aging",
+                "new anti aging powerhouse",
+                "anti aging powerhouse new",
+                "aging powerhouse new launch",
+                "powerhouse new launch anti",
+                "new launch anti dandruff",
+                "launch anti dandruff shampoo"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "step instructions",
+                "provide everything",
+                "world",
+                "would get",
+                "you'd hoped"
+            ],
+            "long_tail": [
+                "scribbles felt like publishing",
+                "customers simply scan",
+                "bear looks bare bones",
+                "exchanges instant exchanges risk",
+                "ecommerce home decor business"
+            ]
+        },
+        "recommendations": [
+            "Optimize product pages with step-by-step instructions to improve user experience",
+            "Create content around wellness products and self-care to attract a broader audience",
+            "Utilize long-tail keywords like 'scribbles felt like publishing' in blog posts or articles to increase organic visibility",
+            "Develop a strong presence in the United States market by incorporating location-based keywords",
+            "Leverage the 'strong candidate' keyword to position Beminimalist as a trusted brand in the skincare industry"
+        ],
+        "competitive_insights": [
+            "Competitors are using short keywords like 'step instructions' and 'provide everything' to attract users seeking comprehensive solutions",
+            "The use of long-tail keywords like 'scribbles felt like publishing' by competitors indicates a focus on creative and engaging content",
+            "Beminimalist can differentiate itself by emphasizing its scientific approach and commitment to transparency, efficacy, and affordability"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

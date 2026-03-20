@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with quality & service! 💧💯 For 50+ yrs, Bisleri has delivered safe, pure & healthy drinking water in India. 🌟 #DemoBrand #QualityMatters #Bisleri",
+      "length": 280,
+      "call_to_action": "Stay hydrated with Demo Brand",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#Bisleri"
+      ]
+    },
+    "instagram": {
+      "copy": "A symbol of trust, purity, and reliability! 💧🌟 For over 50 years, Bisleri has been a household name in India, leading the packaged drinking water category with a strong footprint of 130 operational plants and a robust distribution network. 🌍 With Demo Brand, experience the power of quality and service. 💯 #DemoBrand #Bisleri #QualityAndService #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Experience Demo Brand's quality and service",
+      "hashtags": [
+        "#DemoBrand",
+        "#Bisleri",
+        "#QualityAndService",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a bottle of Bisleri water with a green background and the Demo Brand logo prominently displayed",
+    "Photorealistic image of a map of India with 130 operational plants and a robust distribution network highlighted, and the Demo Brand logo in the center"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:56:27.784730Z"
+  }
+}

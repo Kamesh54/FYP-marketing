@@ -1,8 +1,3 @@
-"""
-Campaign Planner Agent
-Acts as the "Architect" for the Stateful Temporal Campaign model.
-Identifies trends, proposes tiered workflows, and creates dynamic schedules.
-"""
 import os
 import json
 import logging
@@ -11,7 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
-from groq import Groq
+from llm_client import llm_chat_json as _llm_json
 
 # Import database functions for historical analysis
 from database import get_social_metrics
@@ -33,7 +28,7 @@ KEYWORD_EXTRACTOR_BASE = "http://127.0.0.1:8001"
 
 class CampaignPlannerAgent:
     def __init__(self):
-        self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+        # groq_client replaced by llm_client 3-model fallback chain
         self.graph_queries = None
         if GRAPH_AVAILABLE:
             try:
@@ -117,20 +112,16 @@ class CampaignPlannerAgent:
         """
         
         try:
-            response = self.groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                temperature=0.7
+            result, _model = _llm_json(
+                [{"role": "user", "content": prompt}],
+                temperature=0.7,
             )
-            result = json.loads(response.choices[0].message.content)
+            logger.info("Trend discovery via model: %s", _model)
             trends = result.get("trends", [])
             if not trends and isinstance(result, list):
                 trends = result
             elif not trends:
-                # Handle case where key might be different
                 trends = list(result.values())[0] if result else []
-                
             return trends[:3]
         except Exception as e:
             logger.error(f"Error discovering trends: {e}")

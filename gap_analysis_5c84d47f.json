@@ -1,0 +1,186 @@
+{
+    "company_info": {
+        "name": "Demo Brand",
+        "url": null,
+        "product_description": "A symbol of trust, purity, and reliability, Bisleri has been a household name in India for decades. As the country’s most trusted packaged drinking water brand, Bisleri leads its category with a strong footprint of 130 operational plants, including 13 owned facilities, and a robust distribution network of 5980 distributors and 8270 distribution trucks across India and neighbouring countries. For over 50 years, Bisleri has stayed true to its promise of delivering safe, pure, and healthy drinking water.. Sustainable wellness brand — warm, empowering tone encouraging mindful hydration and environmental responsibility."
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "and",
+            "of",
+            "bisleri",
+            "bisleri has",
+            "drinking water",
+            "has",
+            "india",
+            "for",
+            "drinking",
+            "water",
+            "brand",
+            "its",
+            "distribution",
+            "symbol of",
+            "of trust",
+            "trust purity",
+            "purity and",
+            "and reliability",
+            "reliability bisleri",
+            "has been",
+            "been household",
+            "household name",
+            "name in",
+            "in india",
+            "india for"
+        ],
+        "long_tail_keywords": [
+            "symbol of trust purity",
+            "of trust purity and",
+            "trust purity and reliability",
+            "purity and reliability bisleri",
+            "and reliability bisleri has",
+            "reliability bisleri has been",
+            "bisleri has been household",
+            "has been household name",
+            "been household name in",
+            "household name in india",
+            "name in india for",
+            "in india for decades",
+            "india for decades as",
+            "for decades as the",
+            "decades as the country",
+            "as the country most",
+            "the country most trusted",
+            "country most trusted packaged",
+            "most trusted packaged drinking",
+            "trusted packaged drinking water",
+            "packaged drinking water brand",
+            "drinking water brand bisleri",
+            "water brand bisleri leads",
+            "brand bisleri leads its",
+            "bisleri leads its category"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "10 Best Ecommerce Platforms in 2026 (Reviewed, ...",
+                "url": "https://www.emailvendorselection.com/best-ecommerce-platforms-review/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Best Marketplace Software: User Reviews from March 2026",
+                "url": "https://www.g2.com/categories/marketplace",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "Digital Storefronts: Online Store Software",
+                "url": "https://www.salesforce.com/commerce/online-store-platform/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "14 Top Social Ecommerce Platforms in 2026 (+ Web ...",
+                "url": "https://www.shoplazza.com/blog/social-ecommerce-platforms",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 13
+            },
+            {
+                "name": "GRIN: The #1 Influencer Marketing Software",
+                "url": "https://grin.co/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 10
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "search engines",
+                "youve outgrown",
+                "selling products",
+                "repeat traffic",
+                "time",
+                "grin",
+                "powerfulgrowth channel",
+                "newsletter grin",
+                "whether thats",
+                "alternatives tiktok"
+            ],
+            "long_tail": [
+                "fastest ecommerce implementation platform",
+                "composable storefront offers 40",
+                "online store platform enables",
+                "wix review sellfy pricing",
+                "online store platform",
+                "creators selling digital products",
+                "ai creator marketing agent",
+                "business2026 ecommerce cms platforms",
+                "bigcommerce user interface makes",
+                "sell across several platforms"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "and",
+                "of",
+                "bisleri",
+                "bisleri has",
+                "drinking water",
+                "has",
+                "india",
+                "for",
+                "drinking",
+                "water"
+            ],
+            "long_tail": [
+                "symbol of trust purity",
+                "of trust purity and",
+                "trust purity and reliability",
+                "purity and reliability bisleri",
+                "and reliability bisleri has",
+                "reliability bisleri has been",
+                "bisleri has been household",
+                "has been household name",
+                "been household name in",
+                "household name in india"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "search engines",
+                "youve outgrown",
+                "selling products",
+                "repeat traffic",
+                "time"
+            ],
+            "long_tail": [
+                "fastest ecommerce implementation platform",
+                "composable storefront offers 40",
+                "online store platform enables",
+                "wix review sellfy pricing",
+                "online store platform"
+            ]
+        },
+        "recommendations": [
+            "Optimize website for missing short and long-tail keywords",
+            "Create content around unique company keywords to improve brand visibility",
+            "Utilize search engines to increase online presence",
+            "Develop a strategy for selling products on multiple platforms",
+            "Implement a newsletter to encourage repeat traffic and customer engagement"
+        ],
+        "competitive_insights": [
+            "Competitors are leveraging search engines and ecommerce platforms to gain an advantage",
+            "The use of alternatives to TikTok can help Bisleri reach a wider audience",
+            "Bisleri's unique company keywords can be used to create targeted content and improve brand visibility"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

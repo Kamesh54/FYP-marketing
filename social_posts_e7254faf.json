@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Black Friday Sale! Get 25% off our effective & affordable skincare solutions at Beminimalist! #Beminimalist #BlackFriday #SkincareLovers",
+      "length": 280,
+      "call_to_action": "Shop Now",
+      "hashtags": [
+        "#Beminimalist",
+        "#BlackFriday",
+        "#SkincareSolutions"
+      ]
+    },
+    "instagram": {
+      "copy": "It's time to glow! We're having a Black Friday sale with 25% off all our skincare products! At Beminimalist, we pride ourselves on quality and service, providing you with effective and affordable solutions for healthy, radiant skin. #Beminimalist #BlackFridaySale #SkincareLove #BeautyDeals",
+      "length": 300,
+      "call_to_action": "Shop Our Sale",
+      "hashtags": [
+        "#Beminimalist",
+        "#BlackFridaySale",
+        "#SkincareSolutions",
+        "#BeautyDeals"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person with glowing, healthy skin holding a skincare product from Beminimalist, with a Black Friday sale banner in the background.",
+    "A photorealistic image of a skincare routine setup with Beminimalist products, including a cleanser, moisturizer, and serum, with a 25% off discount tag on each product."
+  ],
+  "meta": {
+    "brand_name": "Beminimalist",
+    "location": "N/A",
+    "industry": "beauty",
+    "generated_at": "2026-03-12T00:08:14.664844Z"
+  }
+}

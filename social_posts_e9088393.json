@@ -1,0 +1,34 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "What's the secret to a trusted brand? For over 50 years, Bisleri has delivered safe, pure, and healthy drinking water to India and beyond! #Bisleri #TrustedBrand",
+      "length": 280,
+      "call_to_action": "Learn more about Bisleri's commitment to quality!",
+      "hashtags": [
+        "#TrustedBrand",
+        "#Bisleri",
+        "#DrinkingWater"
+      ]
+    },
+    "instagram": {
+      "copy": "What's the secret to a trusted brand? For over 50 years, Bisleri has delivered safe, pure, and healthy drinking water to India and beyond! With a strong footprint of 130 operational plants and a robust distribution network, Bisleri leads the category in packaged drinking water. Stay true to your promise with Bisleri! #Bisleri #TrustedBrand #DrinkingWater",
+      "length": 300,
+      "call_to_action": "Learn more about Bisleri's commitment to quality!",
+      "hashtags": [
+        "#TrustedBrand",
+        "#Bisleri",
+        "#DrinkingWater"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a Bisleri water bottle with a subtle background of a factory or a distribution network.",
+    "A photorealistic image of a person holding a Bisleri water bottle with a happy and satisfied expression."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:43:44.245410Z"
+  }
+}

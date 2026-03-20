@@ -234,16 +234,114 @@ def execute_campaign_step():
                 metadata = item['metadata']
                 
                 if action == "social_post":
-                    # Call content generation
-                    # For now, we'll simulate the call or use the helper
-                    from intelligent_router import generate_conversational_response
-                    # In reality, we'd call content_agent directly
-                    
-                    # Simulate success
-                    content_id = f"cont_{uuid.uuid4().hex[:8]}"
-                    # Save content (placeholder)
-                    
-                    logger.info(f"Executed social post for campaign {campaign_id}")
+                    # ── Real flow: generate content → image → post ──────────
+                    import requests as _req
+                    import time as _time
+
+                    camp_meta  = campaign.get("metadata", {})
+                    if isinstance(camp_meta, str):
+                        try:
+                            camp_meta = json.loads(camp_meta)
+                        except Exception:
+                            camp_meta = {}
+
+                    brand_name    = camp_meta.get("brand_name", "Brand")
+                    industry      = camp_meta.get("industry", "")
+                    platform      = metadata.get("platform", "instagram") if isinstance(metadata, dict) else "instagram"
+                    topic         = metadata.get("topic", brand_name) if isinstance(metadata, dict) else brand_name
+                    hashtags      = metadata.get("hashtags", []) if isinstance(metadata, dict) else []
+                    ref_images    = camp_meta.get("reference_images", [])
+
+                    CONTENT_BASE = "http://127.0.0.1:8003"
+
+                    # 1. Generate social copy via content_agent
+                    try:
+                        gen_resp = _req.post(
+                            f"{CONTENT_BASE}/generate-social",
+                            json={
+                                "keywords":              {"words": [topic], "domain": industry or topic},
+                                "platforms":             [platform],
+                                "tone":                  camp_meta.get("tone", "professional"),
+                                "hashtags":              hashtags,
+                                "brand_name":            brand_name,
+                                "industry":              industry,
+                                "target_audience":       camp_meta.get("target_audience", ""),
+                                "unique_selling_points": camp_meta.get("unique_selling_points", []),
+                                "user_request":          topic,
+                            },
+                            timeout=15,
+                        )
+                        gen_resp.raise_for_status()
+                        gen_job_id = gen_resp.json().get("job_id")
+
+                        # Poll content_agent for result (max 90 s)
+                        post_text = None
+                        for _ in range(18):
+                            _time.sleep(5)
+                            st = _req.get(f"{CONTENT_BASE}/status/{gen_job_id}", timeout=10).json()
+                            if st.get("status") == "completed":
+                                sp = st.get("social_posts", {})
+                                post_text = (
+                                    sp.get(platform)
+                                    or sp.get("instagram")
+                                    or sp.get("twitter")
+                                    or next(iter(sp.values()), None)
+                                )
+                                if not post_text and st.get("content"):
+                                    post_text = st["content"]
+                                break
+                            if st.get("status") == "failed":
+                                break
+
+                        if not post_text:
+                            post_text = f"Big news from {brand_name}! {topic}\n\n" + " ".join(f"#{h}" for h in hashtags)
+
+                    except Exception as cae:
+                        logger.warning(f"Content agent unavailable, using fallback text: {cae}")
+                        post_text = f"Big news from {brand_name}! {topic}\n\n" + " ".join(f"#{h}" for h in hashtags)
+
+                    # 2. Generate image (lazy import avoids circular dependency)
+                    image_path = None
+                    try:
+                        from orchestrator import generate_image_with_runway
+                        image_prompt = f"Professional social media image for {brand_name}, {topic}, {industry}, modern style"
+                        image_path   = generate_image_with_runway(image_prompt, ref_images or None)
+                        logger.info(f"Image for scheduled post: {image_path}")
+                    except Exception as img_err:
+                        logger.warning(f"Image generation failed for scheduled post: {img_err}")
+
+                    # 3. Post to platform
+                    try:
+                        from orchestrator import post_to_social
+                        post_url = post_to_social(platform, post_text, image_path)
+                        logger.info(f"Scheduled post published to {platform}: {post_url}")
+                    except Exception as post_err:
+                        logger.error(f"Failed to post to {platform}: {post_err}")
+                        update_agenda_item_status(item['id'], 'failed')
+                        continue
+
+                    # 4. Persist to DB
+                    content_id = f"sched_{uuid.uuid4().hex[:8]}"
+                    user_id    = campaign.get("user_id", 1)
+                    session_id = f"auto_{user_id}_{uuid.uuid4().hex[:6]}"
+                    from database import save_generated_content, update_content_status
+                    save_generated_content(
+                        content_id   = content_id,
+                        session_id   = session_id,
+                        content_type = "social_post",
+                        content      = post_text,
+                        preview_url  = post_url,
+                        metadata     = {
+                            "platform":    platform,
+                            "brand_name":  brand_name,
+                            "image_path":  image_path,
+                            "campaign_id": campaign_id,
+                            "auto":        True,
+                        },
+                    )
+                    update_content_status(content_id, "approved", post_url)
+
+                    logger.info(f"Scheduled social post completed for campaign {campaign_id}")
                     update_agenda_item_status(item['id'], 'completed', content_id=content_id)
                     
                 elif action == "blog_post":

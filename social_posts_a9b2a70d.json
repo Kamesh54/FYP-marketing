@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Discover the trusted choice for safe drinking water! Bisleri leads the category with 130 operational plants & a robust distribution network. Stay hydrated with the best! #Bisleri #TrustedChoice #SafeDrinkingWater",
+      "length": 280,
+      "call_to_action": "Learn more",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedChoice",
+        "#SafeDrinkingWater"
+      ]
+    },
+    "instagram": {
+      "copy": "Are you looking for a symbol of trust, purity, and reliability in your drinking water? Bisleri has been a household name in India for decades, delivering safe, pure, and healthy drinking water for over 50 years! With 130 operational plants and a robust distribution network, Bisleri is the trusted choice for conscious consumers like you! #Bisleri #TrustedChoice #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Learn more",
+      "hashtags": [
+        "#Bisleri",
+        "#TrustedChoice",
+        "#ConsciousConsumers",
+        "#Business"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a Bisleri water bottle with a green background, highlighting the brand's commitment to safe and pure drinking water.",
+    "A photorealistic image of a Bisleri factory with a robust distribution network, showcasing the brand's strong footprint and reliability."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-12T04:38:08.082121Z"
+  }
+}

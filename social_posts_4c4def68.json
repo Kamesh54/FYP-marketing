@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand! With a focus on quality and service, we prioritize your health. #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Visit our website",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityAndService",
+        "#GeneralIndustry"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we believe in delivering high-quality products and exceptional service. Just like Bisleri, a symbol of trust, purity, and reliability, we strive to make a positive impact on our customers' lives. Join us in our mission to prioritize health and wellbeing! #DemoBrand #QualityAndService #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Learn more about our mission",
+      "hashtags": [
+        "#DemoBrand",
+        "#ConsciousConsumers",
+        "#GeneralIndustry",
+        "#QualityAndService"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a glass of clean drinking water with a backdrop of a lush green environment, symbolizing health and wellbeing for Demo Brand",
+    "A photorealistic image of a Demo Brand product with a green checkmark, surrounded by leaves, highlighting the brand's focus on quality and service"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "Not specified",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:39:38.885310Z"
+  }
+}

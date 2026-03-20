@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with Demo Brand, a symbol of trust, purity & reliability! With 50+ years of delivering safe, pure & healthy drinking water, choose us for quality & service! #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Choose Demo Brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#TrustAndPurity",
+        "#DrinkingWater"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we pride ourselves on being a symbol of trust, purity, and reliability, just like Bisleri! With 50+ years of experience and a strong footprint of operational plants, we deliver safe, pure, and healthy drinking water to conscious consumers like you! With a robust distribution network, you can trust that our water is always within reach. Choose us for our quality and service, and join the movement towards a healthier lifestyle! #DemoBrand #ConsciousConsumers #HealthyLiving #DrinkingWater #TrustAndPurity",
+      "length": 300,
+      "call_to_action": "Join the Demo Brand community today and make a difference!",
+      "hashtags": [
+        "#DemoBrand",
+        "#ConsciousConsumers",
+        "#HealthyLiving",
+        "#DrinkingWater"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of Demo Brand water, with a green and natural background, conveying a sense of trust, purity, and reliability.",
+    "A photorealistic image of a Demo Brand water plant, showcasing the company's operational facilities and robust distribution network, with a focus on quality and service."
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:57:04.105274Z"
+  }
+}

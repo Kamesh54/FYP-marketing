@@ -1,18 +1,3 @@
-"""
-Campaign Agent — port 8008
-Manages campaign schedules and posts content to social platforms.
-
-Platforms supported: LinkedIn, X (Twitter), Instagram, Reddit
-Scheduling: one-off (run_at) and recurring (cron_expr) via APScheduler
-
-Endpoints:
-  POST /schedule              — create a new schedule
-  GET  /schedules/{user_id}   — list user's schedules
-  DELETE /schedule/{id}       — cancel a schedule
-  POST /post                  — immediately post content to a platform
-  GET  /post/status/{job_id}  — check a post job
-"""
-
 import os
 import uuid
 import asyncio
@@ -78,19 +63,17 @@ _PLATFORM_DB_MAP: Dict[str, Optional[str]] = {
     "facebook": "facebook", "reddit": None,  # not in DB constraint
 }
 
-# ── Pydantic models ───────────────────────────────────────────────────────────
-
 class ScheduleRequest(BaseModel):
     user_id: int
     name: str
-    platform: str                           # linkedin | x | instagram | reddit
-    content_template: Optional[str] = None  # topic/brief or static content
-    content_text: Optional[str] = None      # alias sent by frontend
-    trigger_type: str                       # once | recurring
-    run_at: Optional[str] = None            # ISO datetime for 'once'
-    cron_expr: Optional[str] = None         # cron string for 'recurring'
-    ai_generate: bool = False               # generate fresh content+image each run
-    brand_name: Optional[str] = None        # brand context for generation
+    platform: str                           
+    content_template: Optional[str] = None  
+    content_text: Optional[str] = None      
+    trigger_type: str                       
+    run_at: Optional[str] = None            
+    cron_expr: Optional[str] = None         
+    ai_generate: bool = False               
+    brand_name: Optional[str] = None        
     metadata: Optional[Dict[str, Any]] = {}
 
     @property
@@ -195,8 +178,7 @@ def health():
 @app.get("/brands/{user_id}")
 def get_brands(user_id: int):
     """List all brand profiles (own brands first)."""
-    # Pass user_id so the user's own brands sort first; all brands are returned
-    # to avoid issues when brands were saved under a different user_id.
+  
     profiles = list_brand_profiles(user_id)
     # Deduplicate by brand_name (keep first occurrence = user's own)
     seen: set = set()
@@ -213,15 +195,19 @@ def get_brands(user_id: int):
     }
 
 
-# ── Schedule management ───────────────────────────────────────────────────────
-
 @app.post("/schedule", status_code=201)
 def create_schedule(req: ScheduleRequest):
     _validate_platform(req.platform)
 
     next_run = None
+    normalised_run_at = req.run_at
     if req.trigger_type == "once" and req.run_at:
-        next_run = req.run_at
+        # Validate and normalise to ISO string right here — fail fast with 400
+        try:
+            normalised_run_at = _parse_run_at(req.run_at).isoformat()
+            next_run = normalised_run_at
+        except Exception as e:
+            raise HTTPException(400, f"Invalid run_at date: {e}")
     elif req.trigger_type == "recurring" and req.cron_expr:
         from apscheduler.triggers.cron import CronTrigger as _CT
         try:
@@ -230,27 +216,30 @@ def create_schedule(req: ScheduleRequest):
             raise HTTPException(400, f"Invalid cron expression: {e}")
 
     schedule_id = str(uuid.uuid4())
-    # Map 'x' -> 'twitter' for DB CHECK constraint; store display name in metadata
     db_platform = "twitter" if req.platform.lower() == "x" else req.platform.lower()
     metadata = dict(req.metadata or {})
     metadata["ai_generate"] = req.ai_generate
     if req.brand_name:
         metadata["brand_name"] = req.brand_name
-    metadata["display_platform"] = req.platform  # preserve 'x'
+    metadata["display_platform"] = req.platform
+
+    # resolved_content is the actual text to post; fall back to name
+    effective_content = req.resolved_content or req.content_template or req.name
+
     create_campaign_schedule(
         schedule_id=schedule_id,
         user_id=req.user_id,
         name=req.name,
         platform=db_platform,
-        content_template=req.resolved_content or req.name,
+        content_template=effective_content,
         trigger_type=req.trigger_type,
-        run_at=req.run_at,
+        run_at=normalised_run_at,
         cron_expr=req.cron_expr,
         next_run=next_run,
         metadata=metadata,
     )
-    _add_to_scheduler(schedule_id, req.platform, req.content_template,
-                      req.trigger_type, req.run_at, req.cron_expr, req.user_id,
+    _add_to_scheduler(schedule_id, req.platform, effective_content,
+                      req.trigger_type, normalised_run_at, req.cron_expr, req.user_id,
                       ai_generate=req.ai_generate, brand_name=req.brand_name)
 
     return {"status": "created", "schedule_id": schedule_id, "next_run": next_run,
@@ -342,30 +331,21 @@ def list_posts(user_id: Optional[int] = None, platform: Optional[str] = None):
     return {"posts": deduped, "count": len(deduped)}
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
-
 def _validate_platform(platform: str):
     allowed = {"linkedin", "x", "instagram", "reddit"}
     if platform.lower() not in allowed:
         raise HTTPException(400, f"Unsupported platform '{platform}'. Allowed: {allowed}")
 
 
-# ── AI content + image generation ─────────────────────────────────────────────
-
 async def _ai_generate_content_and_image(
     topic: str, platform: str, brand_name: Optional[str] = None
 ) -> tuple:
-    """
-    Given a campaign topic/brief, use Groq to write platform-specific post text
-    and an image prompt, then generate the image via orchestrator.
-    Returns (post_text: str, image_url: Optional[str]).
-    """
+    
     if not GROQ_API_KEY:
         logger.warning("GROQ_API_KEY not set — skipping AI generation")
         return topic, None
 
-    from groq import Groq as _Groq
-    client = _Groq(api_key=GROQ_API_KEY)
+    from llm_client import llm_chat_json as _llm_json
 
     platform_hints = {
         "linkedin": "professional tone, 150-300 words, include relevant hashtags",
@@ -387,19 +367,17 @@ async def _ai_generate_content_and_image(
         "image_prompt: a vivid, detailed Stable Diffusion / RunwayML prompt for a complementary visual."
     )
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "system", "content": prompt_sys},
-                  {"role": "user",   "content": prompt_user}],
-        temperature=0.7,
-        max_tokens=512,
-    )
     import json as _json
-    raw = response.choices[0].message.content.strip()
-    # Strip markdown fences if present
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    data = _json.loads(raw)
+    try:
+        data, _model = _llm_json(
+            [{"role": "system", "content": prompt_sys},
+             {"role": "user",   "content": prompt_user}],
+            temperature=0.7,
+            max_tokens=512,
+        )
+    except Exception as _e:
+        logger.warning("LLM post generation failed: %s", _e)
+        return topic, None
     post_text    = data.get("post_text", topic)
     image_prompt = data.get("image_prompt", "")
 
@@ -422,13 +400,37 @@ async def _ai_generate_content_and_image(
 
 
 
+def _parse_run_at(run_at: str) -> datetime:
+    """Parse a run_at string to a datetime object, accepting common ISO formats."""
+    if not run_at:
+        raise ValueError("run_at is empty")
+    # Strip trailing 'Z' timezone suffix (treat as local time)
+    s = run_at.strip().rstrip("Z")
+    # Try common formats in order
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    # Last resort: fromisoformat (Python 3.7+)
+    return datetime.fromisoformat(s)
+
+
 def _add_to_scheduler(schedule_id: str, platform: str, content: str,
                       trigger_type: str, run_at: Optional[str],
                       cron_expr: Optional[str], user_id: int,
                       ai_generate: bool = False, brand_name: Optional[str] = None):
     try:
         if trigger_type == "once" and run_at:
-            trigger = DateTrigger(run_date=run_at)
+            run_at_dt = _parse_run_at(run_at)
+            trigger = DateTrigger(run_date=run_at_dt)
         elif trigger_type == "recurring" and cron_expr:
             trigger = CronTrigger.from_crontab(cron_expr)
         else:
@@ -440,6 +442,7 @@ def _add_to_scheduler(schedule_id: str, platform: str, content: str,
             replace_existing=True,
             args=[schedule_id, platform, content, user_id, ai_generate, brand_name],
         )
+        logger.info(f"Scheduler job registered: {schedule_id} | trigger={trigger} | platform={platform}")
     except Exception as e:
         logger.warning(f"Scheduler add_job failed for {schedule_id}: {e}")
 

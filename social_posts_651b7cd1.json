@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Experience the gold standard of purity with Bisleri! With 130+ plants & 5980 distributors, we deliver safe, pure & healthy water. Trust the best! #Bisleri #PureWater #DemoBrand",
+      "length": 280,
+      "call_to_action": "Try Bisleri today!",
+      "hashtags": [
+        "#Bisleri",
+        "#PureWater",
+        "#DemoBrand"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we believe in the power of trust, purity, and reliability. Inspired by Bisleri's legacy, we prioritize quality and service. With over 50 years of experience, Bisleri has set the standard for safe, pure, and healthy drinking water. Join the movement towards a healthier lifestyle! #DemoBrand #Bisleri #QualityMatters #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Make the switch to a trusted brand today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#Bisleri",
+        "#QualityMatters",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "A photorealistic image of a person holding a bottle of Bisleri water, with a cityscape in the background, highlighting the brand's widespread presence",
+    "A photorealistic image of a family enjoying Bisleri water together, emphasizing the importance of quality and purity in our daily lives"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T16:40:35.580210Z"
+  }
+}

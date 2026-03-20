@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Stay hydrated with quality and service! Bisleri, a symbol of trust, purity, and reliability, delivers safe drinking water. Try it today! #DemoBrand #QualityMatters #StayHydrated",
+      "length": 280,
+      "call_to_action": "Try it today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#QualityMatters",
+        "#StayHydrated"
+      ]
+    },
+    "instagram": {
+      "copy": "At Demo Brand, we understand the importance of trust, purity, and reliability when it comes to drinking water. That's why we recommend Bisleri, a household name in India for decades, with a strong footprint of 130 operational plants and a robust distribution network. With over 50 years of delivering safe, pure, and healthy drinking water, Bisleri is the perfect choice for conscious consumers. Make the switch today and experience the quality and service you deserve! #DemoBrand #Bisleri #QualityAndService #ConsciousConsumers",
+      "length": 300,
+      "call_to_action": "Make the switch today!",
+      "hashtags": [
+        "#DemoBrand",
+        "#Bisleri",
+        "#QualityAndService",
+        "#ConsciousConsumers"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a person holding a Bisleri water bottle with a backdrop of a bustling Indian city",
+    "Photorealistic image of a Bisleri water bottle on a table with a few glasses filled with water, surrounded by lush greenery"
+  ],
+  "meta": {
+    "brand_name": "Demo Brand",
+    "location": "N/A",
+    "industry": "General",
+    "generated_at": "2026-03-11T15:55:26.851272Z"
+  }
+}

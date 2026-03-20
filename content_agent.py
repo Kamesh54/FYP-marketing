@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from groq import Groq
+from llm_client import llm_chat, llm_chat_json, groq_client
 
 # Knowledge graph context (optional — gracefully disabled if Neo4j is unavailable)
 try:
@@ -31,11 +31,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Groq client
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY not set in environment.")
-groq_client = Groq(api_key=GROQ_API_KEY)
+# Groq client — imported from llm_client (3-model fallback chain)
+# GROQ_API_KEY must be set in .env (validated in llm_client.py at startup)
 
 # Config: endpoints of your other microservices
 KEYWORD_EXTRACTOR_BASE = os.getenv("KEYWORD_EXTRACTOR_BASE", "http://127.0.0.1:8001")
@@ -141,54 +138,23 @@ def normalize_keywords_input(keywords: Optional[Dict[str, Any]], keywords_job_id
 
 def safe_groq_chat(prompt: str, model: str = "llama-3.3-70b-versatile", timeout: int = 120,
                    system_instruction: Optional[str] = None) -> Dict[str, Any]:
-    """Call Groq aiming for strict JSON. If that fails, retry without response_format and sanitize output."""
-    logger.info("Calling Groq (strict JSON)...")
+    """Call LLM with JSON mode + 3-model fallback chain via llm_client.
+
+    The `model` and `timeout` parameters are kept for API compatibility but
+    are no longer used — llm_chat_json() selects models from LLM_MODELS.
+    """
+    logger.info("Calling LLM (JSON mode, 3-model fallback)...")
     messages: List[Dict[str, str]] = []
     if system_instruction:
         messages.append({"role": "system", "content": system_instruction})
     messages.append({"role": "user", "content": prompt})
     try:
-        resp = groq_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            response_format={"type": "json_object"}
-        )
-        try:
-            return json.loads(resp.choices[0].message.content)
-        except Exception as e:
-            logger.warning(f"Strict JSON parse failed: {e}. Falling back to sanitize.")
-            text = resp.choices[0].message.content or ""
-            # Try to extract JSON substring
-            start = text.find("{"); end = text.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                candidate = text[start:end+1]
-                try:
-                    return json.loads(candidate)
-                except Exception:
-                    pass
-            return {"raw_text": text}
-    except Exception as e:
-        # Retry without response_format if server rejected strict JSON (e.g., json_validate_failed)
-        logger.warning(f"Groq strict JSON request failed: {e}. Retrying without response_format...")
-        relaxed_prompt = prompt + "\n\nReturn ONLY a valid JSON object. No prose, no code fences."
-        _retry_messages: List[Dict[str, str]] = []
-        if system_instruction:
-            _retry_messages.append({"role": "system", "content": system_instruction})
-        _retry_messages.append({"role": "user", "content": relaxed_prompt})
-        resp2 = groq_client.chat.completions.create(
-            model=model,
-            messages=_retry_messages,
-        )
-        text = resp2.choices[0].message.content or ""
-        # Sanitize to JSON
-        start = text.find("{"); end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            candidate = text[start:end+1]
-            try:
-                return json.loads(candidate)
-            except Exception as e2:
-                logger.warning(f"Relaxed parse still failed: {e2}. Returning raw text.")
-        return {"raw_text": text}
+        data, model_used = llm_chat_json(messages)
+        logger.info("LLM responded via model: %s", model_used)
+        return data
+    except Exception as exc:
+        logger.error("All LLM models failed in safe_groq_chat: %s", exc)
+        return {"raw_text": str(exc)}
 
 # Core prompt builders
 def build_analyze_prompt(page_json: Dict[str, Any], keywords_obj: Dict[str, Any], site_url: Optional[str], tone: str, max_replacements: int) -> str:
