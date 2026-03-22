@@ -9,7 +9,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -24,10 +23,10 @@ os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import contextlib, io as _io
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-with contextlib.redirect_stderr(_io.StringIO()):
-    _st_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Lazy-loaded globals
+_st_model = None
+_intent_embeddings = None
 
 # One representative sentence per intent — the model encodes these at import time.
 INTENT_EXAMPLES: Dict[str, str] = {
@@ -46,12 +45,27 @@ INTENT_EXAMPLES: Dict[str, str] = {
     "campaign_post":       "post content immediately to instagram publish now",
 }
 
-# Pre-compute intent embeddings once — O(1) at request time.
-_intent_embeddings: Dict[str, Any] = {
-    intent: _st_model.encode(example, normalize_embeddings=True)
-    for intent, example in INTENT_EXAMPLES.items()
-}
-logger.info("Embedding-based intent classifier ready (%d intents)", len(_intent_embeddings))
+def _ensure_model_loaded():
+    """Lazy load the sentence transformer model to prevent DLL crashes on import."""
+    global _st_model, _intent_embeddings
+    if _st_model is not None:
+        return
+
+    logger.info("Loading sentence transformer model (lazy init)...")
+    from sentence_transformers import SentenceTransformer
+    
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+    
+    with contextlib.redirect_stderr(_io.StringIO()):
+        _st_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Pre-compute intent embeddings once
+    _intent_embeddings = {
+        intent: _st_model.encode(example, normalize_embeddings=True)
+        for intent, example in INTENT_EXAMPLES.items()
+    }
+    logger.info("Embedding-based intent classifier ready (%d intents)", len(_intent_embeddings))
 
 # Intent categories
 INTENTS = {
@@ -218,6 +232,7 @@ async def route_user_query(user_message: str, conversation_history: List[Dict[st
     No API tokens consumed — runs fully on CPU in ~5 ms.
     """
     try:
+        _ensure_model_loaded()
         user_emb = _st_model.encode(user_message, normalize_embeddings=True)
 
         # Cosine similarity = dot product when both vectors are L2-normalised
@@ -255,15 +270,47 @@ async def route_user_query(user_message: str, conversation_history: List[Dict[st
         return routing_result
 
     except Exception as e:
-        logger.error(f"Embedding routing error: {e}")
-        return {
-            "intent": "general_chat",
-            "confidence": 0.5,
-            "requires_url": False,
-            "requires_brand_info": False,
-            "extracted_params": {},
-            "suggested_response": "I'll help you with that. Could you provide more details?"
-        }
+        logger.error(f"Embedding routing error (likely PyTorch DLL issue): {e}")
+        logger.info("Falling back to LLM-based intent routing...")
+        try:
+            prompt = build_routing_prompt(user_message, conversation_history)
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            )
+            result_str = response.choices[0].message.content
+            import json
+            llm_result = json.loads(result_str)
+            logger.info(f"[LLM-router] intent={llm_result.get('intent')} confidence={llm_result.get('confidence', 0.8)}")
+            
+            # Ensure URL is extracted correctly
+            url = await extract_url_from_message(user_message)
+            if url:
+                llm_result["requires_url"] = True
+                if "extracted_params" not in llm_result:
+                    llm_result["extracted_params"] = {}
+                llm_result["extracted_params"]["url"] = url
+                
+            return {
+                "intent": llm_result.get("intent", "general_chat"),
+                "confidence": llm_result.get("confidence", 0.8),
+                "requires_url": llm_result.get("requires_url", url is not None),
+                "requires_brand_info": llm_result.get("requires_brand_info", False),
+                "extracted_params": llm_result.get("extracted_params", {}),
+                "suggested_response": llm_result.get("suggested_response", "")
+            }
+        except Exception as llm_route_err:
+            logger.error(f"LLM routing fallback also failed: {llm_route_err}")
+            return {
+                "intent": "general_chat",
+                "confidence": 0.5,
+                "requires_url": False,
+                "requires_brand_info": False,
+                "extracted_params": {},
+                "suggested_response": "I'll help you with that. Could you provide more details?"
+            }
 
 async def generate_conversational_response(
     user_message: str,

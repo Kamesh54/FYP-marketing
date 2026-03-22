@@ -26,7 +26,6 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from groq import Groq
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import textstat
 
 load_dotenv()
@@ -51,10 +50,19 @@ os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import contextlib, io as _io
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-with contextlib.redirect_stderr(_io.StringIO()):
-    _critic_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+_critic_model = None
+
+def _ensure_critic_model():
+    global _critic_model
+    if _critic_model is not None:
+        return
+    logger.info("Loading sentence transformer model for critic (lazy init)...")
+    from sentence_transformers import SentenceTransformer
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+    with contextlib.redirect_stderr(_io.StringIO()):
+        _critic_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine similarity between two vectors."""
@@ -231,6 +239,7 @@ async def _evaluate(req: CriticRequest, brand_context: str):
     brand_score   — cosine(encode(brand_profile),   encode(content))  × scale
     quality_score — Flesch-Kincaid grade + Type–Token Ratio + length bonus
     """
+    _ensure_critic_model()
     content = req.content_text[:4000]
     content_emb = _critic_model.encode(content, normalize_embeddings=True)
 

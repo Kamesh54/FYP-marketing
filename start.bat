@@ -1,5 +1,6 @@
 @echo off
-SET PY=%~dp0venv\Scripts\python.exe
+cd /d "%~dp0"
+SET "PY=%~dp0venv\Scripts\python.exe"
 
 ECHO Killing old processes...
 netstat -aon | findstr " LISTENING" > "%TEMP%\ag_ports.txt"
