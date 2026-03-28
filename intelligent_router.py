@@ -9,7 +9,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from groq import Groq
 from llm_client import llm_chat as _llm_chat
 from dotenv import load_dotenv
@@ -59,10 +58,12 @@ def _ensure_model() -> None:
     if _st_model is not None:
         return
     try:
+        from sentence_transformers import SentenceTransformer
         with contextlib.redirect_stderr(_io.StringIO()):
             _st_model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
     except Exception:
         # If the cached model is missing, allow a one-time download
+        from sentence_transformers import SentenceTransformer
         with contextlib.redirect_stderr(_io.StringIO()):
             _st_model = SentenceTransformer("all-MiniLM-L6-v2")
     _intent_embeddings = {
@@ -274,15 +275,47 @@ async def route_user_query(user_message: str, conversation_history: List[Dict[st
         return routing_result
 
     except Exception as e:
-        logger.error(f"Embedding routing error: {e}")
-        return {
-            "intent": "general_chat",
-            "confidence": 0.5,
-            "requires_url": False,
-            "requires_brand_info": False,
-            "extracted_params": {},
-            "suggested_response": "I'll help you with that. Could you provide more details?"
-        }
+        logger.error(f"Embedding routing error (likely PyTorch DLL issue): {e}")
+        logger.info("Falling back to LLM-based intent routing...")
+        try:
+            prompt = build_routing_prompt(user_message, conversation_history)
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            )
+            result_str = response.choices[0].message.content
+            import json
+            llm_result = json.loads(result_str)
+            logger.info(f"[LLM-router] intent={llm_result.get('intent')} confidence={llm_result.get('confidence', 0.8)}")
+            
+            # Ensure URL is extracted correctly
+            url = await extract_url_from_message(user_message)
+            if url:
+                llm_result["requires_url"] = True
+                if "extracted_params" not in llm_result:
+                    llm_result["extracted_params"] = {}
+                llm_result["extracted_params"]["url"] = url
+                
+            return {
+                "intent": llm_result.get("intent", "general_chat"),
+                "confidence": llm_result.get("confidence", 0.8),
+                "requires_url": llm_result.get("requires_url", url is not None),
+                "requires_brand_info": llm_result.get("requires_brand_info", False),
+                "extracted_params": llm_result.get("extracted_params", {}),
+                "suggested_response": llm_result.get("suggested_response", "")
+            }
+        except Exception as llm_route_err:
+            logger.error(f"LLM routing fallback also failed: {llm_route_err}")
+            return {
+                "intent": "general_chat",
+                "confidence": 0.5,
+                "requires_url": False,
+                "requires_brand_info": False,
+                "extracted_params": {},
+                "suggested_response": "I'll help you with that. Could you provide more details?"
+            }
 
 async def generate_conversational_response(
     user_message: str,

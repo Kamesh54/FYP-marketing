@@ -1,4 +1,4 @@
-﻿"""
+"""
 Orchestrator Agent v5.0 - Multi-Agent ChatGPT-like Platform
 Intelligent routing, authentication, session management, RL optimization
 """
@@ -48,7 +48,21 @@ from langsmith_tracer import (
 # Import new modules
 import auth
 import database as db
-import intelligent_router as router
+try:
+    import intelligent_router as router
+    ROUTER_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Intelligent router not available: {e}")
+    ROUTER_AVAILABLE = False
+    # Create a mock router for basic functionality
+    class MockRouter:
+        async def route_user_query(self, message, history):
+            return {"intent": "general_query", "confidence": 0.5}
+        async def generate_conversational_response(self, message, history):
+            return "I'm sorry, but the intelligent routing system is currently unavailable."
+        async def extract_url_from_message(self, message):
+            return None
+    router = MockRouter()
 import cost_model
 import memory  # Added for memory persistence
 # import rl_agent  # Deprecated - replaced with MABO
@@ -68,10 +82,28 @@ except Exception as e:
 from metrics_collector import get_aggregated_metrics, collect_metrics_for_post, MetricsCollector
 from campaign_planner import CampaignPlannerAgent
 
+
 # --- Configuration & Setup ---
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# ── LangGraph Integration ────────────────────────────────────────────────────
+USE_LANGGRAPH = True # Forced to True to bypass dotenv caching in long-running uvicorn
+if USE_LANGGRAPH:
+    try:
+        from langgraph_graph import run_marketing_graph, get_marketing_graph
+        # Pre-compile graph on import so first request is fast
+        _lg = get_marketing_graph()
+        logger.info("LangGraph mode ENABLED – graph compiled successfully")
+        LANGGRAPH_AVAILABLE = True
+    except Exception as _lg_err:
+        logger.warning(f"LangGraph import failed, falling back to HTTP: {_lg_err}")
+        LANGGRAPH_AVAILABLE = False
+        USE_LANGGRAPH = False
+else:
+    LANGGRAPH_AVAILABLE = False
+    logger.info("LangGraph mode DISABLED – using HTTP microservices")
 
 # --- API Keys & Endpoints ---
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -1247,7 +1279,71 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
         workflow_cost = None
         seo_result: Optional[Dict[str, Any]] = None
         response_options: Optional[List[Dict[str, Any]]] = None
-        
+        clarification_request: Optional[Dict[str, Any]] = None
+
+        # ══════════════ LangGraph path (feature-flagged) ══════════════
+        if USE_LANGGRAPH and LANGGRAPH_AVAILABLE:
+            try:
+                # Build brand context
+                brand_info_dict = None
+                _brand_ctx = ""
+                if req.active_brand:
+                    _profile = db.get_brand_profile(user_id, req.active_brand)
+                    if _profile:
+                        brand_info_dict = _profile
+                        _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+
+                # Invoke the compiled LangGraph
+                import asyncio
+                graph_result = await run_marketing_graph(
+                    user_message=req.message,
+                    session_id=session_id,
+                    user_id=user_id,
+                    active_brand=req.active_brand,
+                    conversation_history=history_for_router,
+                    brand_info=brand_info_dict,
+                    brand_context_summary=_brand_ctx,
+                )
+
+                # Map graph result → ChatResponse fields
+                response_text = graph_result.get("response_text", "")
+                intent = graph_result.get("intent", intent)
+                seo_result = graph_result.get("seo_result")
+                content_preview_id = graph_result.get("content_preview_id")
+                clarification_request = graph_result.get("clarification_request")
+                response_options = graph_result.get("response_options", response_options)
+
+                logger.info(
+                    f"[LangGraph] intent={intent}, "
+                    f"steps={graph_result.get('steps_completed', [])}, "
+                    f"errors={graph_result.get('errors', [])}"
+                )
+
+                # Save assistant response + auto-generate title
+                db.save_message(session_id, "assistant", response_text,
+                                formatted_content=response_text)
+                if len(history) <= 2:
+                    messages_for_title = db.get_session_messages(session_id)
+                    title = await generate_session_title(messages_for_title)
+                    db.update_session_title(session_id, title)
+
+                return ChatResponse(
+                    session_id=session_id,
+                    response=response_text,
+                    formatted_response=response_text,
+                    intent=intent,
+                    content_preview_id=content_preview_id,
+                    workflow_cost=workflow_cost,
+                    response_options=response_options,
+                    clarification_request=clarification_request,
+                    seo_result=seo_result,
+                )
+            except Exception as lg_err:
+                logger.error(f"LangGraph execution failed, falling back to HTTP path: {lg_err}",
+                             exc_info=True)
+                # Fall through to the original HTTP-based intent handling below
+        # ══════════════ End LangGraph path ══════════════
+
         # Handle different intents
         if intent == "general_chat":
             # Generate conversational response with stored brand context

@@ -28,7 +28,6 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from groq import Groq
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import textstat
 
 load_dotenv()
@@ -85,6 +84,7 @@ class _HashingSentenceEncoder:
 def _load_critic_model():
     """Load a cached transformer if available; otherwise degrade gracefully."""
     try:
+        from sentence_transformers import SentenceTransformer
         with contextlib.redirect_stderr(_io.StringIO()):
             model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
         logger.info("Critic embedding model loaded from local cache")
@@ -93,6 +93,7 @@ def _load_critic_model():
         logger.warning("Cached critic embedding model unavailable: %s", cached_exc)
 
     try:
+        from sentence_transformers import SentenceTransformer
         with contextlib.redirect_stderr(_io.StringIO()):
             model = SentenceTransformer("all-MiniLM-L6-v2")
         logger.info("Critic embedding model downloaded successfully")
@@ -272,7 +273,16 @@ def list_logs(limit: int = 100):
 
 @trace_llm(name="critic_evaluation", tags=["critic_agent", "embedding"])
 async def _evaluate(req: CriticRequest, brand_context: str):
-   
+    """
+    Evaluates content using sentence-transformer cosine similarity + textstat readability.
+    No API tokens consumed.  Runs on CPU in ~5 ms.
+
+    Axes
+    ----
+    intent_score  — cosine(encode(original_intent), encode(content))  × scale
+    brand_score   — cosine(encode(brand_profile),   encode(content))  × scale
+    quality_score — Flesch-Kincaid grade + Type–Token Ratio + length bonus
+    """
     content = req.content_text[:4000]
     content_emb = _critic_model.encode(content, normalize_embeddings=True)
 
