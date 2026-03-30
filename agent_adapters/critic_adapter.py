@@ -20,8 +20,10 @@ def run_critique(content_text: str,
     Returns dict with scores, critique text, and suggestions.
     """
     import asyncio
+    import uuid
     from critic_agent import _evaluate, CriticRequest
-    from database import get_brand_profile
+    from database import get_brand_profile, save_critic_log, create_hitl_event
+    from langsmith_tracer import get_current_run_id, record_critic_feedback
 
     try:
         # Build brand context
@@ -75,8 +77,48 @@ def run_critique(content_text: str,
         PASS_THRESHOLD = 0.70
         passed = overall_s >= PASS_THRESHOLD
 
+        run_id = get_current_run_id()
+
+        # Persist
+        log_id = save_critic_log(
+            content_id=cid,
+            session_id=session_id,
+            intent_score=intent_s,
+            brand_score=brand_s,
+            quality_score=quality_s,
+            overall_score=overall_s,
+            critique_text=critique_text,
+            passed=passed,
+            langsmith_run_id=run_id,
+        )
+
+        # Feed back to LangSmith
+        if run_id:
+            record_critic_feedback(run_id, intent_s, brand_s, quality_s)
+
+        # Emit HITL event if not passed
+        hitl_event_id = None
+        if not passed and session_id and user_id:
+            hitl_event_id = str(uuid.uuid4())
+            create_hitl_event(
+                event_id=hitl_event_id,
+                session_id=session_id,
+                user_id=user_id,
+                event_type="content_review",
+                payload={
+                    "content_id": cid,
+                    "content_type": content_type,
+                    "overall_score": overall_s,
+                    "critique_text": critique_text,
+                    "suggestions": suggestions,
+                    "original_intent": original_intent,
+                    "content_preview": content_text[:500],
+                },
+            )
+
         return {
             "content_id": cid,
+            "critic_log_id": log_id,
             "intent_score": intent_s,
             "brand_score": brand_s,
             "quality_score": quality_s,
@@ -84,6 +126,8 @@ def run_critique(content_text: str,
             "passed": passed,
             "critique_text": critique_text,
             "improvement_suggestions": suggestions,
+            "hitl_event_id": hitl_event_id,
+            "langsmith_run_id": run_id,
         }
 
     except Exception as e:

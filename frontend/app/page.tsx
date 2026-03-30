@@ -299,7 +299,7 @@ export default function Home() {
         body: JSON.stringify({
           session_id: currentSessionId,
           message: userMessage,
-          active_brand: localStorage.getItem("activeBrandName") || undefined,
+          brand: localStorage.getItem("activeBrandName") || undefined,
         }),
       })
 
@@ -1063,12 +1063,24 @@ export default function Home() {
                               )}
 
                               {/* Copy preview */}
-                              {option.content_type === "post" && option.instagram_copy ? (
+                              {option.content_type === "post" && (option.instagram_copy || option.twitter_copy || option.linkedin_copy) ? (
                                 <div className="space-y-2 text-xs">
+                                  {option.twitter_copy && (
+                                    <div className="p-2 rounded-lg" style={{ background: `rgba(var(--surface-hover), 0.5)` }}>
+                                      <span className="font-semibold" style={{ color: `rgba(var(--text-primary), 0.9)` }}>🐦 Twitter/X</span>
+                                      <p className="mt-1 line-clamp-3 leading-relaxed" style={{ color: `rgba(var(--text-secondary), 1)` }}>{option.twitter_copy}</p>
+                                    </div>
+                                  )}
                                   {option.instagram_copy && (
                                     <div className="p-2 rounded-lg" style={{ background: `rgba(var(--surface-hover), 0.5)` }}>
-                                      <span className="font-semibold" style={{ color: `rgba(var(--text-primary), 0.9)` }}>ðŸ“¸ Instagram</span>
+                                      <span className="font-semibold" style={{ color: `rgba(var(--text-primary), 0.9)` }}>📸 Instagram</span>
                                       <p className="mt-1 line-clamp-3 leading-relaxed" style={{ color: `rgba(var(--text-secondary), 1)` }}>{option.instagram_copy}</p>
+                                    </div>
+                                  )}
+                                  {option.linkedin_copy && (
+                                    <div className="p-2 rounded-lg" style={{ background: `rgba(var(--surface-hover), 0.5)` }}>
+                                      <span className="font-semibold" style={{ color: `rgba(var(--text-primary), 0.9)` }}>💼 LinkedIn</span>
+                                      <p className="mt-1 line-clamp-3 leading-relaxed" style={{ color: `rgba(var(--text-secondary), 1)` }}>{option.linkedin_copy}</p>
                                     </div>
                                   )}
                                   {option.hashtags && option.hashtags.length > 0 && (

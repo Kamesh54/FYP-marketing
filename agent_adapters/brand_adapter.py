@@ -29,11 +29,15 @@ async def _extract_brand_async(brand_name: str, website_url: str) -> Dict[str, A
 
         final_logo = visual.get("logo_url") or ""
         final_colors = visual.get("colors") or brand_data.get("colors", [])
+        final_fonts = visual.get("fonts") or brand_data.get("fonts", [])
+        tagline = brand_data.get("tagline", "")
 
         return {
             "brand_name": final_brand_name,
             "logo_url": final_logo,
             "colors": final_colors,
+            "fonts": final_fonts,
+            "tagline": tagline,
             "auto_extracted": True,
             "extracted_data": brand_data,
             "website_url": website_url,
@@ -53,14 +57,20 @@ def extract_brand_from_url(brand_name: str, website_url: str) -> Dict[str, Any]:
     Returns dict with brand_name, logo_url, colors, extracted_data, etc.
     """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+            
+        if loop and loop.is_running():
             import concurrent.futures
+            
+            def run_in_thread():
+                return asyncio.run(_extract_brand_async(brand_name, website_url))
+                
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = pool.submit(
-                    asyncio.run,
-                    _extract_brand_async(brand_name, website_url)
-                ).result()
+                result = pool.submit(run_in_thread).result()
             return result
         else:
             return asyncio.run(_extract_brand_async(brand_name, website_url))
@@ -77,14 +87,20 @@ def extract_brand_signals(brand_name: str, website_url: str,
     from brand_agent import _extract_brand_signals
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+            
+        if loop and loop.is_running():
             import concurrent.futures
+            
+            def run_in_thread():
+                return asyncio.run(_extract_brand_signals(brand_name, website_url, raw_content))
+                
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = pool.submit(
-                    asyncio.run,
-                    _extract_brand_signals(brand_name, website_url, raw_content)
-                ).result()
+                result = pool.submit(run_in_thread).result()
             return result
         else:
             return asyncio.run(

@@ -76,8 +76,15 @@ def run_deep_research(domain: str,
             client = Groq(api_key=GROQ_API_KEY)
             kw_str = ", ".join(keywords[:15]) or "none found"
             gap_str = "\n".join(f"- {g}" for g in gaps[:8]) or "- none analyzed"
+            
+            pages = crawl_data.get("pages", [])
+            title = pages[0].get("title", domain) if pages else domain
+            desc = ""
 
             prompt = f"""You are a senior content strategist. Produce a concise research brief for {domain}.
+
+Website title: {title}
+Description: {desc}
 
 Top keywords found: {kw_str}
 

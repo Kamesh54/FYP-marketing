@@ -99,6 +99,20 @@ def schedule_campaign(user_id: int,
             metadata=metadata,
         )
 
+        try:
+            from campaign_agent import scheduler, _add_to_scheduler
+            
+            if not scheduler.running:
+                scheduler.start()
+                
+            _add_to_scheduler(
+                schedule_id, db_platform, content_template,
+                trigger_type, run_at, cron_expr, user_id,
+                ai_generate, brand_name
+            )
+        except Exception as sched_err:
+            logger.warning(f"Failed to attach APScheduler job: {sched_err}")
+
         return {
             "status": "created",
             "schedule_id": schedule_id,
@@ -106,4 +120,42 @@ def schedule_campaign(user_id: int,
         }
     except Exception as e:
         logger.error(f"Campaign scheduling failed: {e}")
+        return {"status": "failed", "error": str(e)}
+
+
+async def execute_campaign_post(user_id: int, 
+                                platform: str, 
+                                content: str, 
+                                content_id: Optional[str] = None, 
+                                ai_generate: bool = False, 
+                                brand_name: Optional[str] = None) -> Dict[str, Any]:
+    """Execute a post directly to social media using the legacy campaign agent logic."""
+    import uuid
+    from datetime import datetime
+    try:
+        from campaign_agent import _post_content, PostRequest, _post_jobs
+    except ImportError:
+        logger.error("campaign_agent could not be imported. Platform posting unavailable.")
+        return {"status": "failed", "error": "campaign_agent missing"}
+
+    job_id = f"post_{uuid.uuid4().hex[:8]}"
+    req = PostRequest(
+        user_id=user_id,
+        platform=platform,
+        content=content,
+        content_id=content_id,
+        ai_generate=ai_generate,
+        brand_name=brand_name
+    )
+    _post_jobs[job_id] = {
+        "status": "queued",
+        "platform": platform,
+        "created_at": datetime.now().isoformat()
+    }
+    
+    try:
+        await _post_content(job_id, req)
+        return _post_jobs[job_id]
+    except Exception as e:
+        logger.error(f"Execution of campaign post failed: {e}")
         return {"status": "failed", "error": str(e)}

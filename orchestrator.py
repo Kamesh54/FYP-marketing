@@ -280,6 +280,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
     active_brand: Optional[str] = None  # Brand name to use for this request
+    platform: Optional[str] = None  # Platform for social posts
 
 class ChatResponse(BaseModel):
     session_id: str

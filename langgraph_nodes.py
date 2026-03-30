@@ -149,12 +149,55 @@ def brand_setup_node(state: MarketingState) -> Dict[str, Any]:
             "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
         }
     else:
-        return {
-            "response_text": "I'd love to set up your brand profile! Please share your website URL and I'll extract your brand information automatically.",
-            "clarification_needed": True,
-            "current_step": "brand_setup",
-            "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
-        }
+        # Fallback to analyzing user_message directly when no URL is given
+        from agent_adapters import extract_brand_signals
+        result = extract_brand_signals(brand_name or "", "", user_message)
+        
+        extracted_name = result.get("brand_name", "").strip()
+        _PLACEHOLDERS = {"not specified", "not provided", "unknown", "n/a", "", "none", "brand"}
+        
+        if extracted_name and extracted_name.lower() not in _PLACEHOLDERS:
+            # We got a legitimate brand name natively from the text message!
+            final_name = extracted_name
+            import uuid
+            
+            try:
+                save_brand_profile(
+                    user_id=user_id,
+                    brand_name=final_name,
+                    description=result.get("description", ""),
+                    target_audience=result.get("target_audience", ""),
+                    tone=result.get("tone", "professional"),
+                    colors=result.get("colors", []),
+                    website_url="",
+                    logo_url="",
+                    auto_extracted=False,
+                )
+            except Exception as db_err:
+                logger.warning(f"Could not save manual brand profile: {db_err}")
+
+            response = (
+                f"✅ I've established the brand profile for **{final_name}**!\n\n"
+                f"**Industry:** {result.get('industry', 'N/A')}\n"
+                f"**Tone:** {result.get('tone', 'N/A')}\n"
+                f"**Target Audience:** {result.get('target_audience', 'N/A')}\n"
+                f"*(No website URL provided; profile generated from your description)*"
+            )
+
+            return {
+                "brand_extraction_result": {"extracted_data": result, "brand_name": final_name},
+                "brand_info": result,
+                "response_text": response,
+                "current_step": "brand_setup",
+                "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
+            }
+        else:
+            return {
+                "response_text": "I'd love to set up your brand profile! Please share your website URL, or just tell me your brand name and industry, and I'll create your profile automatically.",
+                "clarification_needed": True,
+                "current_step": "brand_setup",
+                "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
+            }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -419,15 +462,24 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def social_content_node(state: MarketingState) -> Dict[str, Any]:
-    """Generate social media posts."""
-    from agent_adapters import generate_social
+    """Generate social media posts with variants and UI previews."""
+    from agent_adapters import generate_social, generate_image
+    import database as db
+    import uuid
+    import os
 
     params = state.get("extracted_params", {})
     brand_info = state.get("brand_info", {}) or {}
+    session_id = state.get("session_id", "local_test")
+    
+    active_brand = state.get("active_brand", "default_brand")
+    actual_brand_name = brand_info.get("brand_name") or active_brand
 
-    platforms = params.get("platforms", ["linkedin", "x", "instagram"])
-    if isinstance(platforms, str):
-        platforms = [platforms]
+    chosen_platform = params.get("platform", "twitter").lower()
+    if chosen_platform == "x":
+        chosen_platform = "twitter"
+
+    platforms = [chosen_platform]
 
     kw_data = state.get("keywords_data", {})
     consolidated_kw = {}
@@ -437,19 +489,121 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
             all_short.extend(comp.get("short_keywords", []))
         consolidated_kw = {"short_keywords": list(set(all_short))[:10]}
 
-    result = generate_social(
-        keywords=consolidated_kw or None,
-        gap_analysis=state.get("gap_analysis"),
-        platforms=platforms,
-        brand_context=state.get("brand_context_summary", ""),
-        tone=params.get("tone", brand_info.get("tone", "professional")),
-        topic=state.get("user_message", ""),
-    )
+    variant_configs = [
+        {"label": "Option A · Authority Launch", "tone": "professional"},
+        {"label": "Option B · Conversational Buzz", "tone": "playful"}
+    ]
 
-    logger.info(f"Social content node: generated for {len(result)} platforms")
+    response_options = []
+    os.makedirs("previews", exist_ok=True)
+    
+    all_social_data = {}
+
+    for variant in variant_configs:
+        try:
+            option_id = f"opt_{uuid.uuid4().hex[:8]}"
+            
+            social_data = generate_social(
+                keywords=consolidated_kw or None,
+                gap_analysis=state.get("gap_analysis"),
+                platforms=platforms,
+                brand_name=actual_brand_name,
+                brand_context=state.get("brand_context_summary", ""),
+                tone=variant["tone"],
+                topic=state.get("user_message", "")
+            )
+            
+            posts = social_data.get('posts', {})
+            post_data = posts.get(chosen_platform, {})
+            primary_copy = post_data.get('copy', '')
+            
+            image_prompts = social_data.get('image_prompts', [])
+            image_prompt = image_prompts[0] if image_prompts else state.get("user_message", "marketing visual")
+            
+            # Generate image synchronously
+            image_result = generate_image(
+                prompt=image_prompt,
+                brand_name=actual_brand_name
+            )
+            
+            image_path = image_result.get("local_path")
+            fallback_url = image_result.get("url")
+            
+            if image_path:
+                clean_path = image_path.replace("\\", "/")
+                preview_url = f"/preview/image/{clean_path}"
+            else:
+                preview_url = fallback_url
+            
+            content_id = str(uuid.uuid4())
+            metadata = {
+                "brand_name": actual_brand_name,
+                "platforms": platforms,
+                "option_id": option_id,
+                "variant_label": variant["label"],
+                "variant_tone": variant["tone"],
+                "workflow_name": "LangGraph Agent Workflow",
+                "post_copy": {chosen_platform: primary_copy},
+                "image_path": image_path
+            }
+            
+            import json
+            
+            post_preview = f"{chosen_platform.title()} Post:\n{primary_copy}"
+            if post_data.get('hashtags'):
+                post_preview += f"\n\nHashtags: {' '.join(post_data.get('hashtags'))}"
+            
+            db.save_generated_content(
+                content_id=content_id,
+                session_id=session_id,
+                content_type="post",
+                content=post_preview,
+                preview_url=preview_url,
+                metadata=metadata
+            )
+            
+            db.save_workflow_variant(
+                option_id=option_id,
+                session_id=session_id,
+                content_id=content_id,
+                workflow_name="LangGraph Orchestrator",
+                state_hash="graph",
+                label=variant["label"],
+                metadata={"estimated_cost": 0.002}
+            )
+
+            response_options.append({
+                "option_id": option_id,
+                "label": variant["label"],
+                "tone": variant["tone"].title(),
+                "workflow_name": "LangGraph Agent Workflow",
+                "workflow_agents": ["KeywordExtractor", "GapAnalyzer", "ContentAgent"],
+                "cost": 0.0020,
+                "cost_display": "$0.0020",
+                "content_id": content_id,
+                "content_type": "post",
+                "state_hash": "graph",
+                "platform": chosen_platform,
+                "twitter_copy": primary_copy if chosen_platform == "twitter" else "",
+                "instagram_copy": primary_copy if chosen_platform == "instagram" else "",
+                "hashtags": post_data.get('hashtags', []),
+                "preview_url": preview_url,
+                "preview_text": f"{variant['label']} ready for {chosen_platform.title()}.",
+            })
+            
+            all_social_data[variant["label"]] = social_data
+            
+        except Exception as e:
+            logger.error(f"Failed to generate explicit social post variant: {e}", exc_info=True)
+
+    final_response = "📍 **Two Social Post Concepts Ready**\n\nI've produced two variations. Review the cards below!"
+    if not response_options:
+        final_response = "I'm sorry, an error occurred while generating the posts."
 
     return {
-        "social_data": result,
+        "social_data": all_social_data,
+        "response_options": response_options,
+        "response_text": final_response,
         "current_step": "social_generate",
         "steps_completed": state.get("steps_completed", []) + ["social_generate"],
     }
@@ -482,6 +636,8 @@ def image_node(state: MarketingState) -> Dict[str, Any]:
     result = generate_image(
         prompt=image_prompt,
         brand_name=brand_info.get("brand_name", ""),
+        negative_prompt=params.get("negative_prompt", ""),
+        duration=params.get("duration", None),
     )
 
     logger.info(f"Image node: url={result.get('url', 'None')}")
@@ -512,12 +668,13 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
     if state.get("blog_result"):
         content_text = state["blog_result"].get("html", "")
         content_type = "blog"
-    elif state.get("social_data"):
-        # Concatenate all social post texts
+    elif state.get("response_options") and state["response_options"][0].get("content_type") == "post":
+        # Concatenate text from response options for critique
         parts = []
-        for platform, pdata in state["social_data"].items():
-            if isinstance(pdata, dict) and "text" in pdata:
-                parts.append(pdata["text"])
+        for opt in state["response_options"]:
+            copy = opt.get("twitter_copy") or opt.get("instagram_copy") or ""
+            if copy:
+                parts.append(copy)
         content_text = "\n\n".join(parts)
         content_type = "social_post"
 
@@ -532,9 +689,10 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
         content_text=content_text,
         original_intent=state.get("user_message", ""),
         content_type=content_type,
-        brand_name=brand_info.get("brand_name"),
+        brand_name=brand_info.get("brand_name", "") or state.get("active_brand", ""),
         user_id=user_id,
         session_id=state.get("session_id"),
+        content_id=state.get("content_id"),
     )
 
     logger.info(f"Critic node: overall={result.get('overall_score', 0):.2f}, passed={result.get('passed', False)}")
@@ -586,20 +744,67 @@ def campaign_node(state: MarketingState) -> Dict[str, Any]:
     params = state.get("extracted_params", {})
     user_message = state.get("user_message", "")
     brand_info = state.get("brand_info", {}) or {}
+    intent = state.get("intent", "campaign_planning")
 
     try:
         from campaign_planner import CampaignPlannerAgent
-        planner = CampaignPlannerAgent()
+        from agent_adapters.campaign_adapter import schedule_campaign, execute_campaign_post
+        
         topic = params.get("topic", user_message)
-        duration = params.get("duration_days", 7)
-        result = planner.generate_proposals(topic, duration_days=duration)
+        
+        if intent == "campaign_post":
+            # Immediate posting
+            user_id = state.get("user_id")
+            platform = params.get("platform", "twitter")
+            content = params.get("content_text") or params.get("content_template") or topic
+            ai_generate = params.get("ai_generate", True)
+            
+            import asyncio
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            
+            if loop.is_running():
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    post_res = pool.submit(
+                        asyncio.run,
+                        execute_campaign_post(
+                            user_id=user_id or 0,
+                            platform=platform,
+                            content=content,
+                            content_id=None,
+                            ai_generate=ai_generate,
+                            brand_name=brand_info.get("brand_name")
+                        )
+                    ).result()
+            else:
+                post_res = asyncio.run(
+                    execute_campaign_post(
+                        user_id=user_id or 0,
+                        platform=platform,
+                        content=content,
+                        content_id=None,
+                        ai_generate=ai_generate,
+                        brand_name=brand_info.get("brand_name")
+                    )
+                )
 
-        return {
-            "campaign_result": result,
-            "response_text": json.dumps(result, indent=2) if isinstance(result, dict) else str(result),
-            "current_step": "campaign",
-            "steps_completed": state.get("steps_completed", []) + ["campaign"],
-        }
+            return {
+                "campaign_result": post_res,
+                "response_text": f"Campaign post requested: {post_res.get('status', 'unknown')}",
+                "current_step": "campaign",
+                "steps_completed": state.get("steps_completed", []) + ["campaign"],
+            }
+        else:
+            planner = CampaignPlannerAgent()
+            duration = params.get("duration_days", 7)
+            result = planner.generate_proposals(topic, duration_days=duration)
+
+            return {
+                "campaign_result": result,
+                "response_text": json.dumps(result, indent=2) if isinstance(result, dict) else str(result),
+                "current_step": "campaign",
+                "steps_completed": state.get("steps_completed", []) + ["campaign"],
+            }
     except Exception as e:
         logger.error(f"Campaign node failed: {e}")
         return {
@@ -695,19 +900,10 @@ def response_builder_node(state: MarketingState) -> Dict[str, Any]:
             parts.append("Blog generation could not be completed.")
 
     elif intent == "social_post":
-        social = state.get("social_data", {})
-        image = state.get("image_result", {})
-        critic = state.get("critic_result", {})
-        if social:
-            parts.append("## Generated Social Posts\n")
-            for platform, pdata in social.items():
-                if isinstance(pdata, dict) and "text" in pdata:
-                    parts.append(f"### {platform.title()}\n{pdata['text']}")
-                    if pdata.get("hashtags"):
-                        parts.append(f"Hashtags: {' '.join(pdata['hashtags'])}")
-                    parts.append("")
-            if image and image.get("url"):
-                parts.append(f"\n**Generated Image:** {image['url']}")
+        options = state.get("response_options", [])
+        if options:
+            platform_label = options[0].get("platform", "Platform").title().replace("Twitter", "Twitter/X")
+            parts.append(f"📣 **{len(options)} {platform_label} Post Concept{'s' if len(options) > 1 else ''} Ready**\n\nReview the cards below — each shows the generated image and {platform_label} copy. Hit **Approve & Post** on the one you like, or tap 🔄 to regenerate the image.")
         else:
             parts.append("Social post generation could not be completed.")
 
