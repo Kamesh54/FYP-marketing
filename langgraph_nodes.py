@@ -23,28 +23,130 @@ logger = logging.getLogger("langgraph.nodes")
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def router_node(state: MarketingState) -> Dict[str, Any]:
-    """Classify user intent using the intelligent router."""
-    from intelligent_router import route_user_query
-    import asyncio
+    """Classify user intent using the intelligent router.
+    
+    Uses the same logic as intelligent_router.py:
+    1. Sentence-transformer embedding cosine similarity (primary, ~5ms, no tokens)
+    2. Hard rules (e.g. brand questions → general_chat)
+    3. LLM fallback via Groq if embeddings fail
+
+    After classification, creates MABO state context and selects optimized
+    workflow + content parameters (tone, template, quality_weight).
+    """
+    from intelligent_router import route_user_query, get_workflow_plan
 
     user_message = state.get("user_message", "")
     conversation_history = state.get("conversation_history", [])
+    user_id = state.get("user_id", 0)
 
     try:
         route_result = await route_user_query(user_message, conversation_history)
 
         intent = route_result.get("intent", "general_chat")
         confidence = route_result.get("confidence", 0.0)
-        params = route_result.get("params", {})
-        workflow = route_result.get("workflow_plan", {})
+        extracted_params = route_result.get("extracted_params", {})
+        requires_url = route_result.get("requires_url", False)
+        requires_brand_info = route_result.get("requires_brand_info", False)
 
-        logger.info(f"Router: intent={intent}, confidence={confidence:.2f}")
+        # Merge any platform from the request into extracted_params
+        # (mirrors the orchestrator's platform-detection behaviour)
+        if not extracted_params.get("platform"):
+            lower_msg = user_message.lower()
+            if any(k in lower_msg for k in ["twitter", " x ", "tweet", "x post", "on x"]):
+                extracted_params["platform"] = "twitter"
+            elif any(k in lower_msg for k in ["instagram", "insta", " ig ", "ig post", "on ig"]):
+                extracted_params["platform"] = "instagram"
+
+        # Build the workflow plan using the same mapping as intelligent_router
+        workflow_plan = get_workflow_plan(intent, extracted_params)
+        workflow_dict = workflow_plan.to_dict() if workflow_plan else {}
+
+        # ── MABO Integration ─────────────────────────────────────────────
+        # Create state context and get optimized workflows from MABO
+        mabo_workflow_primary = None
+        mabo_workflow_alt = None
+        state_hash = "graph"
+        mabo_content_params = None
+
+        try:
+            import mabo_agent
+            from mabo_agent import extract_content_params
+
+            mabo = mabo_agent.get_mabo_agent()
+
+            # Determine content type for MABO
+            content_type_map = {
+                "blog_generation": "blog",
+                "social_post": "social",
+                "social_media_post": "social",
+                "seo_analysis": "seo",
+                "competitor_research": "research",
+                "deep_research": "research",
+            }
+            content_type = content_type_map.get(intent, "blog")
+
+            has_brand = state.get("brand_info") is not None
+            has_website = bool(extracted_params.get("url"))
+
+            state_context = mabo.create_state_from_context(
+                intent=intent,
+                user_id=user_id,
+                content_type=content_type,
+                has_brand_profile=has_brand,
+                has_website=has_website,
+            )
+            state_hash = state_context["state_hash"]
+
+            # Primary workflow from MABO's Bayesian Optimization
+            mabo_workflow_primary = mabo.get_optimized_workflow_details(
+                state_context, use_mabo=True
+            )
+            # Secondary workflow (baseline heuristic, different from primary)
+            mabo_workflow_alt = mabo.get_alternative_workflow_details(
+                intent,
+                state_context,
+                exclude_workflow=mabo_workflow_primary["workflow_name"],
+            )
+
+            # Extract 5D content params from MABO's action vector
+            # (tone, template_style, quality_weight, content_length, budget)
+            intent_to_mabo_agent = {
+                "blog_generation": "content_agent_blog",
+                "social_post": "content_agent_social",
+                "social_media_post": "content_agent_social",
+            }
+            mabo_agent_name = intent_to_mabo_agent.get(intent)
+            if mabo_agent_name and mabo_agent_name in mabo.local_optimizers:
+                action_vector = mabo.local_optimizers[mabo_agent_name].select_action(
+                    mabo.coordinator
+                )
+                mabo_content_params = extract_content_params(action_vector)
+                logger.info(
+                    f"MABO content params: qw={mabo_content_params['quality_weight']:.2f}, "
+                    f"tone={mabo_content_params['tone']:.2f}, "
+                    f"template={mabo_content_params['template_name']}"
+                )
+
+            logger.info(
+                f"MABO: primary_wf={mabo_workflow_primary['workflow_name']}, "
+                f"alt_wf={mabo_workflow_alt['workflow_name']}, "
+                f"state_hash={state_hash}"
+            )
+        except Exception as mabo_err:
+            logger.warning(f"MABO integration skipped: {mabo_err}")
+
+        logger.info(f"Router: intent={intent}, confidence={confidence:.2f}, "
+                    f"params={extracted_params}, requires_url={requires_url}")
 
         return {
             "intent": intent,
             "confidence": confidence,
-            "extracted_params": params,
-            "workflow_plan": workflow if isinstance(workflow, dict) else {},
+            "extracted_params": extracted_params,
+            "workflow_plan": workflow_dict,
+            "mabo_workflow_primary": mabo_workflow_primary,
+            "mabo_workflow_alt": mabo_workflow_alt,
+            "state_hash": state_hash,
+            "mabo_content_params": mabo_content_params,
             "current_step": "router",
             "steps_completed": ["router"],
         }
@@ -333,7 +435,15 @@ def reddit_node(state: MarketingState) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def blog_content_node(state: MarketingState) -> Dict[str, Any]:
-    """Generate two variants of a blog article using keywords, gap analysis, and reddit insights."""
+    """Generate two blog variants using MABO-optimized workflows.
+
+    MABO integration (mirrors orchestrator lines 1600-1870):
+    - Uses mabo_workflow_primary / mabo_workflow_alt for workflow names
+    - Real cost estimation via cost_model.estimate_workflow_cost()
+    - Registers executions with mabo.register_workflow_execution()
+    - Saves vector memory via memory.write_campaign_entity()
+    - Tags variants with proper workflow_name, state_hash, source
+    """
     from agent_adapters import generate_blog
     import database as db
     import uuid
@@ -342,6 +452,13 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
     params = state.get("extracted_params", {})
     brand_info = state.get("brand_info", {}) or {}
     session_id = state.get("session_id", "local_test")
+    user_id = state.get("user_id", 0)
+    state_hash = state.get("state_hash", "graph")
+
+    # MABO workflow details from router_node
+    mabo_primary = state.get("mabo_workflow_primary") or {}
+    mabo_alt = state.get("mabo_workflow_alt") or {}
+    mabo_content_params = state.get("mabo_content_params") or {}
 
     # Build business details from available context
     business_details = state.get("user_message", "")
@@ -364,18 +481,66 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
             "long_tail_keywords": list(set(all_long))[:15],
         }
 
+    # ── MABO-influenced variant configs ──────────────────────────────────
+    # Map MABO quality_weight to word count: higher quality → longer content
+    mabo_qw = mabo_content_params.get("quality_weight", 0.5)
+    mabo_tone_val = mabo_content_params.get("tone", 0.5)
+    primary_length = int(1500 + mabo_qw * 1500)   # 1500-3000 words based on quality_weight
+    alt_length = 1200  # baseline bumped up from 800 logic for more comprehensive posts
+
+    # MABO tone aggressiveness maps to tone label
+    if mabo_tone_val >= 0.65:
+        mabo_tone_label = "bold"
+    elif mabo_tone_val >= 0.35:
+        mabo_tone_label = "informative"
+    else:
+        mabo_tone_label = "nurturing"
+
     variant_configs = [
-        {"label": "Option A · Research-Driven Depth", "tone": "informative", "length": 1500},
-        {"label": "Option B · Fast Conversion Story", "tone": "persuasive", "length": 800}
+        {
+            "label": "Option A · Research-Driven Depth",
+            "tone": mabo_tone_label,
+            "length": primary_length,
+            "workflow": mabo_primary,
+            "source": "mabo",
+        },
+        {
+            "label": "Option B · Fast Conversion Story",
+            "tone": "persuasive",
+            "length": alt_length,
+            "workflow": mabo_alt,
+            "source": "baseline",
+        },
     ]
 
     response_options = []
     os.makedirs("previews", exist_ok=True)
 
+    # ── MABO agent instance (lazy, fault-tolerant) ───────────────────────
+    mabo = None
+    try:
+        import mabo_agent
+        mabo = mabo_agent.get_mabo_agent()
+    except Exception as ma_err:
+        logger.warning(f"MABO agent not available for blog tracking: {ma_err}")
+
     for variant in variant_configs:
         try:
             option_id = f"opt_{uuid.uuid4().hex[:8]}"
-            
+
+            # ── Cost estimation (real, not hardcoded) ─────────────────────
+            wf_agents = variant["workflow"].get("agents", []) if variant["workflow"] else []
+            try:
+                workflow_cost_estimate = cost_model.estimate_workflow_cost(wf_agents) if wf_agents else {}
+            except Exception:
+                workflow_cost_estimate = {"total_cost": 0.005, "total_time": 30}
+
+            variant_cost = workflow_cost_estimate.get("total_cost", 0.005)
+            try:
+                cost_display = cost_model.format_cost_display(variant_cost)
+            except Exception:
+                cost_display = f"${variant_cost:.4f}"
+
             result = generate_blog(
                 business_details=business_details,
                 keywords=consolidated_kw or None,
@@ -383,16 +548,17 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
                 reddit_insights=state.get("reddit_insights"),
                 brand_context=state.get("brand_context_summary", ""),
                 tone=variant["tone"],
-                word_count=variant["length"]
+                word_count=variant["length"],
             )
-            
+
             blog_html = result.get("html", "")
-            
+
             content_id = str(uuid.uuid4())
             preview_path = f"previews/blog_{content_id}.html"
             with open(preview_path, "w", encoding="utf-8") as f:
                 f.write(blog_html)
-                
+
+            wf_name = variant["workflow"].get("workflow_name", "LangGraph Agent Workflow") if variant["workflow"] else "LangGraph Agent Workflow"
             keywords_used = consolidated_kw.get("short_keywords", [])[:5] if consolidated_kw else []
             metadata = {
                 "brand_name": brand_info.get("brand_name", "My Business"),
@@ -401,44 +567,83 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
                 "topic": state.get("user_message", ""),
                 "keywords_used": keywords_used,
                 "option_id": option_id,
+                "selection_group": state_hash,
                 "variant_label": variant["label"],
                 "variant_tone": variant["tone"],
-                "workflow_name": "LangGraph Agent Workflow",
+                "workflow_name": wf_name,
+                "workflow_agents": wf_agents,
+                "workflow_source": variant["source"],
             }
-            
+
             db.save_generated_content(
                 content_id=content_id,
                 session_id=session_id,
                 content_type="blog",
                 content=blog_html,
                 preview_url=f"/preview/blog/{content_id}",
-                metadata=metadata
+                metadata=metadata,
             )
 
             db.save_workflow_variant(
                 option_id=option_id,
                 session_id=session_id,
                 content_id=content_id,
-                workflow_name="LangGraph Orchestrator",
-                state_hash="graph",
+                workflow_name=wf_name,
+                state_hash=state_hash,
                 label=variant["label"],
-                metadata={"estimated_cost": 0.005}
+                metadata={
+                    "tone": variant["tone"],
+                    "length": variant["length"],
+                    "cost_estimate": workflow_cost_estimate,
+                },
             )
+
+            # ── MABO execution registration ──────────────────────────────
+            if mabo:
+                try:
+                    mabo.register_workflow_execution(
+                        content_id=content_id,
+                        state_hash=state_hash,
+                        action=wf_name,
+                        cost=variant_cost,
+                        execution_time=workflow_cost_estimate.get("total_time", 30),
+                    )
+                except Exception as reg_err:
+                    logger.warning(f"MABO registration failed: {reg_err}")
+
+            # ── Vector memory persistence ────────────────────────────────
+            try:
+                import memory
+                rich_text = f"{state.get('user_message', '')}. {business_details}"
+                text_embedding = memory.get_text_embedding(rich_text)
+                memory_entity = {
+                    "campaign_id": content_id,
+                    "text_vector": text_embedding.tolist() if hasattr(text_embedding, "tolist") else text_embedding,
+                    "text_model": "all-MiniLM-L6-v2",
+                    "context_metadata": metadata,
+                    "alignment_score": 1.0,
+                    "source": "langgraph",
+                    "tags": [brand_info.get("industry", "General")],
+                }
+                memory.write_campaign_entity(memory_entity)
+                logger.info(f"Memory saved for blog {content_id}")
+            except Exception as mem_err:
+                logger.warning(f"Failed to save vector memory: {mem_err}")
 
             response_options.append({
                 "option_id": option_id,
                 "label": variant["label"],
                 "tone": variant["tone"].title(),
-                "workflow_name": "LangGraph Agent Workflow",
-                "workflow_agents": ["WebCrawler", "KeywordExtractor", "GapAnalyzer", "ContentAgent", "CriticAgent"],
-                "cost": 0.0050,
-                "cost_display": "$0.0050",
+                "workflow_name": wf_name,
+                "workflow_agents": wf_agents,
+                "cost": variant_cost,
+                "cost_display": cost_display,
                 "preview_url": f"/preview/blog/{content_id}",
                 "content_id": content_id,
                 "content_type": "blog",
-                "state_hash": "graph",
+                "state_hash": state_hash,
             })
-            
+
         except Exception as e:
             logger.error(f"Failed to generate explicit blog HTML variant: {e}", exc_info=True)
 
@@ -462,7 +667,15 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def social_content_node(state: MarketingState) -> Dict[str, Any]:
-    """Generate social media posts with variants and UI previews."""
+    """Generate social media post variants using MABO-optimized workflows.
+
+    MABO integration (mirrors orchestrator lines 2080-2340):
+    - Uses mabo_workflow_primary / mabo_workflow_alt for variant workflow names
+    - Real cost estimation via cost_model.estimate_workflow_cost()
+    - Registers executions with mabo.register_workflow_execution()
+    - Saves text + visual embeddings via memory.write_campaign_entity()
+    - Tags variants with proper workflow_name, state_hash, source
+    """
     from agent_adapters import generate_social, generate_image
     import database as db
     import uuid
@@ -471,9 +684,15 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
     params = state.get("extracted_params", {})
     brand_info = state.get("brand_info", {}) or {}
     session_id = state.get("session_id", "local_test")
-    
+    user_id = state.get("user_id", 0)
+    state_hash = state.get("state_hash", "graph")
+
     active_brand = state.get("active_brand", "default_brand")
     actual_brand_name = brand_info.get("brand_name") or active_brand
+
+    # MABO workflow details from router_node
+    mabo_primary = state.get("mabo_workflow_primary") or {}
+    mabo_alt = state.get("mabo_workflow_alt") or {}
 
     chosen_platform = params.get("platform", "twitter").lower()
     if chosen_platform == "x":
@@ -490,19 +709,49 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
         consolidated_kw = {"short_keywords": list(set(all_short))[:10]}
 
     variant_configs = [
-        {"label": "Option A · Authority Launch", "tone": "professional"},
-        {"label": "Option B · Conversational Buzz", "tone": "playful"}
+        {
+            "label": "Option A · Authority Launch",
+            "tone": "professional",
+            "workflow": mabo_primary,
+            "source": "mabo",
+        },
+        {
+            "label": "Option B · Conversational Buzz",
+            "tone": "playful",
+            "workflow": mabo_alt,
+            "source": "baseline",
+        },
     ]
 
     response_options = []
     os.makedirs("previews", exist_ok=True)
-    
     all_social_data = {}
+
+    # ── MABO agent instance (lazy, fault-tolerant) ───────────────────────
+    mabo = None
+    try:
+        import mabo_agent
+        mabo = mabo_agent.get_mabo_agent()
+    except Exception as ma_err:
+        logger.warning(f"MABO agent not available for social tracking: {ma_err}")
 
     for variant in variant_configs:
         try:
             option_id = f"opt_{uuid.uuid4().hex[:8]}"
-            
+
+            # ── Cost estimation ──────────────────────────────────────────
+            wf_agents = variant["workflow"].get("agents", []) if variant["workflow"] else []
+            try:
+                workflow_cost_estimate = cost_model.estimate_workflow_cost(wf_agents) if wf_agents else {}
+            except Exception:
+                workflow_cost_estimate = {"total_cost": 0.002, "total_time": 20}
+
+            variant_cost = workflow_cost_estimate.get("total_cost", 0.002)
+            try:
+                cost_display = cost_model.format_cost_display(variant_cost)
+            except Exception:
+                cost_display = f"${variant_cost:.4f}"
+
             social_data = generate_social(
                 keywords=consolidated_kw or None,
                 gap_analysis=state.get("gap_analysis"),
@@ -510,89 +759,150 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
                 brand_name=actual_brand_name,
                 brand_context=state.get("brand_context_summary", ""),
                 tone=variant["tone"],
-                topic=state.get("user_message", "")
+                topic=state.get("user_message", ""),
             )
-            
-            posts = social_data.get('posts', {})
+
+            posts = social_data.get("posts", {})
             post_data = posts.get(chosen_platform, {})
-            primary_copy = post_data.get('copy', '')
-            
-            image_prompts = social_data.get('image_prompts', [])
+            primary_copy = post_data.get("copy", "")
+
+            image_prompts = social_data.get("image_prompts", [])
             image_prompt = image_prompts[0] if image_prompts else state.get("user_message", "marketing visual")
-            
+
             # Generate image synchronously
             image_result = generate_image(
                 prompt=image_prompt,
-                brand_name=actual_brand_name
+                brand_name=actual_brand_name,
             )
-            
+
             image_path = image_result.get("local_path")
             fallback_url = image_result.get("url")
-            
+
             if image_path:
                 clean_path = image_path.replace("\\", "/")
                 preview_url = f"/preview/image/{clean_path}"
             else:
                 preview_url = fallback_url
-            
+
             content_id = str(uuid.uuid4())
+            wf_name = variant["workflow"].get("workflow_name", "LangGraph Agent Workflow") if variant["workflow"] else "LangGraph Agent Workflow"
+
             metadata = {
                 "brand_name": actual_brand_name,
+                "location": brand_info.get("location"),
+                "industry": brand_info.get("industry"),
+                "target_audience": brand_info.get("target_audience"),
+                "unique_selling_points": brand_info.get("unique_selling_points", []),
                 "platforms": platforms,
+                "hashtags": post_data.get("hashtags", []),
+                "keywords_used": consolidated_kw.get("short_keywords", [])[:5] if consolidated_kw else [],
+                "image_prompt": image_prompt,
+                "image_path": image_path,
                 "option_id": option_id,
+                "selection_group": state_hash,
                 "variant_label": variant["label"],
                 "variant_tone": variant["tone"],
-                "workflow_name": "LangGraph Agent Workflow",
+                "workflow_name": wf_name,
+                "workflow_agents": wf_agents,
+                "workflow_source": variant["source"],
                 "post_copy": {chosen_platform: primary_copy},
-                "image_path": image_path
+                "full_post_data": social_data,
             }
-            
-            import json
-            
+
             post_preview = f"{chosen_platform.title()} Post:\n{primary_copy}"
-            if post_data.get('hashtags'):
+            if post_data.get("hashtags"):
                 post_preview += f"\n\nHashtags: {' '.join(post_data.get('hashtags'))}"
-            
+
             db.save_generated_content(
                 content_id=content_id,
                 session_id=session_id,
                 content_type="post",
                 content=post_preview,
                 preview_url=preview_url,
-                metadata=metadata
+                metadata=metadata,
             )
-            
+
             db.save_workflow_variant(
                 option_id=option_id,
                 session_id=session_id,
                 content_id=content_id,
-                workflow_name="LangGraph Orchestrator",
-                state_hash="graph",
+                workflow_name=wf_name,
+                state_hash=state_hash,
                 label=variant["label"],
-                metadata={"estimated_cost": 0.002}
+                metadata={
+                    "tone": variant["tone"],
+                    "cost_estimate": workflow_cost_estimate,
+                },
             )
+
+            # ── MABO execution registration ──────────────────────────────
+            if mabo:
+                try:
+                    mabo.register_workflow_execution(
+                        content_id=content_id,
+                        state_hash=state_hash,
+                        action=wf_name,
+                        cost=variant_cost,
+                        execution_time=workflow_cost_estimate.get("total_time", 20),
+                    )
+                except Exception as reg_err:
+                    logger.warning(f"MABO registration failed (social): {reg_err}")
+
+            # ── Vector memory persistence (text + visual) ────────────────
+            try:
+                import memory
+                rich_text = (
+                    f"Social Post ({variant['tone']}): {state.get('user_message', '')}. "
+                    f"{chosen_platform.title()}: {primary_copy}"
+                )
+                text_embedding = memory.get_text_embedding(rich_text)
+
+                visual_embedding = None
+                if image_path and os.path.exists(image_path):
+                    try:
+                        from tools import embedding
+                        img_model = embedding.load_image_model()
+                        visual_embedding = embedding.embed_image(img_model, image_path).tolist()
+                    except Exception as ve:
+                        logger.warning(f"Visual embedding failed: {ve}")
+
+                memory_entity = {
+                    "campaign_id": content_id,
+                    "text_vector": text_embedding.tolist() if hasattr(text_embedding, "tolist") else text_embedding,
+                    "visual_vector": visual_embedding,
+                    "text_model": "all-MiniLM-L6-v2",
+                    "visual_model": "clip-ViT-B-32" if visual_embedding else None,
+                    "context_metadata": metadata,
+                    "alignment_score": 1.0,
+                    "source": "langgraph",
+                    "tags": ["social", brand_info.get("industry", "General"), variant["tone"]],
+                }
+                memory.write_campaign_entity(memory_entity)
+                logger.info(f"Social memory saved for {content_id}")
+            except Exception as mem_err:
+                logger.warning(f"Failed to save social vector memory: {mem_err}")
 
             response_options.append({
                 "option_id": option_id,
                 "label": variant["label"],
                 "tone": variant["tone"].title(),
-                "workflow_name": "LangGraph Agent Workflow",
-                "workflow_agents": ["KeywordExtractor", "GapAnalyzer", "ContentAgent"],
-                "cost": 0.0020,
-                "cost_display": "$0.0020",
+                "workflow_name": wf_name,
+                "workflow_agents": wf_agents,
+                "cost": variant_cost,
+                "cost_display": cost_display,
                 "content_id": content_id,
                 "content_type": "post",
-                "state_hash": "graph",
+                "state_hash": state_hash,
                 "platform": chosen_platform,
                 "twitter_copy": primary_copy if chosen_platform == "twitter" else "",
                 "instagram_copy": primary_copy if chosen_platform == "instagram" else "",
-                "hashtags": post_data.get('hashtags', []),
+                "hashtags": post_data.get("hashtags", []),
                 "preview_url": preview_url,
                 "preview_text": f"{variant['label']} ready for {chosen_platform.title()}.",
             })
-            
+
             all_social_data[variant["label"]] = social_data
-            
+
         except Exception as e:
             logger.error(f"Failed to generate explicit social post variant: {e}", exc_info=True)
 
@@ -654,7 +964,13 @@ def image_node(state: MarketingState) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def critic_node(state: MarketingState) -> Dict[str, Any]:
-    """Evaluate generated content quality."""
+    """Evaluate generated content quality and feed scores back to MABO.
+
+    MABO feedback loop (mirrors orchestrator lines 1828-1847 / 2312-2331):
+    - Calls mabo.update_engagement_metrics(content_id, critic_score)
+    - Calls mabo.update_content_approval(content_id, approved=passed)
+    - Calls prompt_optimizer.score_latest_for_agent() for prompt evolution
+    """
     from agent_adapters import run_critique
 
     intent = state.get("intent", "blog_generation")
@@ -664,6 +980,7 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
     # Determine which content to critique
     content_text = ""
     content_type = "blog"
+    content_ids = []
 
     if state.get("blog_result"):
         content_text = state["blog_result"].get("html", "")
@@ -675,10 +992,23 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
             copy = opt.get("twitter_copy") or opt.get("instagram_copy") or ""
             if copy:
                 parts.append(copy)
+            if opt.get("content_id"):
+                content_ids.append(opt["content_id"])
         content_text = "\n\n".join(parts)
         content_type = "social_post"
 
+    # Also collect content_ids from blog response_options
+    if content_type == "blog" and state.get("response_options"):
+        for opt in state["response_options"]:
+            if opt.get("content_id"):
+                content_ids.append(opt["content_id"])
+
     if not content_text:
+        # Try pulling content from response options for blogs too
+        if state.get("response_options"):
+            for opt in state["response_options"]:
+                if opt.get("preview_url"):
+                    content_ids.append(opt.get("content_id", ""))
         return {
             "critic_result": {"passed": True, "overall_score": 1.0, "critique_text": "No content to evaluate"},
             "current_step": "critic",
@@ -692,10 +1022,40 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
         brand_name=brand_info.get("brand_name", "") or state.get("active_brand", ""),
         user_id=user_id,
         session_id=state.get("session_id"),
-        content_id=state.get("content_id"),
+        content_id=content_ids[0] if content_ids else state.get("content_id"),
     )
 
-    logger.info(f"Critic node: overall={result.get('overall_score', 0):.2f}, passed={result.get('passed', False)}")
+    overall_score = result.get("overall_score", 0)
+    passed = result.get("passed", False)
+
+    logger.info(f"Critic node: overall={overall_score:.2f}, passed={passed}")
+
+    # ── MABO Feedback Loop ───────────────────────────────────────────────
+    # Feed critic score into MABO as an immediate quality reward
+    try:
+        import mabo_agent
+        mabo = mabo_agent.get_mabo_agent()
+
+        for cid in content_ids:
+            if cid:
+                mabo.update_engagement_metrics(cid, float(overall_score))
+                if passed:
+                    mabo.update_content_approval(cid, approved=True)
+                logger.info(
+                    f"[MABO] Critic reward fed: content={cid} "
+                    f"overall={overall_score:.2f} passed={passed}"
+                )
+    except Exception as mabo_err:
+        logger.warning(f"MABO feedback loop skipped: {mabo_err}")
+
+    # ── Prompt Evolution Scoring ─────────────────────────────────────────
+    try:
+        from prompt_optimizer import score_latest_for_agent
+        agent_name = "content_agent"
+        score_latest_for_agent(agent_name, content_type, float(overall_score))
+        logger.info(f"[PromptOptimizer] Scored {agent_name}/{content_type}: {overall_score:.2f}")
+    except Exception as pe:
+        logger.warning(f"[PromptOptimizer] Scoring skipped: {pe}")
 
     return {
         "critic_result": result,

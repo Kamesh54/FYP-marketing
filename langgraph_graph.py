@@ -41,10 +41,14 @@ def route_by_intent(state: MarketingState) -> str:
     """
     Conditional edge function: routes to the appropriate starting node
     based on the classified intent from the router node.
+
+    This mapping mirrors every intent defined in intelligent_router.INTENTS
+    so that no classified intent silently falls through to general_chat.
     """
     intent = state.get("intent", "general_chat")
 
     intent_to_node = {
+        # ── Core intents from intelligent_router.INTENTS ──────────────
         "general_chat": "chat",
         "greeting": "chat",
         "brand_setup": "brand_setup",
@@ -53,10 +57,14 @@ def route_by_intent(state: MarketingState) -> str:
         "social_post": "social_keywords",
         "social_media_post": "social_keywords",
         "competitor_research": "research",
+        "deep_research": "research",
         "campaign_planning": "campaign",
         "campaign_post": "campaign",
         "image_generation": "image_gen",
         "content_generation": "blog_keywords",
+        "critic_review": "chat",           # critique requests handled conversationally
+        "daily_schedule": "campaign",       # scheduling routed to campaign planner
+        "metrics_report": "chat",           # metrics answered conversationally
     }
 
     target = intent_to_node.get(intent, "chat")

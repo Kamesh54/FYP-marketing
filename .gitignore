@@ -29,6 +29,7 @@ tmp1/
 uploads/
 cache/
 reports/
+claude/
 *.log
 job_status.json
 

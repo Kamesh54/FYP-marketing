@@ -3542,9 +3542,413 @@ async def get_tracer_status():
     return tracer_status()
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# A2A (AGENT-TO-AGENT) PROTOCOL LAYER
+# Gated behind ENABLE_A2A env var.  All endpoints reuse existing auth/db/graph.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ENABLE_A2A = os.getenv("ENABLE_A2A", "").lower() == "true"
+
+if ENABLE_A2A:
+    import asyncio as _a2a_asyncio
+    import collections as _a2a_collections
+    from fastapi.responses import StreamingResponse as _SSEResponse
+    from a2a_models import (
+        AgentCard, A2AJsonRpcRequest, A2AJsonRpcResponse, A2AJsonRpcError,
+        A2ATask, A2ATaskStatus, A2AMessage, A2APart, A2AArtifact,
+        TaskStatusEnum, TaskStatusUpdateEvent, TaskArtifactUpdateEvent,
+    )
+
+    logger.info("A2A protocol layer ENABLED")
+
+    # ── In-memory SSE event queues keyed by task_id ──────────────────────────
+    _a2a_event_queues: Dict[str, _a2a_asyncio.Queue] = {}
+
+    # ── Simple in-memory rate limiter (100 req/min per IP) ───────────────────
+    _a2a_rate_window: Dict[str, List[float]] = _a2a_collections.defaultdict(list)
+    _A2A_RATE_LIMIT = 100
+    _A2A_RATE_WINDOW_SECS = 60
+
+    def _a2a_check_rate(client_ip: str):
+        now = time.time()
+        window = _a2a_rate_window[client_ip]
+        # Prune old entries
+        _a2a_rate_window[client_ip] = [t for t in window if now - t < _A2A_RATE_WINDOW_SECS]
+        if len(_a2a_rate_window[client_ip]) >= _A2A_RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="A2A rate limit exceeded (100/min)")
+        _a2a_rate_window[client_ip].append(now)
+
+    # ── Helper: push event to SSE queue + optional webhook ───────────────────
+    async def _a2a_emit_event(task_id: str, event_dict: dict):
+        """Push an event to the SSE queue and optionally POST to the webhook."""
+        q = _a2a_event_queues.get(task_id)
+        if q:
+            await q.put(event_dict)
+
+        # Webhook push
+        task_row = db.get_a2a_task(task_id)
+        webhook = task_row.get("webhook_url") if task_row else None
+        if webhook:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.post(webhook, json=event_dict)
+            except Exception as wh_err:
+                logger.warning(f"A2A webhook POST failed for {task_id}: {wh_err}")
+
+    # ── Background worker: runs graph and updates task rows ──────────────────
+    async def _a2a_run_task(task_id: str, user_message: str, user_id: int,
+                            session_id: str, active_brand: str = ""):
+        """Execute the marketing graph for an A2A task (background)."""
+        try:
+            db.update_a2a_task_status(task_id, "working")
+            await _a2a_emit_event(task_id, {
+                "type": "status",
+                "taskId": task_id,
+                "status": {"state": "working", "message": "Pipeline started"},
+            })
+
+            # Build brand context (same logic as chat_endpoint)
+            brand_info_dict = None
+            brand_ctx = ""
+            if active_brand:
+                _profile = db.get_brand_profile(user_id, active_brand)
+                if _profile:
+                    brand_info_dict = _profile
+                    brand_ctx = _build_user_context_summary(user_id, active_brand)
+
+            graph_result = await run_marketing_graph(
+                user_message=user_message,
+                session_id=session_id,
+                user_id=user_id,
+                active_brand=active_brand,
+                conversation_history=[],
+                brand_info=brand_info_dict,
+                brand_context_summary=brand_ctx,
+            )
+
+            # Build artifacts from graph result
+            response_text = graph_result.get("ai_message", "") or graph_result.get("response_text", "")
+            artifacts = []
+            
+            # 1. Main Text artifact (Conversational intro)
+            if response_text:
+                artifacts.append({
+                    "name": "response",
+                    "parts": [{"type": "text", "text": response_text}],
+                })
+                
+            # 2. Extract specific generated content variants
+            options = graph_result.get("response_options", [])
+            for idx, opt in enumerate(options):
+                # Try to pull the raw text copy securely
+                content_text = ""
+                # For Social Posts
+                if opt.get("twitter_copy"):
+                    content_text += f"[Twitter/X]\n{opt['twitter_copy']}\n"
+                if opt.get("instagram_copy"):
+                    content_text += f"[Instagram]\n{opt['instagram_copy']}\n"
+                if opt.get("facebook_copy"):
+                    content_text += f"[Facebook]\n{opt['facebook_copy']}\n"
+                # For Blog Links
+                if opt.get("preview_url"):
+                    content_text += f"[Blog HTML Output]\n{opt['preview_url']}\n"
+                
+                # If parsed content is empty, just dump the raw dict for the robot to parse manually
+                if not content_text.strip():
+                    import json
+                    content_text = json.dumps(opt)
+                    
+                artifacts.append({
+                    "name": f"generated_variant_{idx+1}",
+                    "parts": [{"type": "text", "text": content_text.strip()}]
+                })
+                
+            # 3. Image artifact (if the graph produced a single flat preview id)
+            preview_id = graph_result.get("content_preview_id")
+            if preview_id:
+                content_row = db.get_generated_content(preview_id)
+                if content_row and content_row.get("preview_url"):
+                    artifacts.append({
+                        "name": "preview",
+                        "parts": [{"type": "text", "text": content_row["preview_url"]}],
+                    })
+
+            db.update_a2a_task_status(task_id, "completed", artifacts=artifacts)
+            await _a2a_emit_event(task_id, {
+                "type": "status",
+                "taskId": task_id,
+                "status": {"state": "completed", "message": "Done"},
+            })
+            for art in artifacts:
+                await _a2a_emit_event(task_id, {
+                    "type": "artifact",
+                    "taskId": task_id,
+                    "artifact": art,
+                })
+            # Send sentinel to close SSE
+            q = _a2a_event_queues.get(task_id)
+            if q:
+                await q.put(None)
+
+        except Exception as e:
+            logger.error(f"A2A task {task_id} failed: {e}", exc_info=True)
+            db.update_a2a_task_status(task_id, "failed", error=str(e))
+            await _a2a_emit_event(task_id, {
+                "type": "status",
+                "taskId": task_id,
+                "status": {"state": "failed", "message": str(e)},
+            })
+            q = _a2a_event_queues.get(task_id)
+            if q:
+                await q.put(None)
+
+    # ── Helper: build A2ATask dict from DB row ───────────────────────────────
+    def _a2a_task_from_row(row: dict) -> dict:
+        return {
+            "id": row["task_id"],
+            "status": {
+                "state": row["status"],
+                "message": row.get("error") or "",
+            },
+            "messages": row.get("request_payload", {}).get("messages", []),
+            "artifacts": row.get("result_artifacts", []),
+            "metadata": {
+                "method": row.get("method"),
+                "created_at": row.get("created_at"),
+                "updated_at": row.get("updated_at"),
+            },
+        }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ROUTE: Discovery
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @app.get("/.well-known/agent.json")
+    async def a2a_agent_card(request: Request):
+        """Return the A2A Agent Card for discovery."""
+        host = os.getenv("A2A_HOST", "")
+        if not host:
+            host = str(request.base_url).rstrip("/")
+        card = AgentCard.build(host)
+        return card.dict()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ROUTE: JSON-RPC Gateway
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @app.post("/a2a")
+    async def a2a_jsonrpc(request: Request, authorization: str = Header(None)):
+        """
+        Main A2A JSON-RPC endpoint.
+        Supported methods: tasks.send, tasks.sendSubscribe, tasks.cancel,
+                           tasks.pushNotification.set
+        """
+        payload = auth.get_current_user(authorization)
+        user_id = payload["user_id"]
+        _a2a_check_rate(request.client.host if request.client else "unknown")
+
+        body = await request.json()
+        rpc = A2AJsonRpcRequest(**body)
+
+        # ---------- tasks.send ----------
+        if rpc.method == "tasks.send":
+            return await _a2a_handle_send(rpc, user_id, subscribe=False)
+
+        # ---------- tasks.sendSubscribe ----------
+        elif rpc.method == "tasks.sendSubscribe":
+            return await _a2a_handle_send(rpc, user_id, subscribe=True)
+
+        # ---------- tasks.cancel ----------
+        elif rpc.method == "tasks.cancel":
+            task_id = rpc.params.get("taskId", "")
+            row = db.get_a2a_task(task_id)
+            if not row:
+                return A2AJsonRpcResponse(
+                    id=rpc.id,
+                    error=A2AJsonRpcError(code=-32001, message="Task not found"),
+                ).dict()
+            db.update_a2a_task_status(task_id, "canceled")
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                result=_a2a_task_from_row(db.get_a2a_task(task_id)),
+            ).dict()
+
+        # ---------- tasks.pushNotification.set ----------
+        elif rpc.method == "tasks.pushNotification.set":
+            task_id = rpc.params.get("taskId", "")
+            webhook_url = rpc.params.get("webhookUrl", "")
+            row = db.get_a2a_task(task_id)
+            if not row:
+                return A2AJsonRpcResponse(
+                    id=rpc.id,
+                    error=A2AJsonRpcError(code=-32001, message="Task not found"),
+                ).dict()
+            if not webhook_url:
+                return A2AJsonRpcResponse(
+                    id=rpc.id,
+                    error=A2AJsonRpcError(code=-32602, message="Missing webhookUrl"),
+                ).dict()
+            db.set_a2a_webhook(task_id, webhook_url)
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                result={"taskId": task_id, "webhookUrl": webhook_url},
+            ).dict()
+
+        # ---------- Unknown method ----------
+        else:
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                error=A2AJsonRpcError(code=-32601, message=f"Method not found: {rpc.method}"),
+            ).dict()
+
+    async def _a2a_handle_send(rpc: A2AJsonRpcRequest, user_id: int, subscribe: bool):
+        """Core handler for tasks.send and tasks.sendSubscribe."""
+        params = rpc.params
+        task_id = params.get("taskId", str(uuid.uuid4()))
+        messages = params.get("messages", [])
+
+        # Extract the first user message text
+        user_text = ""
+        for msg in messages:
+            if msg.get("role", "user") == "user":
+                for part in msg.get("parts", []):
+                    if part.get("type") == "text" and part.get("text"):
+                        user_text = part["text"]
+                        break
+                if user_text:
+                    break
+
+        if not user_text:
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                error=A2AJsonRpcError(code=-32602, message="No text content in messages"),
+            ).dict()
+
+        # Create internal session
+        session_id = f"a2a_{task_id[:12]}"
+        try:
+            db.create_session(session_id, user_id, f"A2A Task {task_id[:8]}")
+        except Exception:
+            pass  # Session may already exist on retry
+
+        # Store task
+        active_brand = params.get("metadata", {}).get("brand", "")
+        db.create_a2a_task(task_id, rpc.method, params, user_id)
+
+        if subscribe:
+            # SSE mode: create queue and return streaming response
+            q: _a2a_asyncio.Queue = _a2a_asyncio.Queue()
+            _a2a_event_queues[task_id] = q
+
+            # Launch background work
+            _a2a_asyncio.create_task(
+                _a2a_run_task(task_id, user_text, user_id, session_id, active_brand)
+            )
+
+            async def _sse_generator():
+                try:
+                    while True:
+                        event = await q.get()
+                        if event is None:
+                            break
+                        yield f"data: {json.dumps(event)}\n\n"
+                finally:
+                    _a2a_event_queues.pop(task_id, None)
+
+            return _SSEResponse(_sse_generator(), media_type="text/event-stream")
+
+        else:
+            # Synchronous mode: run graph and return result
+            _a2a_event_queues[task_id] = _a2a_asyncio.Queue()
+            await _a2a_run_task(task_id, user_text, user_id, session_id, active_brand)
+            _a2a_event_queues.pop(task_id, None)
+
+            row = db.get_a2a_task(task_id)
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                result=_a2a_task_from_row(row) if row else {},
+            ).dict()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ROUTE: Task status polling
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @app.get("/a2a/tasks/{task_id}")
+    async def a2a_get_task(task_id: str, authorization: str = Header(None)):
+        """Poll the current status of an A2A task."""
+        auth.get_current_user(authorization)
+        row = db.get_a2a_task(task_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return _a2a_task_from_row(row)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ROUTE: SSE event stream (standalone)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @app.get("/a2a/tasks/{task_id}/events")
+    async def a2a_task_events(task_id: str, authorization: str = Header(None)):
+        """SSE endpoint to stream events for a task that is already running."""
+        auth.get_current_user(authorization)
+        row = db.get_a2a_task(task_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # If task is already finished, return events as a JSON list
+        if row["status"] in ("completed", "failed", "canceled"):
+            events = [
+                {"type": "status", "taskId": task_id,
+                 "status": {"state": row["status"], "message": row.get("error") or ""}},
+            ]
+            for art in row.get("result_artifacts", []):
+                events.append({"type": "artifact", "taskId": task_id, "artifact": art})
+            return JSONResponse(events)
+
+        # Otherwise stream live
+        q = _a2a_event_queues.get(task_id)
+        if not q:
+            # No active queue — task may have completed between check and here
+            return JSONResponse([{
+                "type": "status", "taskId": task_id,
+                "status": {"state": row["status"], "message": "No active stream"},
+            }])
+
+        async def _stream():
+            try:
+                while True:
+                    event = await q.get()
+                    if event is None:
+                        break
+                    yield f"data: {json.dumps(event)}\n\n"
+            finally:
+                pass
+
+        return _SSEResponse(_stream(), media_type="text/event-stream")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ROUTE: Cancel (REST shortcut)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @app.post("/a2a/tasks/{task_id}/cancel")
+    async def a2a_cancel_task(task_id: str, authorization: str = Header(None)):
+        """Cancel an A2A task via REST."""
+        auth.get_current_user(authorization)
+        row = db.get_a2a_task(task_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Task not found")
+        db.update_a2a_task_status(task_id, "canceled")
+        return {"taskId": task_id, "status": "canceled"}
+
+    logger.info("A2A routes registered: /.well-known/agent.json, /a2a, /a2a/tasks/*")
+
+else:
+    logger.info("A2A protocol layer DISABLED (set ENABLE_A2A=true to enable)")
+
+
 @app.get("/")
 async def root():
-    return {"message": "Orchestrator v5.0", "status": "running"}
+    return {"message": "Orchestrator v5.0", "status": "running", "a2a_enabled": ENABLE_A2A}
 
 if __name__ == "__main__":
     import uvicorn

@@ -53,6 +53,10 @@ class MarketingState(TypedDict, total=False):
 
     # ── Workflow Metadata ─────────────────────────────────────────────────────
     mabo_state: Optional[Dict[str, Any]]
+    mabo_workflow_primary: Optional[Dict[str, Any]]   # MABO-selected primary workflow
+    mabo_workflow_alt: Optional[Dict[str, Any]]       # MABO baseline/alternative workflow
+    state_hash: Optional[str]                         # deterministic hash for tracking
+    mabo_content_params: Optional[Dict[str, Any]]     # 5D content params from extract_content_params()
     current_step: str
     steps_completed: List[str]
     errors: List[str]

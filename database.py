@@ -492,6 +492,27 @@ def initialize_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_research_cache_domain ON research_cache(domain, depth_level)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hitl_events_session ON hitl_events(session_id, status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_workflow_runs_session ON workflow_runs(session_id)")
+
+        # A2A (Agent-to-Agent) tasks table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS a2a_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT UNIQUE NOT NULL,
+            method TEXT NOT NULL,
+            status TEXT DEFAULT 'submitted'
+                CHECK(status IN ('submitted','working','input_required','completed','failed','canceled')),
+            request_payload TEXT NOT NULL DEFAULT '{}',
+            result_artifacts TEXT DEFAULT '[]',
+            error TEXT,
+            webhook_url TEXT,
+            user_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_a2a_tasks_task_id ON a2a_tasks(task_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_a2a_tasks_status ON a2a_tasks(status)")
         
         # Initialize default agent costs
         default_costs = [
@@ -1544,6 +1565,56 @@ def get_workflow_run(run_id: str) -> Optional[Dict[str, Any]]:
                 r[f] = json.loads(r[f]) if r.get(f) else ([] if f == 'agent_sequence' else {})
             return r
         return None
+
+
+# ==================== A2A TASK OPERATIONS ====================
+
+def create_a2a_task(task_id: str, method: str, payload: Dict[str, Any], user_id: Optional[int] = None) -> str:
+    """Create a new A2A task row and return the task_id."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        INSERT INTO a2a_tasks (task_id, method, status, request_payload, user_id, created_at, updated_at)
+        VALUES (?, ?, 'submitted', ?, ?, ?, ?)
+        """, (task_id, method, json.dumps(payload), user_id, datetime.now(), datetime.now()))
+    return task_id
+
+def get_a2a_task(task_id: str) -> Optional[Dict[str, Any]]:
+    """Get an A2A task by its task_id."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM a2a_tasks WHERE task_id = ?", (task_id,))
+        row = cursor.fetchone()
+        if row:
+            data = dict(row)
+            data['request_payload'] = json.loads(data['request_payload']) if data.get('request_payload') else {}
+            data['result_artifacts'] = json.loads(data['result_artifacts']) if data.get('result_artifacts') else []
+            return data
+        return None
+
+def update_a2a_task_status(task_id: str, status: str,
+                           artifacts: Optional[List] = None,
+                           error: Optional[str] = None):
+    """Update A2A task status and optionally set artifacts/error."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        updates = ["status=?", "updated_at=?"]
+        values: list = [status, datetime.now()]
+        if artifacts is not None:
+            updates.append("result_artifacts=?")
+            values.append(json.dumps(artifacts))
+        if error is not None:
+            updates.append("error=?")
+            values.append(error)
+        values.append(task_id)
+        cursor.execute(f"UPDATE a2a_tasks SET {', '.join(updates)} WHERE task_id=?", values)
+
+def set_a2a_webhook(task_id: str, webhook_url: str):
+    """Register a push notification webhook URL for a task."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE a2a_tasks SET webhook_url=?, updated_at=? WHERE task_id=?",
+                       (webhook_url, datetime.now(), task_id))
 
 
 # Initialize database on module import
