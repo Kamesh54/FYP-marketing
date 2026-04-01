@@ -299,7 +299,7 @@ export default function Home() {
         body: JSON.stringify({
           session_id: currentSessionId,
           message: userMessage,
-          brand: localStorage.getItem("activeBrandName") || undefined,
+          active_brand: localStorage.getItem("activeBrandName") || undefined,
         }),
       })
 
@@ -993,24 +993,56 @@ export default function Home() {
                     {/* â”€â”€ Inline option cards for this message â”€â”€ */}
                     {message.role === "assistant" && (message.responseOptions?.length ?? 0) > 0 && (
                       <div className="ml-14 animate-scale-in">
-                        <p className="text-xs font-semibold mb-3" style={{ color: `rgba(var(--text-secondary), 1)` }}>
-                          Pick the concept that fits best:
+                        {/* Enhanced header with MABO indicator */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4" style={{ color: `rgba(var(--primary), 1)` }} />
+                            <p className="text-sm font-bold" style={{ color: `rgba(var(--text-primary), 1)` }}>
+                              AI-Generated Options
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 px-3 py-1 rounded-full"
+                               style={{ background: `rgba(var(--primary), 0.1)`, border: `1px solid rgba(var(--primary), 0.3)` }}>
+                            <Zap className="w-3.5 h-3.5" style={{ color: `rgba(var(--primary), 1)` }} />
+                            <span className="text-xs font-semibold" style={{ color: `rgba(var(--primary), 1)` }}>
+                              MABO Optimized
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs mb-4" style={{ color: `rgba(var(--text-secondary), 1)` }}>
+                          Choose the variant that best matches your goals. Each option is optimized using multi-armed bandit learning.
                         </p>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {message.responseOptions!.map((option, optIdx) => (
                             <Card
                               key={option.option_id}
                               style={{
                                 animationDelay: `${optIdx * 100}ms`,
-                                background: `rgba(var(--surface), 0.4)`,
-                                borderColor: `rgba(var(--border), 0.5)`,
+                                background: `rgba(var(--surface), 0.5)`,
+                                borderColor: `rgba(var(--border), 0.6)`,
+                                position: 'relative',
+                                overflow: 'hidden'
                               }}
-                              className={`glass-effect p-4 space-y-3 animate-fade-in transition-all duration-300 ${
-                                workflowsDisabled ? "opacity-60" : "shadow-glow-hover hover:scale-[1.02]"
+                              className={`glass-effect p-5 space-y-3.5 animate-fade-in transition-all duration-300 ${
+                                workflowsDisabled ? "opacity-60" : "shadow-glow-hover hover:scale-[1.02] hover:shadow-xl cursor-pointer"
                               }`}
                             >
+                              {/* Option badge - A or B */}
+                              <div className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-lg"
+                                   style={{
+                                     background: optIdx === 0
+                                       ? `linear-gradient(135deg, rgba(var(--primary), 0.9), rgba(var(--primary-dark), 0.9))`
+                                       : `linear-gradient(135deg, #8b5cf6, #7c3aed)`,
+                                     color: 'white',
+                                     boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
+                                   }}>
+                                {optIdx === 0 ? 'A' : 'B'}
+                              </div>
+
                               {/* Header: label + tone badge */}
-                              <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start justify-between gap-2 pr-8">
                                 <h3 className="font-semibold text-base leading-tight" style={{ color: `rgba(var(--text-primary), 1)` }}>
                                   {option.label}
                                 </h3>

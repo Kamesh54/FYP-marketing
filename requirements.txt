@@ -36,3 +36,8 @@ chromadb
 sentence-transformers
 httpx
 textstat
+# MCP Protocol Support (Model Context Protocol)
+# Note: MCP SDK is optional - using native implementation
+sse-starlette
+# A2A Protocol Support (already implemented)
+aiofiles

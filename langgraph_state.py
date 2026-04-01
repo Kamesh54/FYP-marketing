@@ -26,6 +26,7 @@ class MarketingState(TypedDict, total=False):
     user_id: int
     active_brand: Optional[str]
     conversation_history: List[Dict[str, Any]]
+    trace_id: Optional[str]  # For live execution visualization
 
     # ── Router Output ─────────────────────────────────────────────────────────
     intent: str

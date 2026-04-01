@@ -477,11 +477,13 @@ class RewardStabilizer:
     """
     Manages delayed rewards with stabilization queue.
     Prevents premature updates until rewards are confirmed.
+    Now with database persistence!
     """
-    
+
     def __init__(self, default_delay_hours: float = 24.0):
         self.default_delay_hours = default_delay_hours
         self.reward_queue: List[RewardQueue] = []
+        self._load_from_db()
     
     def queue_reward(
         self,
@@ -499,6 +501,7 @@ class RewardStabilizer:
             expected_delay_hours=delay
         )
         self.reward_queue.append(reward_item)
+        self._save_to_db(reward_item)  # Persist to database
         logger.info(f"Queued reward for {content_id}, delay={delay}h")
         return reward_item
     
@@ -513,8 +516,10 @@ class RewardStabilizer:
         keyword_relevance: Optional[float] = None
     ):
         """Update reward data for a queued item."""
+        found = False
         for item in self.reward_queue:
             if item.content_id == content_id:
+                found = True
                 if engagement_rate is not None:
                     item.engagement_rate = engagement_rate
                 if cost is not None:
@@ -540,7 +545,12 @@ class RewardStabilizer:
                         critic_score=item.critic_score if item.critic_score is not None else 0.5,
                         keyword_relevance=item.keyword_relevance if item.keyword_relevance is not None else 0.5,
                     )
+
+                self._save_to_db(item)  # Persist updates to database
                 break
+
+        if not found:
+            logger.warning(f"Cannot update reward for {content_id}: not found in queue. Did you forget to call register_workflow_execution?")
     
     def _calculate_reward(
         self,
@@ -599,4 +609,86 @@ class RewardStabilizer:
             item for item in self.reward_queue
             if item.content_id not in content_ids
         ]
+        # Remove from DB too
+        self._delete_from_db(content_ids)
+
+    def _load_from_db(self):
+        """Load reward queue from database on init."""
+        try:
+            from database import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    SELECT content_id, state_hash, action, expected_delay_hours,
+                           reward, engagement_rate, cost, execution_time, content_approved,
+                           created_at, stabilized_at, is_stabilized
+                    FROM mabo_reward_queue
+                    WHERE is_stabilized = 0
+                ''')
+
+                for row in cursor.fetchall():
+                    reward_item = RewardQueue(
+                        content_id=row[0],
+                        state_hash=row[1],
+                        action=row[2],
+                        expected_delay_hours=row[3],
+                        reward=row[4],
+                        engagement_rate=row[5],
+                        cost=row[6],
+                        execution_time=row[7],
+                        content_approved=bool(row[8]) if row[8] is not None else None,
+                        created_at=datetime.fromisoformat(row[9]) if row[9] else datetime.now(),
+                        stabilized_at=datetime.fromisoformat(row[10]) if row[10] else None,
+                        is_stabilized=bool(row[11])
+                    )
+                    self.reward_queue.append(reward_item)
+
+            logger.info(f"Loaded {len(self.reward_queue)} rewards from database")
+        except Exception as e:
+            logger.warning(f"Could not load reward queue from DB: {e}")
+
+    def _save_to_db(self, reward_item: RewardQueue):
+        """Save a single reward item to database."""
+        try:
+            from database import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    INSERT OR REPLACE INTO mabo_reward_queue
+                    (content_id, state_hash, action, expected_delay_hours, reward,
+                     engagement_rate, cost, execution_time, content_approved,
+                     created_at, stabilized_at, is_stabilized)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    reward_item.content_id,
+                    reward_item.state_hash,
+                    reward_item.action,
+                    reward_item.expected_delay_hours,
+                    reward_item.reward,
+                    reward_item.engagement_rate,
+                    reward_item.cost,
+                    reward_item.execution_time,
+                    1 if reward_item.content_approved else 0 if reward_item.content_approved is not None else None,
+                    reward_item.created_at.isoformat() if reward_item.created_at else datetime.now().isoformat(),
+                    reward_item.stabilized_at.isoformat() if reward_item.stabilized_at else None,
+                    1 if reward_item.is_stabilized else 0
+                ))
+        except Exception as e:
+            logger.error(f"Failed to save reward to DB: {e}")
+
+    def _delete_from_db(self, content_ids: List[str]):
+        """Delete rewards from database."""
+        try:
+            from database import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                placeholders = ','.join(['?' for _ in content_ids])
+                cursor.execute(f'DELETE FROM mabo_reward_queue WHERE content_id IN ({placeholders})', content_ids)
+
+            logger.info(f"Deleted {len(content_ids)} rewards from DB")
+        except Exception as e:
+            logger.error(f"Failed to delete rewards from DB: {e}")
 

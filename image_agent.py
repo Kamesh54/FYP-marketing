@@ -203,9 +203,9 @@ async def _runway_generate(prompt: str, req: ImageRequest):
             duration=req.duration,
         )
     else:
-        # Text-to-image
+        # Text-to-image - use Gen-4 Turbo model
         task = await client.text_to_image.create(
-            model="gen3a_turbo",
+            model="gen4_image_turbo",
             prompt_text=prompt,
             ratio=req.aspect_ratio,
         )

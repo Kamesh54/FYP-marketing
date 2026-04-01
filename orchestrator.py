@@ -17,15 +17,21 @@ from urllib.parse import urlparse
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header, BackgroundTasks, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, BackgroundTasks, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, StreamingResponse as _SSEResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
 from groq import Groq
 from contextlib import asynccontextmanager
 import tweepy
-from instagrapi import Client as InstaClient
+try:
+    from instagrapi import Client as InstaClient
+    INSTAGRAPI_AVAILABLE = True
+except (ImportError, TypeError) as e:
+    # Python 3.9 compatibility - instagrapi requires 3.10+
+    INSTAGRAPI_AVAILABLE = False
+    InstaClient = None
 from fastapi.middleware.cors import CORSMiddleware
 
 # Optional: LangSmith tracing
@@ -43,6 +49,7 @@ from langsmith_tracer import (
     get_current_run_id, record_feedback, record_critic_feedback,
     tracer_status,
 )
+from trace_manager import get_trace_manager
 
 # Import new modules
 import auth
@@ -192,7 +199,25 @@ RESEARCH_AGENT_BASE    = "http://127.0.0.1:8009"
 # --- Initialize Clients ---
 groq_client = Groq(api_key=GROQ_API_KEY)
 s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secret_access_key=AWS_SECRET_ACCESS_KEY) if AWS_ACCESS_KEY_ID else None
-insta_client = InstaClient()
+
+# Initialize Instagram Client (requires Python 3.10+)
+insta_client = None
+if INSTAGRAPI_AVAILABLE and InstaClient:
+    try:
+        insta_client = InstaClient()
+        if INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD:
+            try:
+                insta_client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+                logger.info("Instagram client logged in successfully")
+            except Exception as e:
+                logger.warning(f"Instagram login failed: {e}")
+                insta_client = None
+    except Exception as e:
+        logger.warning(f"Instagram client initialization failed: {e}")
+        insta_client = None
+else:
+    logger.info("Instagram client not available (requires Python 3.10+)")
+
 planner_agent = CampaignPlannerAgent()
 
 # --- Lifespan Context Manager ---
@@ -663,8 +688,15 @@ def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]
     if not RUNWAY_API_KEY:
         raise ValueError("RUNWAY_API_KEY not set.")
     headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}", "Content-Type": "application/json", "X-Runway-Version": "2024-11-06"}
-    payload = {"promptText": prompt, "ratio": "1920:1080", "seed": int(datetime.now().timestamp()) % 4294967295, "model": "gen4_image"}
-    if reference_images: 
+    # Use gen4_image_turbo - requires referenceImages array with uri/tag objects
+    payload = {
+        "promptText": prompt,
+        "ratio": "1920:1080",
+        "seed": int(datetime.now().timestamp()) % 4294967295,
+        "model": "gen4_image_turbo",
+        "referenceImages": []  # Will be populated below if reference_images provided
+    }
+    if reference_images:
         # Process reference images - expect S3 URLs or HTTP/HTTPS URLs
         processed_refs = []
         for img in reference_images:
@@ -709,8 +741,17 @@ def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]
                 logger.warning(f"Invalid reference image (not a URL or local file): {img}, skipping")
         
         if processed_refs:
-            payload["referenceImages"] = [{"uri": img} for img in processed_refs]
+            payload["referenceImages"] = [{"uri": img, "tag": f"ref_{i}"} for i, img in enumerate(processed_refs)]
             logger.info(f"Using {len(processed_refs)} reference image(s) for Runway generation")
+        else:
+            # No valid reference images provided - use a placeholder
+            # Gen4 Image requires at least one reference image
+            logger.info("No reference images provided, using default placeholder")
+            # Use a simple white background as default reference
+            payload["referenceImages"] = [{
+                "uri": "https://via.placeholder.com/1920x1080/FFFFFF/FFFFFF",
+                "tag": "placeholder"
+            }]
     try:
         response = requests.post("https://api.dev.runwayml.com/v1/text_to_image", json=payload, headers=headers)
         response.raise_for_status()
@@ -737,6 +778,8 @@ def post_to_social(platform: str, text: str, image_path: str) -> str:
     """Post to social media."""
     try:
         if platform == "twitter":
+            if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET]):
+                raise ValueError("Twitter credentials not configured")
             auth = tweepy.OAuth1UserHandler(TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
             api_v1 = tweepy.API(auth)
             client = tweepy.Client(consumer_key=TWITTER_API_KEY, consumer_secret=TWITTER_API_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_TOKEN_SECRET)
@@ -744,13 +787,21 @@ def post_to_social(platform: str, text: str, image_path: str) -> str:
             post_result = client.create_tweet(text=text, media_ids=[media.media_id_string])
             post_url = f"https://twitter.com/user/status/{post_result.data['id']}"
         elif platform == "instagram":
+            # Check if Instagram is available and credentials are set
+            if not INSTAGRAPI_AVAILABLE:
+                raise ValueError("Instagram posting requires Python 3.10+ and instagrapi package")
+            if not INSTAGRAM_USERNAME or not INSTAGRAM_PASSWORD:
+                raise ValueError("Instagram credentials not configured")
+
+            # Create a fresh client instance for this post
+            temp_insta_client = InstaClient()
             if not os.path.exists("instagram.json"):
-                insta_client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-                insta_client.dump_settings("instagram.json")
+                temp_insta_client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+                temp_insta_client.dump_settings("instagram.json")
             else:
-                insta_client.load_settings("instagram.json")
-                insta_client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            media = insta_client.photo_upload(path=image_path, caption=text)
+                temp_insta_client.load_settings("instagram.json")
+                temp_insta_client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+            media = temp_insta_client.photo_upload(path=image_path, caption=text)
             post_url = f"https://www.instagram.com/p/{media.code}/"
         return post_url
     except Exception as e:
@@ -837,9 +888,13 @@ def normalize_brand_info(brand_info: Dict[str, Any]) -> Dict[str, Any]:
 
 def _build_user_context_summary(user_id: int, brand_name: Optional[str] = None) -> str:
     """
-    Build a plain-text summary of the user's stored brand profile.
+    Build a comprehensive plain-text summary of the user's stored brand profile.
     Used to inject business context into LLM calls so the model never
     needs to ask for details the user has already provided.
+
+    Includes EVERYTHING: brand details, visual identity (colors, fonts, logo),
+    tone, target audience, products/services, and website content.
+
     Returns an empty string when no profile is found.
     """
     try:
@@ -853,31 +908,92 @@ def _build_user_context_summary(user_id: int, brand_name: Optional[str] = None) 
                 import json as _j; meta = _j.loads(meta) if meta else {}
             except Exception:
                 meta = {}
+
         parts = []
+
+        # ═══ BASIC BRAND INFORMATION ═══
         if b.get("brand_name") and b["brand_name"] != "My Business":
             parts.append(f"Business Name: {b['brand_name']}")
+
+        if b.get("tagline"):
+            parts.append(f"Tagline: {b['tagline']}")
+
         if b.get("industry") and b["industry"] != "General":
             parts.append(f"Industry: {b['industry']}")
+
         if b.get("location"):
             parts.append(f"Location: {b['location']}")
+
         if b.get("description"):
             parts.append(f"Description: {b['description']}")
+
         if b.get("target_audience"):
             parts.append(f"Target Audience: {b['target_audience']}")
+
         if b.get("unique_selling_points"):
             parts.append(f"Unique Selling Points: {', '.join(b['unique_selling_points'])}")
+
         if b.get("website"):
             parts.append(f"Website: {b['website']}")
-        # Include products/services extracted from the website
+
+        if b.get("contacts"):
+            parts.append(f"Contact Info: {b['contacts']}")
+
+        # ═══ VISUAL IDENTITY ═══
+        colors = b.get("colors", [])
+        if colors and len(colors) > 0:
+            colors_str = ', '.join(colors) if isinstance(colors, list) else str(colors)
+            parts.append(f"\n🎨 BRAND COLORS: {colors_str}")
+            parts.append(f"   (Use these exact colors in all visual content and image generation)")
+
+        fonts = b.get("fonts", [])
+        if fonts and len(fonts) > 0:
+            fonts_str = ', '.join(fonts) if isinstance(fonts, list) else str(fonts)
+            parts.append(f"📝 BRAND FONTS: {fonts_str}")
+            parts.append(f"   (Recommend these fonts in design descriptions)")
+
+        if b.get("logo_url"):
+            parts.append(f"🖼️  LOGO: {b['logo_url']}")
+            parts.append(f"   (Reference the brand logo in image prompts)")
+
+        # ═══ TONE & VOICE ═══
+        tone = b.get("tone") or b.get("tone_preference") or "professional"
+        parts.append(f"\n🗣️  BRAND TONE: {tone}")
+        parts.append(f"   (Use this tone consistently in ALL content generation)")
+
+        # ═══ PRODUCTS & SERVICES ═══
         products = meta.get("products_services", [])
         if products:
-            parts.append(f"Products / Services: {', '.join(products)}")
-        # Include a snippet of the crawled website content if available
+            parts.append(f"\n📦 PRODUCTS/SERVICES: {', '.join(products)}")
+
+        # ═══ LEARNED SIGNALS (from past content) ═══
+        learned = profile.get("learned_signals", {})
+        if isinstance(learned, str):
+            try:
+                import json as _j; learned = _j.loads(learned) if learned else {}
+            except:
+                learned = {}
+
+        if learned:
+            parts.append(f"\n🧠 LEARNED PREFERENCES:")
+            if learned.get("preferred_content_types"):
+                parts.append(f"   - Preferred content types: {', '.join(learned['preferred_content_types'])}")
+            if learned.get("avg_word_count"):
+                parts.append(f"   - Typical content length: ~{learned['avg_word_count']} words")
+            if learned.get("common_keywords"):
+                parts.append(f"   - Common keywords: {', '.join(learned['common_keywords'][:5])}")
+
+        # ═══ WEBSITE CONTENT (first 1500 chars) ═══
         website_content = meta.get("website_content", "")
         if website_content:
-            parts.append(f"\n--- Crawled Website Content (first 1500 chars) ---\n{website_content[:1500]}")
+            parts.append(f"\n📄 CRAWLED WEBSITE CONTENT (first 1500 chars):")
+            parts.append(f"{website_content[:1500]}")
+            if len(website_content) > 1500:
+                parts.append(f"... (truncated, total {len(website_content)} chars)")
+
         return "\n".join(parts) if parts else ""
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to build brand context summary: {e}")
         return ""
 
 
@@ -1204,23 +1320,54 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                 # Build brand context
                 brand_info_dict = None
                 _brand_ctx = ""
-                if req.active_brand:
-                    _profile = db.get_brand_profile(user_id, req.active_brand)
+                active_brand_name = req.active_brand
+
+                # If no brand specified, try to get user's most recent brand from DB
+                if not active_brand_name:
+                    try:
+                        first_brand_profile = db.get_brand_profile(user_id, None)
+                        if first_brand_profile:
+                            active_brand_name = first_brand_profile.get("brand_name", "")
+                            logger.info(f"Chat: auto-selected brand '{active_brand_name}' for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not fetch user brand for chat: {e}")
+
+                if active_brand_name:
+                    _profile = db.get_brand_profile(user_id, active_brand_name)
                     if _profile:
                         brand_info_dict = _profile
-                        _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
+                        _brand_ctx = _build_user_context_summary(user_id, active_brand_name)
 
                 # Invoke the compiled LangGraph
                 import asyncio
-                graph_result = await run_marketing_graph(
-                    user_message=req.message,
-                    session_id=session_id,
+
+                # Start trace for live visualization
+                trace_id = f"chat_{session_id}_{int(time.time())}"
+                trace_mgr = get_trace_manager()
+                trace_mgr.start_trace(
+                    trace_id=trace_id,
                     user_id=user_id,
-                    active_brand=req.active_brand,
-                    conversation_history=history_for_router,
-                    brand_info=brand_info_dict,
-                    brand_context_summary=_brand_ctx,
+                    session_id=session_id,
+                    user_message=req.message,
+                    intent="unknown",  # Will be determined by router node
+                    workflow="langgraph"
                 )
+
+                try:
+                    graph_result = await run_marketing_graph(
+                        user_message=req.message,
+                        session_id=session_id,
+                        user_id=user_id,
+                        active_brand=active_brand_name,
+                        conversation_history=history_for_router,
+                        brand_info=brand_info_dict,
+                        brand_context_summary=_brand_ctx,
+                        trace_id=trace_id,  # Pass trace_id to graph
+                    )
+                    trace_mgr.complete_trace(trace_id, success=True)
+                except Exception as graph_err:
+                    trace_mgr.complete_trace(trace_id, success=False, error=str(graph_err))
+                    raise
 
                 # Map graph result → ChatResponse fields
                 response_text = graph_result.get("response_text", "")
@@ -2674,16 +2821,17 @@ async def get_content_details(content_id: str, authorization: str = Header(None)
         raise HTTPException(status_code=500, detail="Failed to get content details")
 
 @app.get("/brand-profile")
-async def get_brand_profile(authorization: str = Header(None)):
-    """Get user's brand profile."""
+async def get_brand_profile_endpoint(authorization: str = Header(None)):
+    """Get user's brand profile (latest or default)."""
     try:
         payload = auth.get_current_user(authorization)
         user_id = payload['user_id']
-        
-        brand_profile = db.get_brand_profile(user_id, req.active_brand)
+
+        # Get latest brand profile for user (brand_name is optional, gets most recent)
+        brand_profile = db.get_brand_profile(user_id)
         if not brand_profile:
             return {"message": "No brand profile found", "profile": None}
-        
+
         return {"profile": brand_profile}
     except HTTPException:
         raise
@@ -3118,62 +3266,52 @@ async def upload_file(session_id: str, file: UploadFile = File(...), authorizati
         
         # Store S3 URL in database
         try:
-            # Update brand profile if it's a logo
-            if asset_type == "logo":
-                brand_profile = db.get_brand_profile(user_id, req.active_brand)
-                if brand_profile:
-                    db.update_brand_profile(
-                        user_id=user_id,
-                        brand_name=brand_profile.get('brand_name'),
-                        contacts=brand_profile.get('contacts'),
-                        location=brand_profile.get('location'),
-                        logo_url=s3_url
-                    )
-                else:
-                    # Create brand profile with logo
-                    db.save_brand_profile(
-                        user_id=user_id,
-                        brand_name="My Business",
-                        contacts=None,
-                        location=None,
-                        logo_url=s3_url
-                    )
-            
-            # Store in user assets (add to metadata or create new table entry)
-            # For now, we'll store in brand profile metadata
-            brand_profile = db.get_brand_profile(user_id, req.active_brand)
-            if brand_profile:
-                metadata = brand_profile.get('metadata', {})
-                if not isinstance(metadata, dict):
-                    metadata = json.loads(metadata) if metadata else {}
-                
-                # Store asset URLs in metadata
-                if 'assets' not in metadata:
-                    metadata['assets'] = {}
-                if asset_type not in metadata['assets']:
-                    metadata['assets'][asset_type] = []
-                
-                asset_info = {
-                    "url": s3_url,
-                    "filename": file.filename,
-                    "uploaded_at": datetime.now().isoformat(),
-                    "size": file_size,
-                    "content_type": content_type
-                }
-                metadata['assets'][asset_type].append(asset_info)
-                
-                # Keep only last 20 assets per type
-                if len(metadata['assets'][asset_type]) > 20:
-                    metadata['assets'][asset_type] = metadata['assets'][asset_type][-20:]
-                
-                db.update_brand_profile(
+            # Get or create brand profile
+            brand_profile = db.get_brand_profile(user_id)
+            if not brand_profile:
+                # Create brand profile with logo if it's a logo, otherwise just create basic profile
+                db.save_brand_profile(
                     user_id=user_id,
-                    brand_name=brand_profile.get('brand_name'),
-                    contacts=brand_profile.get('contacts'),
-                    location=brand_profile.get('location'),
-                    logo_url=brand_profile.get('logo_url'),
-                    metadata=metadata
+                    brand_name="My Business",
+                    logo_url=s3_url if asset_type == "logo" else None
                 )
+                brand_profile = db.get_brand_profile(user_id)
+
+            # Prepare metadata with assets
+            metadata = brand_profile.get('metadata', {})
+            if not isinstance(metadata, dict):
+                metadata = json.loads(metadata) if metadata else {}
+
+            # Store asset URLs in metadata
+            if 'assets' not in metadata:
+                metadata['assets'] = {}
+            if asset_type not in metadata['assets']:
+                metadata['assets'][asset_type] = []
+
+            asset_info = {
+                "url": s3_url,
+                "filename": file.filename,
+                "uploaded_at": datetime.now().isoformat(),
+                "size": file_size,
+                "content_type": content_type
+            }
+            metadata['assets'][asset_type].append(asset_info)
+
+            # Keep only last 20 assets per type
+            if len(metadata['assets'][asset_type]) > 20:
+                metadata['assets'][asset_type] = metadata['assets'][asset_type][-20:]
+
+            # Update brand profile with new metadata AND logo_url if it's a logo
+            update_params = {
+                'user_id': user_id,
+                'brand_name': brand_profile.get('brand_name'),
+                'metadata': metadata
+            }
+            if asset_type == "logo":
+                update_params['logo_url'] = s3_url
+
+            db.update_brand_profile(**update_params)
+            logger.info(f"✅ Asset {asset_type} saved to brand profile for user {user_id}")
         except Exception as db_error:
             logger.warning(f"Failed to store asset URL in database: {db_error}")
             # Continue anyway, S3 upload succeeded
@@ -3203,8 +3341,8 @@ async def get_user_assets(authorization: str = Header(None), asset_type: Optiona
     try:
         payload = auth.get_current_user(authorization)
         user_id = payload['user_id']
-        
-        brand_profile = db.get_brand_profile(user_id, req.active_brand)
+
+        brand_profile = db.get_brand_profile(user_id)
         if not brand_profile:
             return {"assets": [], "logo_url": None}
         
@@ -3543,11 +3681,263 @@ async def get_tracer_status():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# MCP (MODEL CONTEXT PROTOCOL) LAYER
+# Exposes agents as MCP tools, resources, and prompts for LLM integration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ENABLE_MCP = os.getenv("ENABLE_MCP", "true").lower() == "true"  # Enabled by default
+
+if ENABLE_MCP:
+    try:
+        from mcp_server import mcp_server, MCP_TOOLS, MCP_RESOURCES, MCP_PROMPTS
+        from mcp_models import MCPRequest, MCPResponse, MCPToolCallRequest
+        logger.info("MCP protocol layer ENABLED")
+    except ImportError as e:
+        logger.error(f"MCP imports failed: {e}. Make sure mcp_server.py and mcp_models.py exist.")
+        ENABLE_MCP = False
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # MCP ENDPOINTS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    @app.post("/mcp/initialize")
+    async def mcp_initialize(request: MCPRequest):
+        """MCP initialization endpoint"""
+        result = mcp_server.handle_initialize(request.params or {})
+        return MCPResponse(
+            id=request.id,
+            result=result.model_dump()
+        )
+
+    @app.post("/mcp/tools/list")
+    async def mcp_list_tools(request: MCPRequest):
+        """List all available MCP tools"""
+        tools = mcp_server.list_tools()
+        return MCPResponse(
+            id=request.id,
+            result={"tools": [t.model_dump() for t in tools]}
+        )
+
+    @app.post("/mcp/tools/call")
+    async def mcp_call_tool(request: MCPRequest, authorization: str = Header(None)):
+        """Execute an MCP tool call"""
+        # Authentication optional but recommended
+        user_id = None
+        if authorization:
+            try:
+                user = auth.get_current_user(authorization)
+                user_id = user["id"]
+            except:
+                pass  # Allow unauthenticated for testing
+
+        params = request.params or {}
+        tool_name = params.get("name")
+        arguments = params.get("arguments", {})
+
+        # Create agent caller that uses our existing infrastructure
+        async def agent_caller(agent_name: str, agent_params: Dict) -> Dict:
+            """Call agent using LangGraph or HTTP fallback"""
+            try:
+                if LANGGRAPH_AVAILABLE:
+                    # Use LangGraph adapter if available
+                    from agent_adapters import (
+                        run_webcrawler, run_keyword_extraction, run_gap_analysis,
+                        generate_blog, generate_social, generate_image,
+                        extract_brand_from_url, run_deep_research, run_seo_analysis,
+                        run_reddit_research
+                    )
+
+                    adapter_map = {
+                        "webcrawler": run_webcrawler,
+                        "keyword_extractor": run_keyword_extraction,
+                        "gap_analyzer": run_gap_analysis,
+                        "content_agent_blog": lambda p: generate_blog(**p),
+                        "content_agent_social": lambda p: generate_social(**p),
+                        "image_agent": generate_image,
+                        "brand_agent": lambda p: extract_brand_from_url(p.get("url")),
+                        "research_agent": lambda p: run_deep_research(p.get("topic"), p.get("depth")),
+                        "seo_agent": lambda p: run_seo_analysis(p.get("url")),
+                        "reddit_agent": lambda p: run_reddit_research(p.get("keywords"), p.get("subreddits")),
+                    }
+
+                    if agent_name in adapter_map:
+                        return await adapter_map[agent_name](agent_params)
+
+                # HTTP fallback
+                return await _call_agent(agent_name, "", None, agent_params, {})
+
+            except Exception as e:
+                logger.error(f"MCP agent caller error ({agent_name}): {e}")
+                return {"error": str(e)}
+
+        # Execute the tool
+        result = await mcp_server.call_tool(tool_name, arguments, agent_caller)
+
+        return MCPResponse(
+            id=request.id,
+            result=result.model_dump()
+        )
+
+    @app.post("/mcp/resources/list")
+    async def mcp_list_resources(request: MCPRequest):
+        """List all available MCP resources"""
+        resources = mcp_server.list_resources()
+        return MCPResponse(
+            id=request.id,
+            result={"resources": [r.model_dump() for r in resources]}
+        )
+
+    @app.post("/mcp/resources/read")
+    async def mcp_read_resource(request: MCPRequest, authorization: str = Header(None)):
+        """Read a specific MCP resource"""
+        auth.get_current_user(authorization)
+
+        params = request.params or {}
+        uri = params.get("uri", "")
+
+        # Parse resource URI and fetch from database
+        content = {}
+        try:
+            if uri.startswith("brand://"):
+                brand_id = uri.replace("brand://", "")
+                brand_data = db.get_brand_profile(brand_id)
+                content = {"text": json.dumps(brand_data, indent=2)}
+
+            elif uri.startswith("content://"):
+                content_id = uri.replace("content://", "")
+                content_data = db.get_content_by_id(int(content_id))
+                content = {"text": json.dumps(content_data, indent=2)}
+
+            elif uri.startswith("campaign://"):
+                campaign_id = uri.replace("campaign://", "")
+                campaign_data = db.get_campaign_by_id(int(campaign_id))
+                content = {"text": json.dumps(campaign_data, indent=2)}
+
+            elif uri == "metrics://overview":
+                metrics = get_aggregated_metrics()
+                content = {"text": json.dumps(metrics, indent=2)}
+
+            elif uri == "knowledge://graph" and GRAPH_AVAILABLE:
+                from graph import get_graph_queries
+                graph_summary = {"status": "available", "queries": get_graph_queries()}
+                content = {"text": json.dumps(graph_summary, indent=2)}
+
+            else:
+                content = {"text": json.dumps({"error": "Resource not found"}, indent=2)}
+
+        except Exception as e:
+            content = {"text": json.dumps({"error": str(e)}, indent=2)}
+
+        return MCPResponse(
+            id=request.id,
+            result={
+                "contents": [{
+                    "uri": uri,
+                    "mimeType": "application/json",
+                    **content
+                }]
+            }
+        )
+
+    @app.post("/mcp/prompts/list")
+    async def mcp_list_prompts(request: MCPRequest):
+        """List all available MCP prompts"""
+        prompts = mcp_server.list_prompts()
+        return MCPResponse(
+            id=request.id,
+            result={"prompts": [p.model_dump() for p in prompts]}
+        )
+
+    @app.post("/mcp/prompts/get")
+    async def mcp_get_prompt(request: MCPRequest):
+        """Get a specific prompt template with arguments filled in"""
+        params = request.params or {}
+        prompt_name = params.get("name")
+        arguments = params.get("arguments", {})
+
+        # Generate prompt messages based on template
+        messages = []
+
+        if prompt_name == "blog_generation_workflow":
+            topic = arguments.get("topic", "")
+            messages = [
+                {
+                    "role": "user",
+                    "content": {
+                        "type": "text",
+                        "text": f"""Generate a complete SEO-optimized blog post on: {topic}
+
+Steps:
+1. Use webcrawler_extract if competitor URL provided
+2. Use keywords_extract to find relevant keywords
+3. Use content_generate_blog to create the post
+4. Optionally use seo_analyze to verify optimization"""
+                    }
+                }
+            ]
+
+        elif prompt_name == "social_campaign_workflow":
+            goal = arguments.get("campaign_goal", "")
+            platforms = arguments.get("platforms", "")
+            messages = [
+                {
+                    "role": "user",
+                    "content": {
+                        "type": "text",
+                        "text": f"""Create a social media campaign for: {goal}
+
+Target platforms: {platforms}
+
+Steps:
+1. Use campaign_plan to create strategy
+2. Use content_generate_social for each platform
+3. Use image_generate for visual content
+4. Review and schedule posts"""
+                    }
+                }
+            ]
+
+        elif prompt_name == "competitor_analysis_workflow":
+            competitor_url = arguments.get("competitor_url", "")
+            messages = [
+                {
+                    "role": "user",
+                    "content": {
+                        "type": "text",
+                        "text": f"""Analyze competitor: {competitor_url}
+
+Steps:
+1. Use webcrawler_extract to get content
+2. Use seo_analyze for SEO insights
+3. Use keywords_extract for keyword strategy
+4. Use gap_analyzer_run to find opportunities"""
+                    }
+                }
+            ]
+
+        else:
+            messages = [{"role": "user", "content": {"type": "text", "text": "Prompt template not found"}}]
+
+        return MCPResponse(
+            id=request.id,
+            result={
+                "description": f"Workflow template: {prompt_name}",
+                "messages": messages
+            }
+        )
+
+    logger.info("MCP routes registered: /mcp/initialize, /mcp/tools/*, /mcp/resources/*, /mcp/prompts/*")
+
+else:
+    logger.info("MCP protocol layer DISABLED (set ENABLE_MCP=true to enable)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # A2A (AGENT-TO-AGENT) PROTOCOL LAYER
 # Gated behind ENABLE_A2A env var.  All endpoints reuse existing auth/db/graph.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-ENABLE_A2A = os.getenv("ENABLE_A2A", "").lower() == "true"
+ENABLE_A2A = os.getenv("ENABLE_A2A", "true").lower() == "true"  # Enabled by default
 
 if ENABLE_A2A:
     import asyncio as _a2a_asyncio
@@ -3617,6 +4007,13 @@ if ENABLE_A2A:
                     brand_info_dict = _profile
                     brand_ctx = _build_user_context_summary(user_id, active_brand)
 
+            # Check if LangGraph is available
+            if not LANGGRAPH_AVAILABLE:
+                error_msg = "LangGraph is not available. Please restart the orchestrator after installing langgraph."
+                logger.error(error_msg)
+                raise Exception(error_msg)
+
+            # Use LangGraph
             graph_result = await run_marketing_graph(
                 user_message=user_message,
                 session_id=session_id,
@@ -3731,7 +4128,7 @@ if ENABLE_A2A:
         if not host:
             host = str(request.base_url).rstrip("/")
         card = AgentCard.build(host)
-        return card.dict()
+        return card.model_dump()
 
     # ══════════════════════════════════════════════════════════════════════════
     # ROUTE: JSON-RPC Gateway
@@ -3767,12 +4164,12 @@ if ENABLE_A2A:
                 return A2AJsonRpcResponse(
                     id=rpc.id,
                     error=A2AJsonRpcError(code=-32001, message="Task not found"),
-                ).dict()
+                ).model_dump()
             db.update_a2a_task_status(task_id, "canceled")
             return A2AJsonRpcResponse(
                 id=rpc.id,
                 result=_a2a_task_from_row(db.get_a2a_task(task_id)),
-            ).dict()
+            ).model_dump()
 
         # ---------- tasks.pushNotification.set ----------
         elif rpc.method == "tasks.pushNotification.set":
@@ -3783,24 +4180,24 @@ if ENABLE_A2A:
                 return A2AJsonRpcResponse(
                     id=rpc.id,
                     error=A2AJsonRpcError(code=-32001, message="Task not found"),
-                ).dict()
+                ).model_dump()
             if not webhook_url:
                 return A2AJsonRpcResponse(
                     id=rpc.id,
                     error=A2AJsonRpcError(code=-32602, message="Missing webhookUrl"),
-                ).dict()
+                ).model_dump()
             db.set_a2a_webhook(task_id, webhook_url)
             return A2AJsonRpcResponse(
                 id=rpc.id,
                 result={"taskId": task_id, "webhookUrl": webhook_url},
-            ).dict()
+            ).model_dump()
 
         # ---------- Unknown method ----------
         else:
             return A2AJsonRpcResponse(
                 id=rpc.id,
                 error=A2AJsonRpcError(code=-32601, message=f"Method not found: {rpc.method}"),
-            ).dict()
+            ).model_dump()
 
     async def _a2a_handle_send(rpc: A2AJsonRpcRequest, user_id: int, subscribe: bool):
         """Core handler for tasks.send and tasks.sendSubscribe."""
@@ -3823,17 +4220,29 @@ if ENABLE_A2A:
             return A2AJsonRpcResponse(
                 id=rpc.id,
                 error=A2AJsonRpcError(code=-32602, message="No text content in messages"),
-            ).dict()
+            ).model_dump()
 
-        # Create internal session
-        session_id = f"a2a_{task_id[:12]}"
+        # Create internal session (with unique ID to avoid conflicts)
+        session_id = f"a2a_{task_id}"
         try:
             db.create_session(session_id, user_id, f"A2A Task {task_id[:8]}")
-        except Exception:
-            pass  # Session may already exist on retry
+        except Exception as e:
+            # Session may already exist on retry, that's okay
+            logger.debug(f"Session {session_id} already exists: {e}")
 
-        # Store task
+        # Store task and determine active brand
         active_brand = params.get("metadata", {}).get("brand", "")
+
+        # If no brand specified in metadata, try to get user's most recent brand from DB
+        if not active_brand:
+            try:
+                first_brand_profile = db.get_brand_profile(user_id, None)
+                if first_brand_profile:
+                    active_brand = first_brand_profile.get("brand_name", "")
+                    logger.info(f"A2A task: auto-selected brand '{active_brand}' for user {user_id}")
+            except Exception as e:
+                logger.warning(f"Could not fetch user brand for A2A task: {e}")
+
         db.create_a2a_task(task_id, rpc.method, params, user_id)
 
         if subscribe:
@@ -3868,7 +4277,7 @@ if ENABLE_A2A:
             return A2AJsonRpcResponse(
                 id=rpc.id,
                 result=_a2a_task_from_row(row) if row else {},
-            ).dict()
+            ).model_dump()
 
     # ══════════════════════════════════════════════════════════════════════════
     # ROUTE: Task status polling
@@ -3948,7 +4357,106 @@ else:
 
 @app.get("/")
 async def root():
-    return {"message": "Orchestrator v5.0", "status": "running", "a2a_enabled": ENABLE_A2A}
+    return {
+        "message": "Orchestrator v5.0 - MCP & A2A Enabled",
+        "status": "running",
+        "protocols": {
+            "mcp_enabled": ENABLE_MCP,
+            "a2a_enabled": ENABLE_A2A
+        },
+        "mcp_endpoints": {
+            "initialize": "/mcp/initialize",
+            "tools": "/mcp/tools/list",
+            "call_tool": "/mcp/tools/call",
+            "resources": "/mcp/resources/list",
+            "read_resource": "/mcp/resources/read",
+            "prompts": "/mcp/prompts/list",
+            "get_prompt": "/mcp/prompts/get"
+        } if ENABLE_MCP else None,
+        "a2a_endpoints": {
+            "agent_card": "/.well-known/agent.json",
+            "json_rpc": "/a2a",
+            "tasks": "/a2a/tasks/*"
+        } if ENABLE_A2A else None
+    }
+
+# ══════════════════════════════════════════════════════════════════════════
+# WEBSOCKET ROUTES: Real-time Trace Streaming
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.websocket("/ws/traces")
+async def websocket_all_traces(websocket: WebSocket):
+    """WebSocket endpoint for streaming all trace events."""
+    await websocket.accept()
+    trace_mgr = get_trace_manager()
+    trace_mgr.add_connection(websocket, trace_id=None)
+
+    try:
+        # Send initial list of recent traces
+        recent_traces = trace_mgr.get_recent_traces(limit=10)
+        await websocket.send_json({
+            "type": "initial_traces",
+            "traces": recent_traces
+        })
+
+        # Keep connection alive and handle client messages
+        while True:
+            try:
+                data = await websocket.receive_text()
+                # Client can request specific trace details
+                if data.startswith("get_trace:"):
+                    trace_id = data.split(":", 1)[1]
+                    trace_data = trace_mgr.get_trace(trace_id)
+                    if trace_data:
+                        await websocket.send_json({
+                            "type": "trace_details",
+                            **trace_data
+                        })
+            except WebSocketDisconnect:
+                break
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        trace_mgr._remove_connection(websocket)
+
+@app.websocket("/ws/traces/{trace_id}")
+async def websocket_single_trace(websocket: WebSocket, trace_id: str):
+    """WebSocket endpoint for streaming a specific trace."""
+    await websocket.accept()
+    trace_mgr = get_trace_manager()
+    trace_mgr.add_connection(websocket, trace_id=trace_id)
+
+    try:
+        # Send existing trace data if available
+        trace_data = trace_mgr.get_trace(trace_id)
+        if trace_data:
+            await websocket.send_json({
+                "type": "trace_details",
+                **trace_data
+            })
+
+        # Keep connection alive
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        trace_mgr._remove_connection(websocket)
+
+@app.get("/traces")
+async def list_traces(limit: int = 20):
+    """Get list of recent traces."""
+    trace_mgr = get_trace_manager()
+    return {"traces": trace_mgr.get_recent_traces(limit=limit)}
+
+@app.get("/traces/{trace_id}")
+async def get_trace_details(trace_id: str):
+    """Get detailed trace data."""
+    trace_mgr = get_trace_manager()
+    trace_data = trace_mgr.get_trace(trace_id)
+    if not trace_data:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    return trace_data
 
 if __name__ == "__main__":
     import uvicorn

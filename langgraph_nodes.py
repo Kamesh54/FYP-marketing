@@ -19,12 +19,29 @@ logger = logging.getLogger("langgraph.nodes")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# TRACE HELPER FUNCTIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def emit_trace(state: MarketingState, event_type: str, node: str, data: Dict[str, Any]) -> None:
+    """Helper to emit trace events without failing the node."""
+    trace_id = state.get("trace_id")
+    if not trace_id:
+        return
+    try:
+        from trace_manager import get_trace_manager
+        trace_mgr = get_trace_manager()
+        trace_mgr.add_event(trace_id, event_type, node, data)
+    except Exception as e:
+        logger.warning(f"Failed to emit trace: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ROUTER NODE
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def router_node(state: MarketingState) -> Dict[str, Any]:
     """Classify user intent using the intelligent router.
-    
+
     Uses the same logic as intelligent_router.py:
     1. Sentence-transformer embedding cosine similarity (primary, ~5ms, no tokens)
     2. Hard rules (e.g. brand questions → general_chat)
@@ -38,6 +55,9 @@ async def router_node(state: MarketingState) -> Dict[str, Any]:
     user_message = state.get("user_message", "")
     conversation_history = state.get("conversation_history", [])
     user_id = state.get("user_id", 0)
+
+    # Emit trace event
+    emit_trace(state, "start", "router", {"user_message": user_message[:100]})
 
     try:
         route_result = await route_user_query(user_message, conversation_history)
@@ -138,6 +158,14 @@ async def router_node(state: MarketingState) -> Dict[str, Any]:
         logger.info(f"Router: intent={intent}, confidence={confidence:.2f}, "
                     f"params={extracted_params}, requires_url={requires_url}")
 
+        # Emit completion trace event
+        emit_trace(state, "complete", "router", {
+            "intent": intent,
+            "confidence": confidence,
+            "extracted_params": extracted_params,
+            "workflow": mabo_workflow_primary["workflow_name"] if mabo_workflow_primary else None
+        })
+
         return {
             "intent": intent,
             "confidence": confidence,
@@ -152,6 +180,10 @@ async def router_node(state: MarketingState) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Router node failed: {e}")
+
+        # Emit error trace event
+        emit_trace(state, "error", "router", {"error": str(e)})
+
         return {
             "intent": "general_chat",
             "confidence": 0.0,
@@ -174,10 +206,21 @@ async def chat_node(state: MarketingState) -> Dict[str, Any]:
     conversation_history = state.get("conversation_history", [])
     brand_context = state.get("brand_context_summary", "")
 
+    emit_trace(state, "start", "chat", {
+        "user_message": user_message[:100],
+        "has_brand_context": bool(brand_context)
+    })
+
     try:
         response = await generate_conversational_response(
             user_message, conversation_history, brand_context
         )
+
+        emit_trace(state, "complete", "chat", {
+            "response_length": len(response),
+            "response_preview": response[:150]
+        })
+
         return {
             "response_text": response,
             "current_step": "chat",
@@ -185,6 +228,7 @@ async def chat_node(state: MarketingState) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Chat node failed: {e}")
+        emit_trace(state, "error", "chat", {"error": str(e)})
         return {
             "response_text": f"I apologize, I encountered an error: {str(e)}",
             "errors": state.get("errors", []) + [f"Chat error: {e}"],
@@ -345,6 +389,8 @@ def keyword_node(state: MarketingState) -> Dict[str, Any]:
     """Extract keywords from the business context or user message."""
     from agent_adapters import run_keyword_extraction
 
+    emit_trace(state, "start", "keywords", {"message": "Extracting keywords from context"})
+
     user_message = state.get("user_message", "")
     brand_context = state.get("brand_context_summary", "")
     params = state.get("extracted_params", {})
@@ -355,7 +401,13 @@ def keyword_node(state: MarketingState) -> Dict[str, Any]:
         query = f"{query} {brand_context[:200]}"
 
     result = run_keyword_extraction(query, max_results=5, max_pages=1)
-    logger.info(f"Keyword node: {result.get('competitors_processed', 0)} competitors analyzed")
+    competitors_count = result.get('competitors_processed', 0)
+    logger.info(f"Keyword node: {competitors_count} competitors analyzed")
+
+    emit_trace(state, "complete", "keywords", {
+        "competitors_analyzed": competitors_count,
+        "total_keywords": len(result.get("competitors", []))
+    })
 
     return {
         "keywords_data": result,
@@ -379,6 +431,8 @@ def gap_analysis_node(state: MarketingState) -> Dict[str, Any]:
     product_desc = brand_info.get("description", state.get("user_message", ""))
     company_url = brand_info.get("website_url") or params.get("url")
 
+    emit_trace(state, "start", "gap_analysis", {"brand": company_name})
+
     result = run_gap_analysis(
         company_name=company_name,
         product_description=product_desc,
@@ -386,6 +440,20 @@ def gap_analysis_node(state: MarketingState) -> Dict[str, Any]:
         max_competitors=3,
     )
     logger.info(f"Gap analysis node completed for {company_name}")
+
+    # Extract gap count from the nested structure
+    gap_analysis = result.get("gap_analysis", {})
+    missing_kw = gap_analysis.get("missing_keywords", {})
+    gap_count = len(missing_kw.get("short", [])) + len(missing_kw.get("long_tail", []))
+
+    logger.info(f"Gap analysis found {gap_count} keyword gaps")
+
+    emit_trace(state, "complete", "gap_analysis", {
+        "brand": company_name,
+        "gaps_found": gap_count,
+        "missing_short": len(missing_kw.get("short", [])),
+        "missing_long_tail": len(missing_kw.get("long_tail", []))
+    })
 
     return {
         "gap_analysis": result,
@@ -416,12 +484,20 @@ def reddit_node(state: MarketingState) -> Dict[str, Any]:
 
     brand_name = brand_info.get("brand_name", params.get("brand_name", ""))
 
+    emit_trace(state, "start", "reddit_research", {"keywords": keywords[:3]})
+
     result = run_reddit_research(
         keywords=keywords[:8],
         brand_name=brand_name,
         max_subreddits=3,
     )
-    logger.info(f"Reddit node: available={result.get('available', False)}")
+    is_available = result.get('available', False)
+    logger.info(f"Reddit node: available={is_available}")
+
+    emit_trace(state, "complete", "reddit_research", {
+        "available": is_available,
+        "insights_count": len(result.get("insights", []))
+    })
 
     return {
         "reddit_insights": result,
@@ -516,6 +592,11 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
     response_options = []
     os.makedirs("previews", exist_ok=True)
 
+    emit_trace(state, "start", "blog_generate", {
+        "variants_to_generate": len(variant_configs),
+        "brand": brand_info.get("brand_name", "")
+    })
+
     # ── MABO agent instance (lazy, fault-tolerant) ───────────────────────
     mabo = None
     try:
@@ -531,11 +612,23 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
             # ── Cost estimation (real, not hardcoded) ─────────────────────
             wf_agents = variant["workflow"].get("agents", []) if variant["workflow"] else []
             try:
-                workflow_cost_estimate = cost_model.estimate_workflow_cost(wf_agents) if wf_agents else {}
-            except Exception:
+                if wf_agents:
+                    workflow_cost_estimate = cost_model.estimate_workflow_cost(wf_agents)
+                    logger.info(f"Cost estimate for {wf_agents}: {workflow_cost_estimate}")
+                else:
+                    workflow_cost_estimate = {"total_cost": 0.005, "total_time": 30}
+                    logger.warning(f"No agents in workflow, using fallback cost")
+            except Exception as cost_err:
+                logger.error(f"Cost estimation failed: {cost_err}", exc_info=True)
                 workflow_cost_estimate = {"total_cost": 0.005, "total_time": 30}
 
             variant_cost = workflow_cost_estimate.get("total_cost", 0.005)
+
+            # Cap cost at reasonable maximum (prevent display bugs)
+            if variant_cost > 1.0:
+                logger.warning(f"Unusually high cost {variant_cost}, capping at $0.02")
+                variant_cost = 0.02
+
             try:
                 cost_display = cost_model.format_cost_display(variant_cost)
             except Exception:
@@ -652,6 +745,11 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
         final_response = "I'm sorry, an error occurred while generating the blogs."
 
     logger.info(f"Blog content node: generated {len(response_options)} HTML variants.")
+
+    emit_trace(state, "complete", "blog_generate", {
+        "variants_generated": len(response_options),
+        "options": [opt["label"] for opt in response_options]
+    })
 
     return {
         "blog_result": {"variants": len(response_options)},
@@ -924,8 +1022,11 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def image_node(state: MarketingState) -> Dict[str, Any]:
-    """Generate an image for social posts or blog."""
+    """Generate an image for social posts or blog with full brand visual identity."""
     from agent_adapters import generate_image
+    import json
+
+    emit_trace(state, "start", "image_gen", {"message": "Generating image with brand visual identity"})
 
     social_data = state.get("social_data", {})
     brand_info = state.get("brand_info", {}) or {}
@@ -943,14 +1044,64 @@ def image_node(state: MarketingState) -> Dict[str, Any]:
     if not image_prompt:
         image_prompt = state.get("user_message", "marketing visual")
 
+    # ═══ ENRICH IMAGE PROMPT WITH BRAND VISUAL IDENTITY ═══
+    brand_visual_context = []
+
+    # Add brand colors
+    colors = brand_info.get("colors", [])
+    if colors and len(colors) > 0:
+        if isinstance(colors, str):
+            try:
+                colors = json.loads(colors)
+            except:
+                colors = [colors]
+        colors_str = ", ".join(colors) if isinstance(colors, list) else str(colors)
+        brand_visual_context.append(f"using brand colors: {colors_str}")
+
+    # Add fonts for visual style description
+    fonts = brand_info.get("fonts", [])
+    if fonts and len(fonts) > 0:
+        if isinstance(fonts, str):
+            try:
+                fonts = json.loads(fonts)
+            except:
+                fonts = [fonts]
+        fonts_str = ", ".join(fonts) if isinstance(fonts, list) else str(fonts)
+        brand_visual_context.append(f"visual style inspired by fonts: {fonts_str}")
+
+    # Add brand tone to influence mood
+    tone = brand_info.get("tone") or brand_info.get("tone_preference")
+    if tone:
+        brand_visual_context.append(f"{tone} mood")
+
+    # Add industry context
+    industry = brand_info.get("industry")
+    if industry and industry != "General":
+        brand_visual_context.append(f"{industry} industry aesthetic")
+
+    # Enhance the original prompt with brand visual identity
+    if brand_visual_context:
+        enhanced_prompt = f"{image_prompt}, {', '.join(brand_visual_context)}"
+    else:
+        enhanced_prompt = image_prompt
+
+    logger.info(f"Image generation prompt enhanced with brand identity: {enhanced_prompt[:200]}")
+
     result = generate_image(
-        prompt=image_prompt,
+        prompt=enhanced_prompt,
         brand_name=brand_info.get("brand_name", ""),
         negative_prompt=params.get("negative_prompt", ""),
         duration=params.get("duration", None),
     )
 
     logger.info(f"Image node: url={result.get('url', 'None')}")
+
+    emit_trace(state, "complete", "image_gen", {
+        "image_url": result.get("url", ""),
+        "original_prompt": image_prompt,
+        "enhanced_prompt": enhanced_prompt,
+        "brand_colors": colors if colors else None,
+    })
 
     return {
         "image_result": result,
@@ -973,6 +1124,8 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
     """
     from agent_adapters import run_critique
 
+    emit_trace(state, "start", "critic", {"message": "Evaluating content quality"})
+
     intent = state.get("intent", "blog_generation")
     user_id = state.get("user_id")
     brand_info = state.get("brand_info", {}) or {}
@@ -982,33 +1135,55 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
     content_type = "blog"
     content_ids = []
 
-    if state.get("blog_result"):
-        content_text = state["blog_result"].get("html", "")
-        content_type = "blog"
-    elif state.get("response_options") and state["response_options"][0].get("content_type") == "post":
-        # Concatenate text from response options for critique
-        parts = []
-        for opt in state["response_options"]:
-            copy = opt.get("twitter_copy") or opt.get("instagram_copy") or ""
-            if copy:
-                parts.append(copy)
-            if opt.get("content_id"):
-                content_ids.append(opt["content_id"])
-        content_text = "\n\n".join(parts)
-        content_type = "social_post"
+    # Check for content in response_options
+    if state.get("response_options"):
+        response_opts = state["response_options"]
 
-    # Also collect content_ids from blog response_options
-    if content_type == "blog" and state.get("response_options"):
-        for opt in state["response_options"]:
-            if opt.get("content_id"):
-                content_ids.append(opt["content_id"])
+        if response_opts and isinstance(response_opts, list) and len(response_opts) > 0:
+            first_opt = response_opts[0]
 
+            # Collect content_ids first
+            for opt in response_opts:
+                if opt.get("content_id"):
+                    content_ids.append(opt["content_id"])
+
+            # For blog content, we need to load it from database since it's not in state
+            if first_opt.get("content_type") == "blog":
+                content_type = "blog"
+                # Load content from database using first content_id
+                if content_ids:
+                    try:
+                        import database as db
+                        from database import get_db_connection
+                        with get_db_connection() as conn:
+                            cursor = conn.cursor()
+                            cursor.execute('SELECT content FROM generated_content WHERE id = ?', (content_ids[0],))
+                            row = cursor.fetchone()
+                            if row:
+                                content_text = row[0]
+                                logger.info(f"Critic: Loaded {len(content_text)} chars from DB for content_id={content_ids[0]}")
+                            else:
+                                logger.warning(f"Critic: Content not found in DB for content_id={content_ids[0]}")
+                    except Exception as db_err:
+                        logger.error(f"Critic: Failed to load content from DB: {db_err}")
+
+            # For social post content - concatenate copies
+            elif first_opt.get("content_type") == "post" or first_opt.get("twitter_copy") or first_opt.get("instagram_copy"):
+                content_type = "social_post"
+                parts = []
+                for opt in response_opts:
+                    copy = opt.get("twitter_copy") or opt.get("instagram_copy") or ""
+                    if copy:
+                        parts.append(copy)
+                content_text = "\n\n".join(parts)
+
+    # If still no content, return early
     if not content_text:
-        # Try pulling content from response options for blogs too
-        if state.get("response_options"):
-            for opt in state["response_options"]:
-                if opt.get("preview_url"):
-                    content_ids.append(opt.get("content_id", ""))
+        logger.warning(f"Critic node: No content found to evaluate. response_options={bool(state.get('response_options'))}, content_ids={content_ids}")
+        emit_trace(state, "complete", "critic", {
+            "skipped": True,
+            "reason": "no_content"
+        })
         return {
             "critic_result": {"passed": True, "overall_score": 1.0, "critique_text": "No content to evaluate"},
             "current_step": "critic",
@@ -1056,6 +1231,12 @@ def critic_node(state: MarketingState) -> Dict[str, Any]:
         logger.info(f"[PromptOptimizer] Scored {agent_name}/{content_type}: {overall_score:.2f}")
     except Exception as pe:
         logger.warning(f"[PromptOptimizer] Scoring skipped: {pe}")
+
+    emit_trace(state, "complete", "critic", {
+        "overall_score": overall_score,
+        "passed": passed,
+        "content_ids_evaluated": len(content_ids)
+    })
 
     return {
         "critic_result": result,

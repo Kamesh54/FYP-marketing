@@ -515,15 +515,18 @@ def initialize_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_a2a_tasks_status ON a2a_tasks(status)")
         
         # Initialize default agent costs
+        # Format: (agent_name, token_cost_per_1k, time_cost_per_second, api_cost_per_call)
         default_costs = [
-            ('webcrawler', 0.0001, 10, 0),
-            ('seo_agent', 0.0001, 30, 0),
-            ('keyword_extractor', 0.0005, 15, 0),
-            ('gap_analyzer', 0.001, 20, 0.005),
-            ('content_agent_blog', 0.002, 25, 0),
-            ('content_agent_social', 0.0005, 10, 0),
-            ('image_generator', 0, 45, 0.05),
-            ('social_poster', 0, 5, 0)
+            ('webcrawler', 0.0001, 0.0001, 0),
+            ('seo_agent', 0.0001, 0.0001, 0),
+            ('keyword_extractor', 0.0005, 0.0001, 0),
+            ('gap_analyzer', 0.001, 0.0001, 0.005),
+            ('content_agent_blog', 0.002, 0.0001, 0),
+            ('content_agent_social', 0.0005, 0.0001, 0),
+            ('image_generator', 0, 0.0001, 0.05),
+            ('social_poster', 0, 0.0001, 0),
+            ('critic_agent', 0.0005, 0.0001, 0),
+            ('research_agent', 0.0008, 0.0001, 0.01)
         ]
         
         for agent_name, token_cost, time_cost, api_cost in default_costs:
@@ -1008,6 +1011,7 @@ def update_brand_profile(user_id: int, brand_name: Optional[str] = None, **kwarg
 
         updates, values = [], []
         json_fields = {'metadata', 'learned_signals', 'colors', 'fonts'}
+
         for key, val in kwargs.items():
             if val is None:
                 continue

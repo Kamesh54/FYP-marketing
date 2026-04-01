@@ -7,7 +7,12 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import tweepy
-from instagrapi import Client as InstaClient
+try:
+    from instagrapi import Client as InstaClient
+    INSTAGRAPI_AVAILABLE = True
+except (ImportError, TypeError):
+    INSTAGRAPI_AVAILABLE = False
+    InstaClient = None
 from dotenv import load_dotenv
 from database import save_social_metrics, get_db_connection
 
@@ -163,6 +168,10 @@ class MetricsCollector:
                 "engagement_rate": float
             }
         """
+        if not INSTAGRAPI_AVAILABLE:
+            logger.warning("Instagram metrics unavailable - instagrapi requires Python 3.10+")
+            return None
+
         if not self.instagram_client:
             logger.warning("Instagram client not available")
             return None

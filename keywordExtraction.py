@@ -30,14 +30,18 @@ def clean_text(text: str) -> str:
 # ---------------- NLTK Setup ----------------
 nltk_packages = {
     "stopwords": "corpora/stopwords",
-    "punkt": "tokenizers/punkt"
+    "punkt": "tokenizers/punkt",
+    "punkt_tab": "tokenizers/punkt_tab"
 }
 for package, resource in nltk_packages.items():
     try:
         nltk.data.find(resource)
     except LookupError:
         print(f"Downloading NLTK resource: {package}")
-        nltk.download(package, quiet=True)
+        try:
+            nltk.download(package, quiet=True)
+        except Exception as e:
+            print(f"Warning: Could not download {package}: {e}")
 
 # ---------------- Env + Logging ----------------
 load_dotenv()

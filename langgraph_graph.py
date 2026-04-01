@@ -181,6 +181,7 @@ async def run_marketing_graph(
     conversation_history: Optional[list] = None,
     brand_info: Optional[Dict[str, Any]] = None,
     brand_context_summary: str = "",
+    trace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Convenience function to invoke the marketing graph with a user message.
@@ -198,6 +199,7 @@ async def run_marketing_graph(
         "conversation_history": conversation_history or [],
         "brand_info": brand_info,
         "brand_context_summary": brand_context_summary,
+        "trace_id": trace_id,  # For live execution visualization
         "steps_completed": [],
         "errors": [],
         "clarification_needed": False,

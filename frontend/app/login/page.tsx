@@ -108,8 +108,8 @@ export default function LoginPage() {
               <Sparkles className="w-8 h-8 text-primary animate-pulse-slow" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-black mb-2 animate-fade-in">Markx.pro</h1>
-          <p className="text-black/60 animate-fade-in-delay">Next-generation marketing intelligence platform</p>
+          <h1 className="text-4xl font-bold text-white mb-2 animate-fade-in">Markx.pro</h1>
+          <p className="text-white/60 animate-fade-in-delay">Next-generation marketing intelligence platform</p>
         </div>
 
         {/* Tab Switcher */}
@@ -119,7 +119,7 @@ export default function LoginPage() {
             className={`flex-1 rounded-lg transition-all duration-300 ${
               isLogin
                 ? "bg-primary text-white shadow-lg shadow-primary/50 scale-105"
-                : "bg-transparent text-black/60 hover:bg-white/5 hover:text-white"
+                : "bg-transparent text-white/60 hover:bg-white/5 hover:text-white"
             }`}
           >
             Login
@@ -129,7 +129,7 @@ export default function LoginPage() {
             className={`flex-1 rounded-lg transition-all duration-300 ${
               !isLogin
                 ? "bg-primary text-white shadow-lg shadow-primary/50 scale-105"
-                : "bg-transparent text-black/60 hover:bg-white/5 hover:text-white"
+                : "bg-transparent text-white/60 hover:bg-white/5 hover:text-white"
             }`}
           >
             Sign Up
@@ -158,7 +158,7 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="animate-slide-in-left">
-            <label className="block text-black text-sm font-medium mb-2 flex items-center gap-2">
+            <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
               <Mail className="w-4 h-4 text-primary" />
               Email Address
             </label>
@@ -168,12 +168,12 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className="w-full glass-panel border-black/10 text-black placeholder:text-white/40 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl h-12 px-4 transition-all duration-300 hover:border-white/30"
+              className="w-full glass-panel border-white/10 text-white placeholder:text-white/40 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl h-12 px-4 transition-all duration-300 hover:border-white/30"
             />
           </div>
 
           <div className="animate-slide-in-left" style={{ animationDelay: "0.1s" }}>
-            <label className="block text-black text-sm font-medium mb-2 flex items-center gap-2">
+            <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
               <Lock className="w-4 h-4 text-primary" />
               Password
             </label>
@@ -183,10 +183,10 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder={isLogin ? "Enter your password" : "Create a strong password"}
               required
-              className="w-full glass-panel border-black/10 text-black placeholder:text-white/40 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl h-12 px-4 transition-all duration-300 hover:border-white/30"
+              className="w-full glass-panel border-white/10 text-white placeholder:text-white/40 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl h-12 px-4 transition-all duration-300 hover:border-white/30"
             />
             {!isLogin && (
-              <p className="text-red/40 text-xs mt-2 flex items-center gap-1">
+              <p className="text-white/40 text-xs mt-2 flex items-center gap-1">
                 <span className="w-1 h-1 rounded-full bg-primary"></span>
                 Must be 8+ characters with uppercase, lowercase, and number
               </p>
@@ -195,7 +195,7 @@ export default function LoginPage() {
 
           {!isLogin && (
             <div className="animate-slide-in-left" style={{ animationDelay: "0.2s" }}>
-              <label className="block text-black text-sm font-medium mb-2 flex items-center gap-2">
+              <label className="block text-white text-sm font-medium mb-2 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-primary" />
                 Confirm Password
               </label>
@@ -205,7 +205,7 @@ export default function LoginPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter your password"
                 required
-                className="w-full glass-panel border-red/10 text-black placeholder:text-white/40 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl h-12 px-4 transition-all duration-300 hover:border-white/30"
+                className="w-full glass-panel border-white/10 text-white placeholder:text-white/40 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl h-12 px-4 transition-all duration-300 hover:border-white/30"
               />
             </div>
           )}
@@ -246,7 +246,7 @@ export default function LoginPage() {
           style={{ animationDelay: "0.5s" }}
         >
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-          <span className="text-red/40 text-xs capitalize">{theme} Theme Active</span>
+          <span className="text-white/40 text-xs capitalize">{theme} Theme Active</span>
         </div>
       </Card>
     </div>

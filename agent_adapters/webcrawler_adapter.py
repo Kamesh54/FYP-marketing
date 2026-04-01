@@ -16,8 +16,9 @@ def run_webcrawler(url: str, max_pages: int = 5, delay: float = 0.5,
     from webcrawler import WebCrawler
 
     try:
-        crawler = WebCrawler(delay=delay, timeout=timeout)
-        pages = crawler.crawl(url, max_pages=max_pages)
+        # Pass max_pages to constructor, not to crawl() method
+        crawler = WebCrawler(delay=delay, timeout=timeout, max_pages=max_pages)
+        pages = crawler.crawl(url)
 
         # Combine all page content into a single string
         combined_content = ""
