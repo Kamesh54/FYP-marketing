@@ -1,0 +1,966 @@
+openapi: 3.0.0
+info:
+  title: FYP Marketing Platform - A2A Protocol & MCP API
+  description: |
+    Comprehensive API documentation for Agent-to-Agent (A2A) communication protocol and Model Context Protocol (MCP)
+    in the FYP Multi-Agent Marketing Platform.
+    
+    ## Protocols Supported
+    - **A2A**: Agent-to-Agent task delegation using JSON-RPC 2.0
+    - **MCP**: Model Context Protocol for LLM tool integration
+    
+    ## Authentication
+    All endpoints require JWT Bearer token authentication (except discovery endpoints).
+  version: 1.0.0
+  contact:
+    name: FYP Marketing Platform
+    url: http://localhost:8004
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:8004
+    description: Orchestrator Server (Production)
+  - url: http://127.0.0.1:8004
+    description: Orchestrator Server (Local)
+
+# ============================================================================
+# TAG ORGANIZATION
+# ============================================================================
+tags:
+  - name: A2A Protocol
+    description: Agent-to-Agent communication (JSON-RPC 2.0)
+  - name: A2A Discovery
+    description: Agent discovery and capability negotiation
+  - name: MCP Tools
+    description: LLM tool invocation
+  - name: MCP Resources
+    description: Data resource access
+  - name: MCP Prompts
+    description: Workflow prompt templates
+  - name: Health & Status
+    description: System health and status endpoints
+
+# ============================================================================
+# PATHS - A2A PROTOCOL
+# ============================================================================
+paths:
+
+  # ────────────────────────────────────────────────────────────────────────
+  # DISCOVERY & CAPABILITY ENDPOINTS
+  # ────────────────────────────────────────────────────────────────────────
+  
+  /.well-known/agent.json:
+    get:
+      tags:
+        - A2A Discovery
+      summary: Get Agent Card (discoverable capabilities)
+      description: |
+        Returns the Agent Card describing orchestrator capabilities, supported methods, and endpoints.
+        This is the entry point for other agents to discover our capabilities.
+      operationId: getAgentCard
+      security: []  # No authentication required for discovery
+      responses:
+        '200':
+          description: Agent Card successfully returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentCard'
+              example:
+                name: FYP Orchestrator
+                description: Multi-agent marketing automation platform
+                a2aVersion: "0.1"
+                a2aEndpointUrl: http://localhost:8004/a2a
+                authentication:
+                  schemes:
+                    - bearer
+                  description: JWT Bearer token required
+                capabilities:
+                  - method: tasks.send
+                    description: Submit task and wait for completion
+                  - method: tasks.sendSubscribe
+                    description: Submit task with real-time SSE updates
+                  - method: tasks.cancel
+                    description: Cancel a running task
+                  - method: campaigns.propose
+                    description: Propose marketing campaign
+                  - method: campaigns.accept
+                    description: Accept proposed campaign
+
+  # ────────────────────────────────────────────────────────────────────────
+  # A2A TASK ENDPOINTS (JSON-RPC 2.0)
+  # ────────────────────────────────────────────────────────────────────────
+
+  /a2a:
+    post:
+      tags:
+        - A2A Protocol
+      summary: JSON-RPC 2.0 Endpoint (A2A Task Submission)
+      description: |
+        Main A2A JSON-RPC endpoint for task submission and method invocation.
+        Supports both request-response and streaming patterns.
+        
+        ## Supported Methods:
+        
+        1. **tasks.send**: Submit task and poll for completion
+        2. **tasks.sendSubscribe**: Submit task with SSE streaming
+        3. **tasks.cancel**: Cancel running task
+        4. **campaigns.propose**: Propose campaign strategy
+        5. **campaigns.accept**: Accept campaign and execute
+        
+        ## Error Handling:
+        - Returns JSON-RPC error object on failure
+        - Error codes: -32600 (invalid), -32602 (invalid params), -32603 (internal)
+      operationId: a2aJsonRpc
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/A2AJsonRpcRequest'
+            examples:
+              taskSend:
+                summary: Submit task and wait for completion
+                value:
+                  jsonrpc: "2.0"
+                  id: "req-001"
+                  method: tasks.send
+                  params:
+                    task:
+                      messages:
+                        - role: user
+                          parts:
+                            - type: text
+                              text: Generate a blog post about AI marketing
+                      metadata:
+                        intent: blog_generation
+                        brand_name: TechCorp
+                        duration_days: 7
+              
+              taskSendSubscribe:
+                summary: Submit task with SSE streaming
+                value:
+                  jsonrpc: "2.0"
+                  id: "req-002"
+                  method: tasks.sendSubscribe
+                  params:
+                    task:
+                      messages:
+                        - role: user
+                          parts:
+                            - type: text
+                              text: Plan a 21-day social media campaign
+                      metadata:
+                        campaign_tier: premium
+              
+              campaignPropose:
+                summary: Propose campaign strategy
+                value:
+                  jsonrpc: "2.0"
+                  id: "req-003"
+                  method: campaigns.propose
+                  params:
+                    campaign:
+                      theme: "Sustainable Products Q2 2026"
+                      tier: balanced
+                      duration_days: 28
+                      budget: 5000
+
+      responses:
+        '200':
+          description: JSON-RPC response received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/A2AJsonRpcResponse'
+              examples:
+                success:
+                  summary: Successful task submission
+                  value:
+                    jsonrpc: "2.0"
+                    id: "req-001"
+                    result:
+                      taskId: "task-blog-ai-20260407-12345"
+                      status:
+                        state: submitted
+                        message: Task queued for processing
+                
+                error:
+                  summary: Invalid parameters error
+                  value:
+                    jsonrpc: "2.0"
+                    id: "req-001"
+                    error:
+                      code: -32602
+                      message: Invalid params
+                      data:
+                        details: "Brand 'Unknown' is not a valid brand name"
+
+  /a2a/tasks/{task_id}:
+    get:
+      tags:
+        - A2A Protocol
+      summary: Poll Task Status
+      description: |
+        Get current status of a submitted task.
+        Polling interval: typically 1-5 seconds
+        Terminal states: completed, failed, canceled
+      operationId: getTaskStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: Task ID from initial submission
+          schema:
+            type: string
+            example: "task-blog-ai-20260407-12345"
+      responses:
+        '200':
+          description: Task status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/A2ATask'
+              example:
+                id: "task-blog-ai-20260407-12345"
+                status:
+                  state: working
+                  message: "Generating blog content (step 3/5)..."
+                messages:
+                  - role: user
+                    parts:
+                      - type: text
+                        text: Generate blog post about AI marketing
+                artifacts: []
+                metadata:
+                  progress: 60
+                  estimated_remaining_seconds: 45
+
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /a2a/tasks/{task_id}/subscribe:
+    post:
+      tags:
+        - A2A Protocol
+      summary: Subscribe to Task (Server-Sent Events)
+      description: |
+        Open a persistent SSE connection to receive real-time task updates.
+        
+        **Event Types:**
+        - `status`: Task state changed
+        - `artifact`: Content artifact generated
+        - `error`: Task encountered error
+        
+        **Connection Management:**
+        - Keep-alive: heartbeat every 30 seconds
+        - Auto-reconnect on client disconnect
+        - Max connections per task: 5
+      operationId: subscribeTask
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE stream opened
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                event: status
+                data: {"type":"status","taskId":"task-001","status":{"state":"working"}}
+                
+                event: status
+                data: {"type":"status","taskId":"task-001","status":{"state":"working","message":"Generating keywords..."}}
+                
+                event: artifact
+                data: {"type":"artifact","taskId":"task-001","artifact":{"name":"blog_post.html","parts":[...]}}
+                
+                event: status
+                data: {"type":"status","taskId":"task-001","status":{"state":"completed"}}
+
+  /a2a/tasks/{task_id}/cancel:
+    post:
+      tags:
+        - A2A Protocol
+      summary: Cancel Task
+      description: |
+        Cancel a running or queued task.
+        Returns immediately; task transitions to 'canceled' state.
+      operationId: cancelTask
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: "User requested cancellation"
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/A2ATask'
+
+  # ────────────────────────────────────────────────────────────────────────
+  # MCP ENDPOINTS
+  # ────────────────────────────────────────────────────────────────────────
+
+  /mcp/initialize:
+    post:
+      tags:
+        - MCP Tools
+      summary: Initialize MCP Connection
+      description: |
+        Handshake endpoint for LLM clients to initiate MCP connection.
+        Returns server capabilities and protocol version.
+      operationId: mcpInitialize
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                protocolVersion:
+                  type: string
+                  example: "2024-11-05"
+                clientInfo:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "claude-desktop"
+                    version:
+                      type: string
+                      example: "1.0.0"
+      responses:
+        '200':
+          description: MCP connection initialized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  protocolVersion:
+                    type: string
+                  serverInfo:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      version:
+                        type: string
+                  capabilities:
+                    type: array
+                    items:
+                      type: string
+
+  /mcp/tools/list:
+    post:
+      tags:
+        - MCP Tools
+      summary: List Available Tools
+      description: |
+        Returns all callable tools available to LLM.
+        Each tool includes name, description, and input schema.
+      operationId: mcpListTools
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MCPRequest'
+      responses:
+        '200':
+          description: Tools list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MCPTool'
+
+  /mcp/tools/call:
+    post:
+      tags:
+        - MCP Tools
+      summary: Call Tool
+      description: |
+        Invoke a tool with provided arguments.
+        
+        **Available Tools:**
+        - webcrawler_extract
+        - keywords_extract
+        - gap_analyzer_run
+        - content_generate_blog
+        - content_generate_social
+        - seo_analyze
+        - get_optimal_workflow
+        - query_knowledge_graph
+      operationId: mcpCallTool
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jsonrpc:
+                  type: string
+                  enum: ["2.0"]
+                id:
+                  oneOf:
+                    - type: string
+                    - type: number
+                method:
+                  type: string
+                  example: "tools/call"
+                params:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "seo_analyze"
+                    arguments:
+                      type: object
+                      example:
+                        url: "https://example.com"
+      responses:
+        '200':
+          description: Tool executed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jsonrpc:
+                    type: string
+                  id:
+                    oneOf:
+                      - type: string
+                      - type: number
+                  result:
+                    type: object
+
+  /mcp/resources/list:
+    post:
+      tags:
+        - MCP Resources
+      summary: List Available Resources
+      description: |
+        Returns all accessible data resources via URI scheme.
+        
+        **Resource Types:**
+        - `brand://id` - Brand profile
+        - `content://id` - Generated content
+        - `campaign://id` - Campaign data
+        - `metrics://scope` - Engagement metrics
+        - `knowledge://graph` - Neo4j knowledge graph
+      operationId: mcpListResources
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Resources list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resources:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MCPResource'
+
+  /mcp/resources/read:
+    post:
+      tags:
+        - MCP Resources
+      summary: Read Resource
+      description: |
+        Access live data from a resource using URI.
+        Example URIs:
+        - `brand://42` - User 42's brand profile
+        - `metrics://overview` - Aggregated metrics
+        - `knowledge://graph` - Knowledge graph snapshot
+      operationId: mcpReadResource
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uri:
+                  type: string
+                  example: "brand://42"
+      responses:
+        '200':
+          description: Resource content
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /mcp/prompts/list:
+    post:
+      tags:
+        - MCP Prompts
+      summary: List Workflow Prompts
+      description: |
+        Returns pre-built workflow prompt templates.
+        
+        **Available Workflows:**
+        - blog_generation_workflow
+        - social_campaign_workflow
+        - competitor_analysis_workflow
+        - content_optimization_workflow
+      operationId: mcpListPrompts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Prompts list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prompts:
+                    type: array
+                    items:
+                      type: object
+
+  /mcp/prompts/get:
+    post:
+      tags:
+        - MCP Prompts
+      summary: Get Prompt Template
+      description: |
+        Retrieve a specific workflow prompt template with substitution variables.
+      operationId: mcpGetPrompt
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "blog_generation_workflow"
+      responses:
+        '200':
+          description: Prompt template
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ────────────────────────────────────────────────────────────────────────
+  # HEALTH & STATUS
+  # ────────────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags:
+        - Health & Status
+      summary: Health Check
+      description: Service health status
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  services:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                      langgraph:
+                        type: string
+                      mabo:
+                        type: string
+
+  /status:
+    get:
+      tags:
+        - Health & Status
+      summary: System Status
+      description: Detailed system status including agents
+      operationId: getStatus
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uptime_seconds:
+                    type: integer
+                  active_tasks:
+                    type: integer
+                  agents:
+                    type: object
+                  last_updated:
+                    type: string
+                    format: date-time
+
+# ============================================================================
+# COMPONENTS - SCHEMAS
+# ============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from authentication endpoint
+
+  schemas:
+    # ────────────────────────────────────────────────────────────────────
+    # A2A Protocol Schemas
+    # ────────────────────────────────────────────────────────────────────
+
+    AgentCard:
+      type: object
+      required:
+        - name
+        - description
+        - a2aVersion
+        - a2aEndpointUrl
+        - capabilities
+      properties:
+        name:
+          type: string
+          example: "FYP Orchestrator"
+        description:
+          type: string
+          example: "Multi-agent marketing automation platform"
+        a2aVersion:
+          type: string
+          example: "0.1"
+        a2aEndpointUrl:
+          type: string
+          format: uri
+          example: "http://localhost:8004/a2a"
+        authentication:
+          type: object
+          properties:
+            schemes:
+              type: array
+              items:
+                type: string
+                example: "bearer"
+            description:
+              type: string
+        capabilities:
+          type: array
+          items:
+            type: object
+            properties:
+              method:
+                type: string
+              description:
+                type: string
+
+    A2AJsonRpcRequest:
+      type: object
+      required:
+        - jsonrpc
+        - id
+        - method
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: string
+            - type: number
+          description: Request ID (echoed in response)
+        method:
+          type: string
+          description: "RPC method: tasks.send, tasks.sendSubscribe, tasks.cancel, campaigns.propose, campaigns.accept"
+          example: "tasks.send"
+        params:
+          type: object
+          description: Method-specific parameters
+
+    A2AJsonRpcResponse:
+      type: object
+      required:
+        - jsonrpc
+        - id
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: string
+            - type: number
+        result:
+          oneOf:
+            - type: object
+              properties:
+                taskId:
+                  type: string
+                status:
+                  $ref: '#/components/schemas/TaskStatus'
+            - type: null
+        error:
+          $ref: '#/components/schemas/JsonRpcError'
+
+    A2ATask:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          example: "task-blog-ai-20260407-12345"
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/A2AMessage'
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/A2AArtifact'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    TaskStatus:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum:
+            - submitted
+            - working
+            - input_required
+            - completed
+            - failed
+            - canceled
+        message:
+          type: string
+          example: "Processing step 3 of 5..."
+        progress_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+
+    A2AMessage:
+      type: object
+      required:
+        - role
+        - parts
+      properties:
+        role:
+          type: string
+          enum: [user, agent]
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/A2APart'
+
+    A2APart:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [text, file]
+        text:
+          type: string
+        file:
+          $ref: '#/components/schemas/FilePart'
+
+    FilePart:
+      type: object
+      properties:
+        name:
+          type: string
+        mimeType:
+          type: string
+        bytes:
+          type: string
+          format: base64
+
+    A2AArtifact:
+      type: object
+      required:
+        - name
+        - parts
+      properties:
+        name:
+          type: string
+          example: "blog_post.html"
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/A2APart'
+
+    JsonRpcError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          enum:
+            - -32700  # Parse error
+            - -32600  # Invalid Request
+            - -32601  # Method not found
+            - -32602  # Invalid params
+            - -32603  # Internal error
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+
+    # ────────────────────────────────────────────────────────────────────
+    # MCP Schemas
+    # ────────────────────────────────────────────────────────────────────
+
+    MCPRequest:
+      type: object
+      required:
+        - jsonrpc
+        - id
+        - method
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          oneOf:
+            - type: string
+            - type: number
+        method:
+          type: string
+          example: "tools/list"
+        params:
+          type: object
+          additionalProperties: true
+
+    MCPTool:
+      type: object
+      required:
+        - name
+        - description
+        - inputSchema
+      properties:
+        name:
+          type: string
+          example: "seo_analyze"
+        description:
+          type: string
+          example: "Perform comprehensive SEO analysis"
+        inputSchema:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [object]
+            properties:
+              type: object
+            required:
+              type: array
+              items:
+                type: string
+
+    MCPResource:
+      type: object
+      required:
+        - uri
+        - name
+        - description
+      properties:
+        uri:
+          type: string
+          example: "brand://*/profile"
+        name:
+          type: string
+        description:
+          type: string
+        mimeType:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

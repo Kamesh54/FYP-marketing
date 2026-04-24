@@ -1,0 +1,154 @@
+{
+    "company_info": {
+        "name": "bikes 90",
+        "url": "",
+        "product_description": "automotive in None. all brand bikes are available here"
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "automotive in",
+            "in none",
+            "none all",
+            "all brand",
+            "brand bikes",
+            "bikes are",
+            "are available",
+            "available here",
+            "automotive",
+            "in",
+            "none",
+            "all",
+            "brand",
+            "bikes",
+            "are",
+            "available",
+            "here"
+        ],
+        "long_tail_keywords": [
+            "automotive in none all",
+            "in none all brand",
+            "none all brand bikes",
+            "all brand bikes are",
+            "brand bikes are available",
+            "bikes are available here",
+            "automotive in none",
+            "in none all",
+            "none all brand",
+            "all brand bikes",
+            "brand bikes are",
+            "bikes are available",
+            "are available here"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 3,
+        "competitor_details": [
+            {
+                "name": "eBike Flow app: your eBike gets smart.",
+                "url": "https://www.bosch-ebike.com/us/products/ebike-flow-app",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Workstand | Bike Shop Software and Marketing",
+                "url": "https://workstand.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Bike Shop POS & Management Software",
+                "url": "https://www.lightspeedhq.com/pos/retail/bike-shop/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "powerful relationships",
+                "singlekey id",
+                "simply remove",
+                "route profile",
+                "increase sales",
+                "premium service",
+                "presented exclusively",
+                "saved compared",
+                "updates ensure",
+                "valuable information"
+            ],
+            "long_tail": [
+                "workstand delivers affordable",
+                "manage payroll efficiently",
+                "build better sales forecasts",
+                "ebike flow app becomes",
+                "party pos systems",
+                "available every month free",
+                "analyze riding data connect",
+                "following new drive units",
+                "also offers detailed navigation",
+                "ebike display automatically record"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "automotive in",
+                "in none",
+                "none all",
+                "all brand",
+                "brand bikes",
+                "bikes are",
+                "are available",
+                "available here",
+                "automotive",
+                "in"
+            ],
+            "long_tail": [
+                "automotive in none all",
+                "in none all brand",
+                "none all brand bikes",
+                "all brand bikes are",
+                "brand bikes are available",
+                "bikes are available here",
+                "automotive in none",
+                "in none all",
+                "none all brand",
+                "all brand bikes"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "powerful relationships",
+                "singlekey id",
+                "simply remove",
+                "route profile",
+                "increase sales"
+            ],
+            "long_tail": [
+                "workstand delivers affordable",
+                "manage payroll efficiently",
+                "build better sales forecasts",
+                "ebike flow app becomes",
+                "party pos systems"
+            ]
+        },
+        "recommendations": [
+            "Optimize website content to include missing short and long-tail keywords",
+            "Create high-quality, informative content around unique company keywords",
+            "Develop a content marketing strategy focusing on automotive and ebike-related topics",
+            "Utilize long-tail keywords in meta tags, headings, and body content",
+            "Leverage internal linking to connect relevant pages and improve user experience"
+        ],
+        "competitive_insights": [
+            "Competitors are targeting a wider range of keywords, including short and long-tail phrases",
+            "The company has a unique set of keywords related to 'automotive in none' and 'all brand bikes'",
+            "There is an opportunity to create content around 'ebike' and 'riding data' to attract a specific audience"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

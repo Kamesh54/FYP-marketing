@@ -47,6 +47,7 @@ interface Message {
   role: "user" | "assistant"
   content: string
   timestamp?: string
+  intent?: string
   responseOptions?: WorkflowOption[]
   selectedOption?: { label: string; content_id: string }
 }
@@ -62,9 +63,14 @@ interface WorkflowOption {
   workflow_agents?: string[]
   content_id?: string
   content_type?: string
+  html_code?: string
   twitter_copy?: string
   instagram_copy?: string
+  linkedin_copy?: string
   hashtags?: string[]
+  bundle_type?: string
+  direct_action?: boolean
+  platform?: string
   critic?: {
     overall: number
     intent: number
@@ -72,6 +78,11 @@ interface WorkflowOption {
     quality: number
     passed: boolean
     text: string
+  }
+  campaign_data?: {
+    tier: string
+    theme: string
+    duration_days: number
   }
 }
 
@@ -86,6 +97,7 @@ interface ContentDetails {
   preview_url?: string
   metadata?: {
     image_path?: string
+    image_paths?: string[]
   }
 }
 
@@ -103,12 +115,80 @@ interface Asset {
   asset_type: string
 }
 
+// Helper function to extract URLs from text
+function extractUrls(text: string): string[] {
+  const urlRegex = /(https?:\/\/[^\s]+)/gi
+  const matches = text.match(urlRegex) || []
+  return [...new Set(matches.map(url => url.replace(/[.,;:]$/, '')))] // Remove trailing punctuation and deduplicate
+}
+
+function cleanMarkdownWrappedHTML(text: string): string {
+  let cleaned = (text || "").trim()
+  if (!cleaned) return ""
+
+  if (cleaned.startsWith("```") && cleaned.endsWith("```")) {
+    cleaned = cleaned
+      .replace(/^```(?:json|html)?\s*/i, "")
+      .replace(/\s*```$/, "")
+      .trim()
+  }
+
+  return cleaned
+}
+
+function extractHtmlFromUnknown(value: unknown): string {
+  if (typeof value === "string") {
+    const cleaned = cleanMarkdownWrappedHTML(value)
+    if (!cleaned) return ""
+
+    if (cleaned.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(cleaned)
+        return extractHtmlFromUnknown(parsed)
+      } catch {
+        // Keep trying as plain text below.
+      }
+    }
+
+    if (/<(?:!doctype|html|head|body|main|article|section|div|h1|h2|p)\b/i.test(cleaned)) {
+      return cleaned
+    }
+
+    return ""
+  }
+
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>
+    const keys = ["html_code", "html", "html_content", "content", "blog_html"]
+    for (const key of keys) {
+      if (key in obj) {
+        const nested = extractHtmlFromUnknown(obj[key])
+        if (nested) return nested
+      }
+    }
+  }
+
+  return ""
+}
+
+function extractOptionBlogHTML(option: WorkflowOption): string {
+  const fromHtmlCode = extractHtmlFromUnknown(option.html_code)
+  if (fromHtmlCode) return fromHtmlCode
+
+  // Fallback for responses where html/json was accidentally placed in preview_text.
+  const fromPreviewText = extractHtmlFromUnknown(option.preview_text)
+  if (fromPreviewText) return fromPreviewText
+
+  return ""
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [userEmail, setUserEmail] = useState("")
+  const [creditsBalance, setCreditsBalance] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -135,6 +215,10 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    const cachedCredits = Number(localStorage.getItem("creditsBalance") || 0)
+    if (cachedCredits > 0) {
+      setCreditsBalance(cachedCredits)
+    }
     checkAuth()
   }, [])
 
@@ -189,10 +273,13 @@ export default function Home() {
 
       const user = await response.json()
       setUserEmail(user.email)
+      setCreditsBalance(Number(user.credits_balance || 0))
+      localStorage.setItem("creditsBalance", String(user.credits_balance || 0))
       await loadSessions()
     } catch (error) {
       console.error("Auth check failed:", error)
       localStorage.removeItem("authToken")
+      localStorage.removeItem("creditsBalance")
       window.location.href = "/login"
     }
   }
@@ -305,6 +392,11 @@ export default function Home() {
 
       const data = await response.json()
 
+      if (typeof data.credits_balance === "number") {
+        setCreditsBalance(data.credits_balance)
+        localStorage.setItem("creditsBalance", String(data.credits_balance))
+      }
+
       // Persist SEO audit data so the /seo page can display it immediately
       if (data.seo_result) {
         localStorage.setItem("lastSeoAudit", JSON.stringify({
@@ -319,7 +411,7 @@ export default function Home() {
 
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.response, responseOptions: incomingOptions },
+        { role: "assistant", content: data.response, intent: data.intent, responseOptions: incomingOptions },
       ])
 
       if (data.session_id !== currentSessionId) {
@@ -337,7 +429,7 @@ export default function Home() {
         ...prev,
         {
           role: "assistant",
-          content: "âš ï¸ Connection error. Please check if the server is running.",
+          content: "Connection error. Please check if the server is running.",
         },
       ])
     } finally {
@@ -372,16 +464,28 @@ export default function Home() {
 
     try {
       const token = localStorage.getItem("authToken")
-      const response = await fetch(`${API_BASE_URL}/workflow/select`, {
+      const isCampaignOption = Boolean(option.campaign_data)
+      const endpoint = isCampaignOption ? `${API_BASE_URL}/campaigns/select` : `${API_BASE_URL}/workflow/select`
+      const payload = isCampaignOption
+        ? {
+            session_id: currentSessionId,
+            campaign_id: option.option_id,
+            tier: option.campaign_data?.tier,
+            theme: option.campaign_data?.theme,
+            duration_days: option.campaign_data?.duration_days,
+          }
+        : {
+            session_id: currentSessionId,
+            option_id: option.option_id,
+          }
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          session_id: currentSessionId,
-          option_id: option.option_id,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json()
@@ -443,11 +547,16 @@ export default function Home() {
       })
 
       const data = await response.json()
+      const urlLines = data.url
+        ? [data.url]
+        : data.urls
+          ? Object.values(data.urls)
+          : []
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `âœ… Content published successfully!\n\n${data.url ? `View at: ${data.url}` : ""}`,
+          content: `Content published successfully.\n\n${urlLines.length > 0 ? `View at:\n${urlLines.join("\n")}` : ""}`,
         },
       ])
       setContentPreview(null)
@@ -458,7 +567,7 @@ export default function Home() {
         ...prev,
         {
           role: "assistant",
-          content: "âš ï¸ Failed to publish content. Please try again.",
+          content: "Failed to publish content. Please try again.",
         },
       ])
     }
@@ -568,7 +677,7 @@ export default function Home() {
         ...prev,
         {
           role: "user",
-          content: `ðŸ“· Uploading ${uploadFile.name} as ${assetType}...`,
+          content: `Uploading ${uploadFile.name} as ${assetType}...`,
         },
       ])
 
@@ -585,7 +694,7 @@ export default function Home() {
           ...prev,
           {
             role: "assistant",
-            content: `âœ… Image uploaded successfully!\n\n**Type:** ${assetType}\n**S3 URL:** ${data.s3_url}`,
+            content: `Image uploaded successfully.\n\n**Type:** ${assetType}\n**S3 URL:** ${data.s3_url}`,
           },
         ])
         // Refresh assets after successful upload
@@ -595,7 +704,7 @@ export default function Home() {
           ...prev,
           {
             role: "assistant",
-            content: `âœ… Image uploaded successfully!\n\n**Type:** ${assetType}`,
+            content: `Image uploaded successfully.\n\n**Type:** ${assetType}`,
           },
         ])
         // Refresh assets even if no S3 URL
@@ -610,7 +719,7 @@ export default function Home() {
         ...prev,
         {
           role: "assistant",
-          content: "âŒ Upload failed. Please try again.",
+          content: "Upload failed. Please try again.",
         },
       ])
     }
@@ -620,6 +729,7 @@ export default function Home() {
     localStorage.removeItem("authToken")
     localStorage.removeItem("userId")
     localStorage.removeItem("userEmail")
+    localStorage.removeItem("creditsBalance")
     window.location.href = "/login"
   }
 
@@ -675,6 +785,21 @@ export default function Home() {
               <Plus className="w-4 h-4 mr-2" />
               New Chat
             </Button>
+
+            <div
+              className="mt-3 rounded-xl px-3 py-2 flex items-center justify-between"
+              style={{
+                background: `rgba(var(--primary), 0.12)`,
+                border: `1px solid rgba(var(--primary), 0.28)`,
+              }}
+            >
+              <span className="text-xs font-semibold" style={{ color: `rgba(var(--text-secondary), 1)` }}>
+                Credits
+              </span>
+              <span className="text-sm font-bold" style={{ color: `rgba(var(--primary), 1)` }}>
+                {creditsBalance}
+              </span>
+            </div>
           </div>
 
           {/* Sessions List */}
@@ -816,11 +941,11 @@ export default function Home() {
                   <TrendingUp className="w-4 h-4 mr-2" />Analytics
                 </Button>
               </Link>
-              <a href="http://localhost:8080/critic_dashboard.html" target="_blank" rel="noopener noreferrer">
+              <Link href="/critic">
                 <Button variant="ghost" className="w-full justify-start text-sm" style={{ color: `rgba(var(--text-secondary), 1)` }}>
                   <BarChart3 className="w-4 h-4 mr-2" />Critic Log
                 </Button>
-              </a>
+              </Link>
               <Link href="/seo">
                 <Button variant="ghost" className="w-full justify-start text-sm" style={{ color: `rgba(var(--text-secondary), 1)` }}>
                   <Search className="w-4 h-4 mr-2" />SEO Audit
@@ -893,7 +1018,18 @@ export default function Home() {
                 AI Marketing Assistant
               </h1>
             </div>
-            <div className="w-10" />
+            <div className="flex items-center gap-2">
+              <div
+                className="px-3 py-1 rounded-full text-xs font-semibold"
+                style={{
+                  background: `rgba(var(--primary), 0.12)`,
+                  border: `1px solid rgba(var(--primary), 0.28)`,
+                  color: `rgba(var(--primary), 1)`,
+                }}
+              >
+                {creditsBalance} credits
+              </div>
+            </div>
           </div>
 
           {/* Chat Container */}
@@ -960,6 +1096,30 @@ export default function Home() {
                         )}
                       </div>
 
+                      {/* Quick-analyze buttons for URLs in assistant messages */}
+                      {message.role === "assistant" && !message.responseOptions?.length && (
+                        (() => {
+                          const urls = extractUrls(message.content)
+                          return urls.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 -mt-2">
+                              {urls.map((url, idx) => (
+                                <Link key={idx} href={`/seo?url=${encodeURIComponent(url)}`}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs rounded-lg"
+                                    style={{ border: `1px solid rgba(var(--primary), 0.3)`, color: `rgba(var(--primary), 1)` }}
+                                  >
+                                    <Search className="w-3 h-3 mr-1" />
+                                    Analyze {url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                                  </Button>
+                                </Link>
+                              ))}
+                            </div>
+                          ) : null
+                        })()
+                      )}
+
                       {message.role === "user" && (
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center font-semibold flex-shrink-0"
@@ -993,30 +1153,42 @@ export default function Home() {
                     {/* â”€â”€ Inline option cards for this message â”€â”€ */}
                     {message.role === "assistant" && (message.responseOptions?.length ?? 0) > 0 && (
                       <div className="ml-14 animate-scale-in">
+                        {(() => {
+                          const isCombinedKit =
+                            message.intent === "blog_instagram_combo" ||
+                            message.responseOptions?.every((option) => option.bundle_type === "blog_instagram_combo")
+
+                          return (
+                            <>
                         {/* Enhanced header with MABO indicator */}
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-2">
                             <Sparkles className="w-4 h-4" style={{ color: `rgba(var(--primary), 1)` }} />
                             <p className="text-sm font-bold" style={{ color: `rgba(var(--text-primary), 1)` }}>
-                              AI-Generated Options
+                              {isCombinedKit ? "Combined Content Kit" : "AI-Generated Options"}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 px-3 py-1 rounded-full"
                                style={{ background: `rgba(var(--primary), 0.1)`, border: `1px solid rgba(var(--primary), 0.3)` }}>
                             <Zap className="w-3.5 h-3.5" style={{ color: `rgba(var(--primary), 1)` }} />
                             <span className="text-xs font-semibold" style={{ color: `rgba(var(--primary), 1)` }}>
-                              MABO Optimized
+                              {isCombinedKit ? "Dual Output" : "MABO Optimized"}
                             </span>
                           </div>
                         </div>
 
                         <p className="text-xs mb-4" style={{ color: `rgba(var(--text-secondary), 1)` }}>
-                          Choose the variant that best matches your goals. Each option is optimized using multi-armed bandit learning.
+                          {isCombinedKit
+                            ? "One request generated both deliverables. Review and publish each piece independently."
+                            : "Choose the variant that best matches your goals. Each option is optimized using multi-armed bandit learning."}
                         </p>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {message.responseOptions!.map((option, optIdx) => (
-                            <Card
+                        <div className={`grid grid-cols-1 ${isCombinedKit ? "xl:grid-cols-2" : "md:grid-cols-2"} gap-4`}>
+                          {message.responseOptions!.map((option, optIdx) => {
+                            const blogHtml = option.content_type === "blog" ? extractOptionBlogHTML(option) : ""
+                            const isDirectAction = Boolean(option.direct_action || option.bundle_type === "blog_instagram_combo")
+
+                            return <Card
                               key={option.option_id}
                               style={{
                                 animationDelay: `${optIdx * 100}ms`,
@@ -1060,7 +1232,7 @@ export default function Home() {
                                   {option.preview_url ? (
                                     <>
                                       <img
-                                        src={`${API_BASE_URL}${option.preview_url}`}
+                                        src={option.preview_url.startsWith('http') ? option.preview_url : `${API_BASE_URL}${option.preview_url}`}
                                         alt="Generated image"
                                         className="w-full h-36 object-cover"
                                         onError={(e) => {
@@ -1094,7 +1266,7 @@ export default function Home() {
                                 </div>
                               )}
 
-                              {/* Copy preview */}
+                              {/* Copy/Blog preview */}
                               {option.content_type === "post" && (option.instagram_copy || option.twitter_copy || option.linkedin_copy) ? (
                                 <div className="space-y-2 text-xs">
                                   {option.twitter_copy && (
@@ -1120,6 +1292,16 @@ export default function Home() {
                                       {option.hashtags.slice(0, 5).join(" ")}
                                     </p>
                                   )}
+                                </div>
+                              ) : option.content_type === "blog" && blogHtml ? (
+                                <div className="rounded-lg overflow-hidden border" style={{ borderColor: `rgba(var(--border), 0.5)` }}>
+                                  <iframe
+                                    srcDoc={blogHtml}
+                                    className="w-full h-[250px] bg-white"
+                                    title={`${option.label} Blog Preview`}
+                                    loading="lazy"
+                                    sandbox="allow-same-origin"
+                                  />
                                 </div>
                               ) : (
                                 <p className="text-sm line-clamp-3" style={{ color: `rgba(var(--text-secondary), 1)` }}>
@@ -1147,14 +1329,14 @@ export default function Home() {
                                 }}>
                                   <div className="flex items-center justify-between">
                                     <span className="text-xs font-semibold" style={{ color: `rgba(var(--text-secondary), 1)` }}>
-                                      ðŸ¤– AI Critic
+                                      AI Critic
                                     </span>
                                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                       option.critic.passed
                                         ? 'bg-green-500/20 text-green-400'
                                         : 'bg-red-500/20 text-red-400'
                                     }`}>
-                                      {option.critic.overall.toFixed(2)} {option.critic.passed ? 'âœ“ Pass' : 'âœ— Review'}
+                                      {option.critic.overall.toFixed(2)} {option.critic.passed ? 'Pass' : 'Review'}
                                     </span>
                                   </div>
                                   <div className="grid grid-cols-3 gap-2 text-xs text-center">
@@ -1190,7 +1372,7 @@ export default function Home() {
                                 )}
                                 {option.preview_url && (
                                   <Button
-                                    onClick={() => window.open(`${API_BASE_URL}${option.preview_url}`, "_blank")}
+                                    onClick={() => window.open(option.preview_url!.startsWith('http') ? option.preview_url : `${API_BASE_URL}${option.preview_url}`, "_blank")}
                                     variant="outline" size="sm" className="glass-effect"
                                     style={{ borderColor: `rgba(var(--border), 0.5)`, color: `rgba(var(--text-primary), 1)` }}
                                   >
@@ -1198,17 +1380,34 @@ export default function Home() {
                                     {option.content_type === "post" ? "Image" : "Preview"}
                                   </Button>
                                 )}
-                                <Button
-                                  onClick={() => selectWorkflowOption(option)}
-                                  disabled={workflowsDisabled}
-                                  size="sm" className="flex-1 btn-primary border-0"
-                                >
-                                  {option.content_type === "post" ? "Approve & Post" : "Select"}
-                                </Button>
+                                {isDirectAction && option.content_id ? (
+                                  <Button
+                                    onClick={() => approveContent(option.content_id!)}
+                                    disabled={workflowsDisabled}
+                                    size="sm" className="flex-1 btn-primary border-0"
+                                  >
+                                    {option.content_type === "post" ? "Approve & Post" : "Publish Blog"}
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    onClick={() => selectWorkflowOption(option)}
+                                    disabled={workflowsDisabled}
+                                    size="sm" className="flex-1 btn-primary border-0"
+                                  >
+                                    {option.campaign_data
+                                      ? "Activate Campaign"
+                                      : option.content_type === "post"
+                                        ? "Approve & Post"
+                                        : "Select"}
+                                  </Button>
+                                )}
                               </div>
                             </Card>
-                          ))}
+                          })}
                         </div>
+                            </>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1259,28 +1458,39 @@ export default function Home() {
                             <div className="space-y-4">
                               <div className="p-6 rounded-lg" style={{ background: `rgba(var(--surface-hover), 0.4)` }}>
                                 {contentDetails?.preview_url || contentDetails?.metadata?.image_path ? (
-                                  <div className="relative group">
-                                    <img
-                                      src={`${API_BASE_URL}/preview/image/${encodeURIComponent(
-                                        contentDetails.preview_url || contentDetails.metadata?.image_path || "",
-                                      )}`}
-                                      alt="Generated social media post"
-                                      className="w-full max-w-lg mx-auto rounded-lg border-2 shadow-lg transition-transform duration-300 group-hover:scale-105"
-                                      style={{ borderColor: `rgba(var(--primary), 0.3)` }}
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = "none"
-                                        const errorDiv = e.currentTarget.nextElementSibling as HTMLElement
-                                        if (errorDiv) errorDiv.style.display = "block"
-                                      }}
-                                    />
-                                    <div
-                                      className="hidden text-center py-12"
-                                      style={{ color: `rgba(var(--text-secondary), 1)` }}
-                                    >
-                                      <ImageIcon className="w-16 h-16 mx-auto mb-3 opacity-50" />
-                                      <p>Image preview not available</p>
-                                    </div>
+                                  (() => {
+                                    const previewImages = (
+                                      contentDetails?.metadata?.image_paths?.filter(Boolean) ||
+                                      [contentDetails?.preview_url || contentDetails?.metadata?.image_path].filter(Boolean)
+                                    ) as string[]
+
+                                    return (
+                                  <div className={previewImages.length > 1 ? 'grid grid-cols-2 gap-4' : 'relative group'}>
+                                    {previewImages.map((imgP: string, idx: number) => (
+                                      <div key={idx} className="relative group">
+                                        <img
+                                          src={imgP.startsWith('http') ? imgP : `${API_BASE_URL}/preview/image/${encodeURIComponent(imgP)}`}
+                                          alt={`Generated social media post ${idx+1}`}
+                                          className="w-full max-w-lg mx-auto rounded-lg border-2 shadow-lg transition-transform duration-300 group-hover:scale-105"
+                                          style={{ borderColor: `rgba(var(--primary), 0.3)` }}
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = "none"
+                                            const errorDiv = e.currentTarget.nextElementSibling as HTMLElement
+                                            if (errorDiv) errorDiv.style.display = "block"
+                                          }}
+                                        />
+                                        <div
+                                          className="hidden text-center py-12"
+                                          style={{ color: `rgba(var(--text-secondary), 1)` }}
+                                        >
+                                          <ImageIcon className="w-16 h-16 mx-auto mb-3 opacity-50" />
+                                          <p>Image preview not available</p>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
+                                    )
+                                  })()
                                 ) : (
                                   <div
                                     className="text-center py-12"
@@ -1736,3 +1946,4 @@ export default function Home() {
     </>
   )
 }
+

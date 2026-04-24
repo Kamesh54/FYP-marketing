@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Get ready to ride with bikes 90! Quality & service that's unmatched! #bikes90 #AutomotiveExcellence",
+      "length": 280,
+      "call_to_action": "Visit our website",
+      "hashtags": [
+        "#bikes90",
+        "#AutomotiveExcellence",
+        "#YouthOnWheels"
+      ]
+    },
+    "instagram": {
+      "copy": "Calling all young riders! At bikes 90, we're passionate about providing top-notch quality and service. Join our community and experience the difference! #bikes90 #Automotive #QualityMatters #YouthOnWheels",
+      "length": 300,
+      "call_to_action": "Follow us for updates",
+      "hashtags": [
+        "#bikes90",
+        "#Automotive",
+        "#QualityMatters",
+        "#YouthOnWheels"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a young rider on a bike with a cityscape background, with the bikes 90 logo prominently displayed",
+    "Photorealistic image of a bikes 90 store with happy customers and staff, showcasing the quality and service of the brand"
+  ],
+  "meta": {
+    "brand_name": "bikes 90",
+    "location": "N/A",
+    "industry": "automotive",
+    "generated_at": "2026-04-01T06:44:58.998986Z"
+  }
+}

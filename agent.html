@@ -1278,6 +1278,141 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
+        function cleanMarkdownWrappedHTML(text) {
+            if (!text) return "";
+            
+            text = text.trim();
+            
+            // Remove markdown code block wrapper
+            if (text.startsWith("```json")) {
+                text = text.substring(7);
+            } else if (text.startsWith("```html")) {
+                text = text.substring(7);
+            } else if (text.startsWith("```")) {
+                text = text.substring(3);
+            }
+            
+            if (text.endsWith("```")) {
+                text = text.substring(0, text.length - 3);
+            }
+            
+            text = text.trim();
+            
+            // If it's wrapped in JSON, extract the html_content field
+            if (text.startsWith("{")) {
+                try {
+                    const parsed = JSON.parse(text);
+                    if (typeof parsed === 'object' && parsed !== null) {
+                        // Try various keys
+                        for (const key of ["html_content", "html", "content", "body"]) {
+                            if (key in parsed) {
+                                return String(parsed[key]).trim();
+                            }
+                        }
+                        // Return first string value
+                        for (const v of Object.values(parsed)) {
+                            if (typeof v === 'string') {
+                                return v.trim();
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Not JSON, continue
+                }
+            }
+            
+            // Return as-is if already HTML
+            if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+                return text;
+            }
+            
+            return text;
+        }
+
+        function renderHTMLModal(htmlCode) {
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.className = 'html-render-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                flex-direction: column;
+                z-index: 10000;
+            `;
+
+            // Create header with close button
+            const header = document.createElement('div');
+            header.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 15px 20px;
+                background: #2c3e50;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+            `;
+
+            const title = document.createElement('span');
+            title.textContent = 'Blog Preview';
+            header.appendChild(title);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕';
+            closeBtn.style.cssText = `
+                background: none;
+                border: none;
+                color: white;
+                font-size: 24px;
+                cursor: pointer;
+                padding: 0;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            closeBtn.addEventListener('click', () => {
+                modal.remove();
+            });
+            header.appendChild(closeBtn);
+
+            // Create iframe container
+            const iframeContainer = document.createElement('div');
+            iframeContainer.style.cssText = `
+                flex: 1;
+                overflow: hidden;
+                position: relative;
+            `;
+
+            // Create iframe
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = `
+                width: 100%;
+                height: 100%;
+                border: none;
+            `;
+            
+            // Clean the HTML first
+            const cleanHTML = cleanMarkdownWrappedHTML(htmlCode);
+            
+            // Use a data URL to display the HTML
+            const dataURL = 'data:text/html;charset=utf-8,' + encodeURIComponent(cleanHTML);
+            iframe.src = dataURL;
+            
+            iframeContainer.appendChild(iframe);
+
+            modal.appendChild(header);
+            modal.appendChild(iframeContainer);
+            document.body.appendChild(modal);
+        }
+
+
         function renderWorkflowOptions(options) {
             if (!options || !options.length) return;
             const chatContainer = document.getElementById("chatContainer");
@@ -1323,8 +1458,50 @@
                     <div><strong>Summary:</strong> ${snippet}</div>
                 `;
 
+                // Add inline HTML preview if html_code is available
+                let previewContainer = null;
+                if (option.html_code) {
+                    previewContainer = document.createElement('div');
+                    previewContainer.className = 'workflow-option-preview';
+                    previewContainer.style.cssText = `
+                        margin: 12px 0;
+                        border: 1px solid #ddd;
+                        border-radius: 6px;
+                        height: 250px;
+                        overflow: hidden;
+                        background: #f9f9f9;
+                    `;
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        border: none;
+                        background: white;
+                    `;
+                    iframe.setAttribute('title', `Preview of ${option.label}`);
+                    
+                    const cleanHTML = cleanMarkdownWrappedHTML(option.html_code);
+                    const dataURL = 'data:text/html;charset=utf-8,' + encodeURIComponent(cleanHTML);
+                    iframe.src = dataURL;
+                    
+                    previewContainer.appendChild(iframe);
+                }
+
                 const actions = document.createElement('div');
                 actions.className = 'workflow-option-actions';
+
+                // Add View Rendered HTML button (max size) if html_code is available
+                if (option.html_code) {
+                    const renderBtn = document.createElement('button');
+                    renderBtn.type = 'button';
+                    renderBtn.textContent = 'View Full Preview';
+                    renderBtn.style.cssText = 'margin-right: 8px; flex: 1;';
+                    renderBtn.addEventListener('click', () => {
+                        renderHTMLModal(option.html_code);
+                    });
+                    actions.appendChild(renderBtn);
+                }
 
                 if (option.preview_url) {
                     const previewBtn = document.createElement('button');
@@ -1346,6 +1523,9 @@
                 card.appendChild(label);
                 card.appendChild(meta);
                 card.appendChild(details);
+                if (previewContainer) {
+                    card.appendChild(previewContainer);
+                }
                 card.appendChild(actions);
                 grid.appendChild(card);
             });

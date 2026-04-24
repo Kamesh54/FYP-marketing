@@ -45,16 +45,11 @@ async def _generate_image_async(prompt: str,
             "Content-Type": "application/json",
             "X-Runway-Version": "2024-11-06"
         }
-        # Use gen4_image_turbo - requires referenceImages array with uri/tag objects
+        # Use Runway gen4_image model
         payload = {
+            "model": "gen4_image",
             "promptText": enriched,
-            "ratio": "1920:1080",
-            "seed": int(datetime.now().timestamp()) % 4294967295,
-            "model": "gen4_image_turbo",
-            "referenceImages": [{
-                "uri": "https://via.placeholder.com/1920x1080/FFFFFF/FFFFFF",
-                "tag": "placeholder"
-            }]  # Default placeholder - gen4_image_turbo requires at least one reference
+            "ratio": "1280:720",
         }
 
         async with httpx.AsyncClient(timeout=120) as client:

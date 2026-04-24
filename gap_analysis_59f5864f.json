@@ -1,0 +1,166 @@
+{
+    "company_info": {
+        "name": "bikes 90",
+        "url": "",
+        "product_description": "automotive in None. all brand bikes are available here"
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "automotive in",
+            "in none",
+            "none all",
+            "all brand",
+            "brand bikes",
+            "bikes are",
+            "are available",
+            "available here",
+            "automotive",
+            "in",
+            "none",
+            "all",
+            "brand",
+            "bikes",
+            "are",
+            "available",
+            "here"
+        ],
+        "long_tail_keywords": [
+            "automotive in none all",
+            "in none all brand",
+            "none all brand bikes",
+            "all brand bikes are",
+            "brand bikes are available",
+            "bikes are available here",
+            "automotive in none",
+            "in none all",
+            "none all brand",
+            "all brand bikes",
+            "brand bikes are",
+            "bikes are available",
+            "are available here"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "Bosch eBike Connect",
+                "url": "https://www.bosch-ebike.com/us/connect/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 22
+            },
+            {
+                "name": "Cycling Analytics — Bike power meter and performance ...",
+                "url": "https://www.cyclinganalytics.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 21
+            },
+            {
+                "name": "PackWizard",
+                "url": "https://www.packwizard.com/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "RV Dealership Management Software",
+                "url": "https://everlogic.com/rv-dealership-management-software/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "SportSoft® - The Leader in Athletic Equipment Inventory ...",
+                "url": "https://sportsoft.com/",
+                "short_keywords_count": 18,
+                "long_tail_keywords_count": 8
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "signed agreement",
+                "performance riding",
+                "maximum heartrate",
+                "provides well",
+                "thirty days",
+                "click around",
+                "people say",
+                "confidence",
+                "leader",
+                "cycling analytics"
+            ],
+            "long_tail": [
+                "know exactly whats happening",
+                "touch function makes",
+                "one platform streamlines operations",
+                "connected biking news",
+                "seasoned road cyclist",
+                "rv dealerships across america",
+                "one demo experience everlogic",
+                "site data solution",
+                "world next junction left",
+                "new ebike abs"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "automotive in",
+                "in none",
+                "none all",
+                "all brand",
+                "brand bikes",
+                "bikes are",
+                "are available",
+                "available here",
+                "automotive",
+                "in"
+            ],
+            "long_tail": [
+                "automotive in none all",
+                "in none all brand",
+                "none all brand bikes",
+                "all brand bikes are",
+                "brand bikes are available",
+                "bikes are available here",
+                "automotive in none",
+                "in none all",
+                "none all brand",
+                "all brand bikes"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "signed agreement",
+                "performance riding",
+                "maximum heartrate",
+                "provides well",
+                "thirty days"
+            ],
+            "long_tail": [
+                "know exactly whats happening",
+                "touch function makes",
+                "one platform streamlines operations",
+                "connected biking news",
+                "seasoned road cyclist"
+            ]
+        },
+        "recommendations": [
+            "Optimize website content to include missing short and long-tail keywords",
+            "Develop a content strategy to address gaps in keywords",
+            "Create high-quality, engaging content to attract and retain audience",
+            "Utilize technical SEO to improve website structure and accessibility",
+            "Leverage local SEO to target location-specific keywords"
+        ],
+        "competitive_insights": [
+            "Competitors are targeting a range of keywords related to performance, technology, and user experience",
+            "There is an opportunity to differentiate the company by emphasizing its unique selling points, such as 'automotive in none' and 'all brand bikes'",
+            "The company can learn from competitors' strategies and adapt them to its own strengths and weaknesses"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

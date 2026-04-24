@@ -5,6 +5,7 @@ All agent calls go through the agent_adapters package (no HTTP).
 """
 import logging
 import json
+import re
 from typing import Dict, Any
 import database as db
 
@@ -16,6 +17,178 @@ except ImportError:
 from langgraph_state import MarketingState
 
 logger = logging.getLogger("langgraph.nodes")
+
+_PLACEHOLDER_BRANDS = {
+    "",
+    "company",
+    "my business",
+    "business",
+    "brand",
+    "unknown",
+    "n/a",
+    "na",
+    "none",
+}
+
+_PROMOTIONAL_BRAND_TERMS = {
+    "sale",
+    "discount",
+    "offer",
+    "offers",
+    "deal",
+    "deals",
+    "promo",
+    "promotion",
+    "campaign",
+    "launch",
+    "giveaway",
+    "clearance",
+}
+
+
+def _normalize_score_100(raw_score: Any) -> int:
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        return 0
+    if 0 < score <= 1:
+        score *= 100
+    return max(0, min(100, int(round(score))))
+
+
+def _is_valid_brand_name(name: Any) -> bool:
+    if not isinstance(name, str):
+        return False
+    cleaned = name.strip()
+    if not cleaned:
+        return False
+    return cleaned.lower() not in _PLACEHOLDER_BRANDS
+
+
+def _looks_like_campaign_theme(name: Any) -> bool:
+    if not isinstance(name, str):
+        return False
+    cleaned = name.strip().lower()
+    if not cleaned:
+        return False
+
+    words = re.findall(r"[a-z0-9]+", cleaned)
+    return any(word in _PROMOTIONAL_BRAND_TERMS for word in words)
+
+
+def _extract_brand_from_message(user_message: str) -> str:
+    if not user_message:
+        return ""
+
+    normalized_message = re.sub(r"[\u2018\u2019\u201c\u201d\"']", " ", user_message)
+
+    # First, try explicit form-style labels (e.g., "Brand: RoadPro Carbon Helmet")
+    patterns = [
+        r"(?im)^\s*(?:brand|business|company|product)\s*(?:name)?\s*[:\-]\s*(.+?)\s*$",
+        r"(?im)^\s*(?:name)\s*[:\-]\s*(.+?)\s*$",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, normalized_message, re.MULTILINE)
+        if match:
+            candidate = match.group(1).strip()
+            if _is_valid_brand_name(candidate):
+                return candidate
+
+    natural_language_patterns = [
+        r"(?i)\b(?:for|about|using|use|used|with)\s+([a-zA-Z][\w&'.-]*(?:\s+[a-zA-Z][\w&'.-]*){0,3})\b",
+        r"(?i)\b(?:brand|business|company|product)\s+(?:is|name is|named|called)\s+([a-zA-Z][\w&'.-]*(?:\s+[a-zA-Z][\w&'.-]*){0,3})\b",
+        r"(?i)\b(?:called|named)\s+([a-zA-Z][\w&'.-]*(?:\s+[a-zA-Z][\w&'.-]*){0,3})\b",
+        r"(?i)\b(?:for|about|using|use|used|with)\s+(?:brand|business|company|product)\s+([a-zA-Z][\w&'.-]*(?:\s+[a-zA-Z][\w&'.-]*){0,3})\b",
+        r"(?i)\b(?:brand|business|company)\s+(?:is|name is|named)\s+([a-zA-Z][\w&'.-]*(?:\s+[a-zA-Z][\w&'.-]*){0,3})\b",
+    ]
+    stop_phrases = {
+        "my business",
+        "my brand",
+        "my company",
+        "this brand",
+        "this business",
+        "this company",
+        "the business",
+        "the company",
+        "the brand",
+        "a blog post",
+        "an instagram post",
+    }
+    trailing_cutoffs = {
+        "for", "about", "with", "using", "use", "on", "in", "at", "to", "from",
+        "and", "but", "or", "because", "that", "which", "who",
+    }
+    for pattern in natural_language_patterns:
+        for match in re.finditer(pattern, normalized_message):
+            candidate = re.split(r"[,.!?;\n]", match.group(1).strip())[0].strip()
+            words = candidate.split()
+            while words and words[-1].lower() in trailing_cutoffs:
+                words.pop()
+            candidate = " ".join(words).strip(" -:")
+            if not candidate:
+                continue
+            if candidate.lower() in stop_phrases:
+                continue
+            if _is_valid_brand_name(candidate):
+                return candidate.title() if candidate.islower() else candidate
+
+    # Fallback: try the first non-empty line as brand name (if it looks like a brand)
+    first_line = normalized_message.strip().split('\n')[0].strip()
+    if first_line and _is_valid_brand_name(first_line) and len(first_line.split()) <= 5:
+        # Only accept if it's a reasonable brand name (max 5 words, not obvious instructions)
+        lower_line = first_line.lower()
+        instruction_keywords = ["generate", "create", "write", "need", "make", "want", "give", "show", "tell", "analyze", "extract", "find"]
+        if not any(kw in lower_line for kw in instruction_keywords):
+            return first_line
+
+    return ""
+
+
+def _resolve_brand_seed(state: MarketingState) -> str:
+    params = state.get("extracted_params", {}) or {}
+    brand_info = state.get("brand_info", {}) or {}
+    extracted_from_msg = _extract_brand_from_message(state.get("user_message", ""))
+    trusted_brand_candidates = [
+        state.get("active_brand", ""),
+        brand_info.get("brand_name", ""),
+    ]
+    has_trusted_brand = any(_is_valid_brand_name(candidate) for candidate in trusted_brand_candidates)
+    candidates = [
+        params.get("brand_name", ""),
+        extracted_from_msg,
+        state.get("active_brand", ""),
+        brand_info.get("brand_name", ""),
+    ]
+    
+    # Debug logging to understand candidate values
+    logger.info(f"[RESOLVE_BRAND_DEBUG] Checking candidates: "
+                f"params.brand_name='{candidates[0]}', "
+                f"active_brand='{candidates[2]}', "
+                f"brand_info.brand_name='{candidates[3]}', "
+                f"extracted_from_msg='{extracted_from_msg}'")
+
+    for i, candidate in enumerate(candidates):
+        if i in (0, 1) and has_trusted_brand and _looks_like_campaign_theme(candidate):
+            logger.info(
+                f"[RESOLVE_BRAND_DEBUG] Candidate {i}: '{candidate}' skipped because it looks like a campaign/theme and a trusted brand is available"
+            )
+            continue
+        logger.info(f"[RESOLVE_BRAND_DEBUG] Candidate {i}: '{candidate}' -> valid={_is_valid_brand_name(candidate)}")
+        if _is_valid_brand_name(candidate):
+            logger.info(f"[RESOLVE_BRAND_DEBUG] SELECTED: '{candidate.strip()}'")
+            return candidate.strip()
+    logger.info(f"[RESOLVE_BRAND_DEBUG] No valid candidates found, returning empty string")
+    return ""
+
+
+def _resolve_industry_seed(state: MarketingState) -> str:
+    params = state.get("extracted_params", {}) or {}
+    brand_info = state.get("brand_info", {}) or {}
+    for candidate in [brand_info.get("industry", ""), params.get("domain", "")]:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return ""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -67,6 +240,70 @@ async def router_node(state: MarketingState) -> Dict[str, Any]:
         extracted_params = route_result.get("extracted_params", {})
         requires_url = route_result.get("requires_url", False)
         requires_brand_info = route_result.get("requires_brand_info", False)
+        explicit_brand = _extract_brand_from_message(user_message)
+
+        if extracted_params.get("brand_name") and _looks_like_campaign_theme(extracted_params.get("brand_name")):
+            logger.info(
+                f"[ROUTER_BRAND_DEBUG] Ignoring extracted brand_name='{extracted_params.get('brand_name')}' because it looks like a campaign/theme"
+            )
+            extracted_params.pop("brand_name", None)
+
+        if explicit_brand and not _looks_like_campaign_theme(explicit_brand) and not extracted_params.get("brand_name"):
+            extracted_params["brand_name"] = explicit_brand
+
+        # Trigger background auto-extraction if the user's message contains a URL and mentions their website
+        url_extracted = extracted_params.get("url")
+        lower_msg = user_message.lower()
+        if not url_extracted:
+            import re
+            url_match = re.search(r'(?:https?://)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', user_message)
+            if url_match:
+                url_extracted = url_match.group(0)
+
+        keyword_matches = ["my website", "my site", "my domain", "my company", "my brand", "my business", "im "]
+        if url_extracted and intent != "brand_setup" and any(k in lower_msg for k in keyword_matches):
+            try:
+                import asyncio
+                import urllib.parse
+                from agent_adapters.brand_adapter import _extract_brand_async
+                from database import save_brand_profile, get_brand_profile
+                
+                async def _bg_save_user_brand(bg_url: str, bg_user_id: int):
+                    try:
+                        full_url = bg_url if bg_url.startswith("http") else f"https://{bg_url}"
+                        brand_key = urllib.parse.urlparse(full_url).netloc.replace("www.", "").split(".")[0].title()
+                        
+                        # Verify we don't already have it
+                        if get_brand_profile(bg_user_id, brand_key):
+                            return
+                            
+                        logger.info(f"Auto-extracting brand from {bg_url} in background...")
+                        result = await _extract_brand_async(brand_key, full_url)
+                        final_name = result.get("brand_name", brand_key)
+                        
+                        save_brand_profile(
+                            user_id=bg_user_id,
+                            brand_name=final_name,
+                            description=result.get("extracted_data", {}).get("description", ""),
+                            target_audience=result.get("extracted_data", {}).get("target_audience", ""),
+                            tone=result.get("extracted_data", {}).get("tone", "professional"),
+                            colors=result.get("colors", []),
+                            website_url=full_url,
+                            logo_url=result.get("logo_url", ""),
+                            auto_extracted=True,
+                        )
+                        logger.info(f"Successfully auto-extracted and stored brand: {final_name}")
+                    except Exception as e:
+                        logger.warning(f"Background brand extraction failed: {e}")
+
+                global _bg_tasks
+                if '_bg_tasks' not in globals():
+                    _bg_tasks = set()
+                task = asyncio.create_task(_bg_save_user_brand(url_extracted, state.get("user_id", 0)))
+                _bg_tasks.add(task)
+                task.add_done_callback(_bg_tasks.discard)
+            except Exception as bg_ext_error:
+                logger.warning(f"Failed to initialize background brand auto-extractor: {bg_ext_error}")
 
         # Merge any platform from the request into extracted_params
         # (mirrors the orchestrator's platform-detection behaviour)
@@ -245,6 +482,8 @@ def brand_setup_node(state: MarketingState) -> Dict[str, Any]:
     from agent_adapters import extract_brand_from_url
     from database import save_brand_profile
 
+    emit_trace(state, "start", "brand_setup", {"message": "Extracting brand profile"})
+
     params = state.get("extracted_params", {})
     user_message = state.get("user_message", "")
     user_id = state.get("user_id", 0)
@@ -260,90 +499,115 @@ def brand_setup_node(state: MarketingState) -> Dict[str, Any]:
         if url_match:
             url = url_match.group()
 
-    if url:
-        result = extract_brand_from_url(brand_name or "Brand", url)
-        final_name = result.get("brand_name", brand_name)
+    try:
+        if url:
+            result = extract_brand_from_url(brand_name or "Brand", url)
+            final_name = result.get("brand_name", brand_name)
 
-        # Save to database
-        try:
-            save_brand_profile(
-                user_id=user_id,
-                brand_name=final_name,
-                description=result.get("extracted_data", {}).get("description", ""),
-                target_audience=result.get("extracted_data", {}).get("target_audience", ""),
-                tone=result.get("extracted_data", {}).get("tone", "professional"),
-                colors=result.get("colors", []),
-                website_url=url,
-                logo_url=result.get("logo_url", ""),
-                auto_extracted=True,
-            )
-        except Exception as db_err:
-            logger.warning(f"Could not save brand profile: {db_err}")
-
-        response = (
-            f"✅ I've analyzed **{final_name}** and extracted the brand profile!\n\n"
-            f"**Industry:** {result.get('extracted_data', {}).get('industry', 'N/A')}\n"
-            f"**Tone:** {result.get('extracted_data', {}).get('tone', 'N/A')}\n"
-            f"**Target Audience:** {result.get('extracted_data', {}).get('target_audience', 'N/A')}\n"
-        )
-
-        return {
-            "brand_extraction_result": result,
-            "brand_info": result.get("extracted_data", {}),
-            "response_text": response,
-            "current_step": "brand_setup",
-            "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
-        }
-    else:
-        # Fallback to analyzing user_message directly when no URL is given
-        from agent_adapters import extract_brand_signals
-        result = extract_brand_signals(brand_name or "", "", user_message)
-        
-        extracted_name = result.get("brand_name", "").strip()
-        _PLACEHOLDERS = {"not specified", "not provided", "unknown", "n/a", "", "none", "brand"}
-        
-        if extracted_name and extracted_name.lower() not in _PLACEHOLDERS:
-            # We got a legitimate brand name natively from the text message!
-            final_name = extracted_name
-            import uuid
-            
+            # Save to database
             try:
                 save_brand_profile(
                     user_id=user_id,
                     brand_name=final_name,
-                    description=result.get("description", ""),
-                    target_audience=result.get("target_audience", ""),
-                    tone=result.get("tone", "professional"),
+                    description=result.get("extracted_data", {}).get("description", ""),
+                    target_audience=result.get("extracted_data", {}).get("target_audience", ""),
+                    tone=result.get("extracted_data", {}).get("tone", "professional"),
                     colors=result.get("colors", []),
-                    website_url="",
-                    logo_url="",
-                    auto_extracted=False,
+                    website_url=url,
+                    logo_url=result.get("logo_url", ""),
+                    auto_extracted=True,
                 )
             except Exception as db_err:
-                logger.warning(f"Could not save manual brand profile: {db_err}")
+                logger.warning(f"Could not save brand profile: {db_err}")
 
             response = (
-                f"✅ I've established the brand profile for **{final_name}**!\n\n"
-                f"**Industry:** {result.get('industry', 'N/A')}\n"
-                f"**Tone:** {result.get('tone', 'N/A')}\n"
-                f"**Target Audience:** {result.get('target_audience', 'N/A')}\n"
-                f"*(No website URL provided; profile generated from your description)*"
+                f"✅ I've analyzed **{final_name}** and extracted the brand profile!\n\n"
+                f"**Industry:** {result.get('extracted_data', {}).get('industry', 'N/A')}\n"
+                f"**Tone:** {result.get('extracted_data', {}).get('tone', 'N/A')}\n"
+                f"**Target Audience:** {result.get('extracted_data', {}).get('target_audience', 'N/A')}\n"
             )
 
+            emit_trace(state, "complete", "brand_setup", {
+                "mode": "url",
+                "brand_name": final_name,
+                "has_url": bool(url),
+            })
+
             return {
-                "brand_extraction_result": {"extracted_data": result, "brand_name": final_name},
-                "brand_info": result,
+                "brand_extraction_result": result,
+                "brand_info": result.get("extracted_data", {}),
                 "response_text": response,
                 "current_step": "brand_setup",
                 "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
             }
         else:
-            return {
-                "response_text": "I'd love to set up your brand profile! Please share your website URL, or just tell me your brand name and industry, and I'll create your profile automatically.",
-                "clarification_needed": True,
-                "current_step": "brand_setup",
-                "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
-            }
+            # Fallback to analyzing user_message directly when no URL is given
+            from agent_adapters import extract_brand_signals
+            result = extract_brand_signals(brand_name or "", "", user_message)
+        
+            extracted_name = result.get("brand_name", "").strip()
+            _PLACEHOLDERS = {"not specified", "not provided", "unknown", "n/a", "", "none", "brand"}
+        
+            if extracted_name and extracted_name.lower() not in _PLACEHOLDERS:
+                # We got a legitimate brand name natively from the text message!
+                final_name = extracted_name
+                import uuid
+
+                try:
+                    save_brand_profile(
+                        user_id=user_id,
+                        brand_name=final_name,
+                        description=result.get("description", ""),
+                        target_audience=result.get("target_audience", ""),
+                        tone=result.get("tone", "professional"),
+                        colors=result.get("colors", []),
+                        website_url="",
+                        logo_url="",
+                        auto_extracted=False,
+                    )
+                except Exception as db_err:
+                    logger.warning(f"Could not save manual brand profile: {db_err}")
+
+                response = (
+                    f"✅ I've established the brand profile for **{final_name}**!\n\n"
+                    f"**Industry:** {result.get('industry', 'N/A')}\n"
+                    f"**Tone:** {result.get('tone', 'N/A')}\n"
+                    f"**Target Audience:** {result.get('target_audience', 'N/A')}\n"
+                    f"*(No website URL provided; profile generated from your description)*"
+                )
+
+                emit_trace(state, "complete", "brand_setup", {
+                    "mode": "text",
+                    "brand_name": final_name,
+                    "clarification_needed": False,
+                })
+
+                return {
+                    "brand_extraction_result": {"extracted_data": result, "brand_name": final_name},
+                    "brand_info": result,
+                    "response_text": response,
+                    "current_step": "brand_setup",
+                    "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
+                }
+            else:
+                emit_trace(state, "complete", "brand_setup", {
+                    "mode": "text",
+                    "clarification_needed": True,
+                })
+                return {
+                    "response_text": "I'd love to set up your brand profile! Please share your website URL, or just tell me your brand name and industry, and I'll create your profile automatically.",
+                    "clarification_needed": True,
+                    "current_step": "brand_setup",
+                    "steps_completed": state.get("steps_completed", []) + ["brand_setup"],
+                }
+    except Exception as e:
+        logger.error(f"Brand setup node failed: {e}")
+        emit_trace(state, "error", "brand_setup", {"error": str(e)})
+        return {
+            "response_text": f"Brand setup encountered an error: {e}",
+            "errors": state.get("errors", []) + [f"Brand setup error: {e}"],
+            "current_step": "brand_setup",
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -354,7 +618,10 @@ def crawl_node(state: MarketingState) -> Dict[str, Any]:
     """Crawl a website for SEO analysis or content extraction."""
     from agent_adapters import run_webcrawler
 
+    emit_trace(state, "start", "webcrawler", {"message": "Starting SEO crawl"})
+
     params = state.get("extracted_params", {})
+    brand_info = state.get("brand_info", {}) or {}
     url = params.get("url", "")
 
     if not url:
@@ -364,7 +631,12 @@ def crawl_node(state: MarketingState) -> Dict[str, Any]:
         if url_match:
             url = url_match.group()
 
+    # Fallback to brand profile URL
+    if not url and brand_info.get("website_url"):
+        url = brand_info.get("website_url")
+
     if not url:
+        emit_trace(state, "error", "webcrawler", {"error": "No URL provided for crawl"})
         return {
             "crawled_data": {"content": "", "error": "No URL provided"},
             "errors": state.get("errors", []) + ["No URL for crawling"],
@@ -373,6 +645,12 @@ def crawl_node(state: MarketingState) -> Dict[str, Any]:
 
     result = run_webcrawler(url, max_pages=5)
     logger.info(f"Crawl node: {result.get('pages_count', 0)} pages from {url}")
+
+    emit_trace(state, "complete", "webcrawler", {
+        "url": url,
+        "pages_count": result.get("pages_count", 0),
+        "status": result.get("status", "unknown"),
+    })
 
     return {
         "crawled_data": result,
@@ -392,13 +670,23 @@ def keyword_node(state: MarketingState) -> Dict[str, Any]:
     emit_trace(state, "start", "keywords", {"message": "Extracting keywords from context"})
 
     user_message = state.get("user_message", "")
-    brand_context = state.get("brand_context_summary", "")
+    brand_info = state.get("brand_info", {}) or {}
     params = state.get("extracted_params", {})
+    brand_seed = _resolve_brand_seed(state)
+    industry_seed = _resolve_industry_seed(state)
 
-    # Build query from available context
-    query = params.get("topic", user_message)
-    if brand_context:
-        query = f"{query} {brand_context[:200]}"
+    # Build a structured seed so keyword extraction stays in the same market.
+    query = (
+        f"Business: {brand_seed or 'Company'}\n"
+        f"Industry: {industry_seed or 'General'}\n"
+        f"Description: {brand_info.get('description', '')}\n"
+        f"Target Audience: {brand_info.get('target_audience', '')}\n"
+        f"Topic: {params.get('topic', user_message)}"
+    )
+
+    logger.info(
+        f"Keyword node seed: brand='{brand_seed or 'Company'}', industry='{industry_seed or 'General'}'"
+    )
 
     result = run_keyword_extraction(query, max_results=5, max_pages=1)
     competitors_count = result.get('competitors_processed', 0)
@@ -427,8 +715,11 @@ def gap_analysis_node(state: MarketingState) -> Dict[str, Any]:
     brand_info = state.get("brand_info", {}) or {}
     params = state.get("extracted_params", {})
 
-    company_name = brand_info.get("brand_name", params.get("brand_name", "Company"))
-    product_desc = brand_info.get("description", state.get("user_message", ""))
+    company_name = _resolve_brand_seed(state) or "Company"
+    industry_seed = _resolve_industry_seed(state)
+    product_desc = brand_info.get("description", "") or params.get("topic", state.get("user_message", ""))
+    if industry_seed and industry_seed.lower() not in product_desc.lower():
+        product_desc = f"{industry_seed}. {product_desc}".strip()
     company_url = brand_info.get("website_url") or params.get("url")
 
     emit_trace(state, "start", "gap_analysis", {"brand": company_name})
@@ -632,7 +923,7 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
             try:
                 cost_display = cost_model.format_cost_display(variant_cost)
             except Exception:
-                cost_display = f"${variant_cost:.4f}"
+                cost_display = cost_model.format_credits_display(cost_model.usd_cost_to_credits(variant_cost))
 
             result = generate_blog(
                 business_details=business_details,
@@ -735,6 +1026,7 @@ def blog_content_node(state: MarketingState) -> Dict[str, Any]:
                 "content_id": content_id,
                 "content_type": "blog",
                 "state_hash": state_hash,
+                "html_code": blog_html,  # ← Full HTML code included for programmatic use
             })
 
         except Exception as e:
@@ -833,6 +1125,12 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
     except Exception as ma_err:
         logger.warning(f"MABO agent not available for social tracking: {ma_err}")
 
+    emit_trace(state, "start", "social_generate", {
+        "variants_to_generate": len(variant_configs),
+        "platform": chosen_platform,
+        "brand": actual_brand_name,
+    })
+
     for variant in variant_configs:
         try:
             option_id = f"opt_{uuid.uuid4().hex[:8]}"
@@ -848,7 +1146,7 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
             try:
                 cost_display = cost_model.format_cost_display(variant_cost)
             except Exception:
-                cost_display = f"${variant_cost:.4f}"
+                cost_display = cost_model.format_credits_display(cost_model.usd_cost_to_credits(variant_cost))
 
             social_data = generate_social(
                 keywords=consolidated_kw or None,
@@ -1007,6 +1305,12 @@ def social_content_node(state: MarketingState) -> Dict[str, Any]:
     final_response = "📍 **Two Social Post Concepts Ready**\n\nI've produced two variations. Review the cards below!"
     if not response_options:
         final_response = "I'm sorry, an error occurred while generating the posts."
+
+    emit_trace(state, "complete", "social_generate", {
+        "variants_generated": len(response_options),
+        "platform": chosen_platform,
+        "options": [opt["label"] for opt in response_options],
+    })
 
     return {
         "social_data": all_social_data,
@@ -1253,21 +1557,81 @@ def seo_node(state: MarketingState) -> Dict[str, Any]:
     """Perform SEO analysis on a URL."""
     from agent_adapters import run_seo_analysis
 
+    emit_trace(state, "start", "seo_agent", {"message": "Running SEO analysis"})
+
     crawled_data = state.get("crawled_data", {})
     url = crawled_data.get("url", "")
 
     if not url:
         params = state.get("extracted_params", {})
         url = params.get("url", "")
+        
+    if not url:
+        brand_info = state.get("brand_info", {}) or {}
+        url = brand_info.get("website_url", "")
 
     if not url:
+        emit_trace(state, "error", "seo_agent", {"error": "No URL provided for SEO analysis"})
         return {
             "seo_result": {"error": "No URL provided for SEO analysis"},
             "current_step": "seo_analysis",
         }
 
-    result = run_seo_analysis(url)
-    logger.info(f"SEO node: score={result.get('overall_score', 0)} for {url}")
+    user_message = (state.get("user_message", "") or "").lower()
+    detailed_keywords = [
+        "detailed",
+        "more detailed",
+        "comprehensive",
+        "full report",
+        "full analysis",
+        "in-depth",
+        "thorough",
+        "complete report",
+    ]
+    wants_detailed = any(keyword in user_message for keyword in detailed_keywords)
+
+    if wants_detailed:
+        from comprehensive_seo_analysis import run_comprehensive_seo_analysis
+        from seo_html_report_generator import generate_seo_html_report
+        import os
+        import shutil
+
+        result = run_comprehensive_seo_analysis(url=url)
+        report_path = None
+        report_url = None
+        if result.get("status") == "completed":
+            try:
+                original_report_path = generate_seo_html_report(url, result)
+                os.makedirs("reports", exist_ok=True)
+                report_filename = os.path.basename(original_report_path)
+                report_path = os.path.join("reports", report_filename)
+                if os.path.abspath(original_report_path) != os.path.abspath(report_path):
+                    shutil.move(original_report_path, report_path)
+                report_url = f"/reports/{report_filename}"
+            except Exception as report_err:
+                logger.warning(f"SEO detailed report generation failed: {report_err}")
+
+        result["report_path"] = report_path
+        result["report_url"] = report_url
+        result["detailed_report"] = True
+    else:
+        result = run_seo_analysis(url)
+        result["detailed_report"] = False
+
+    # Normalize score keys so chat summaries, tracing, and HTML reports stay consistent.
+    if "overall_score" not in result:
+        result["overall_score"] = result.get("seo_score", result.get("scores", {}).get("overall", 0))
+    if "seo_score" not in result:
+        result["seo_score"] = result.get("overall_score", result.get("scores", {}).get("overall", 0))
+
+    logger.info(f"SEO node: score={result.get('overall_score', result.get('seo_score', 0))} for {url}")
+
+    emit_trace(state, "complete", "seo_agent", {
+        "url": url,
+        "overall_score": result.get("overall_score", result.get("seo_score", 0)),
+        "status": result.get("status", "unknown"),
+        "detailed_report": wants_detailed,
+    })
 
     return {
         "seo_result": result,
@@ -1287,11 +1651,71 @@ def campaign_node(state: MarketingState) -> Dict[str, Any]:
     brand_info = state.get("brand_info", {}) or {}
     intent = state.get("intent", "campaign_planning")
 
+    emit_trace(state, "start", "campaign", {
+        "intent": intent,
+        "brand": brand_info.get("brand_name", ""),
+    })
+
     try:
         from campaign_planner import CampaignPlannerAgent
         from agent_adapters.campaign_adapter import schedule_campaign, execute_campaign_post
         
-        topic = params.get("topic", user_message)
+        topic = params.get("theme") or params.get("topic") or user_message
+
+        # Normalize duration from params first, then fallback to natural language in message.
+        def _parse_duration_days(value: Any) -> int:
+            if value is None:
+                return 0
+            if isinstance(value, (int, float)):
+                return int(value)
+            text = str(value).strip().lower()
+            if not text:
+                return 0
+            import re
+            num_match = re.search(r"(\d+)", text)
+            if num_match:
+                amount = int(num_match.group(1))
+                if "week" in text:
+                    return amount * 7
+                return amount
+            return 0
+
+        duration = _parse_duration_days(params.get("duration_days"))
+        if duration <= 0:
+            duration = _parse_duration_days(params.get("duration"))
+
+        if duration <= 0:
+            import re
+            lower_msg = (user_message or "").lower()
+            word_to_num = {
+                "one": 1,
+                "two": 2,
+                "three": 3,
+                "four": 4,
+                "five": 5,
+                "six": 6,
+                "seven": 7,
+                "eight": 8,
+                "nine": 9,
+                "ten": 10,
+            }
+
+            num_day_match = re.search(r"(\d+)\s*[- ]?(day|days)\b", lower_msg)
+            num_week_match = re.search(r"(\d+)\s*[- ]?(week|weeks)\b", lower_msg)
+            word_day_match = re.search(r"\b(" + "|".join(word_to_num.keys()) + r")\s+(day|days)\b", lower_msg)
+            word_week_match = re.search(r"\b(" + "|".join(word_to_num.keys()) + r")\s+(week|weeks)\b", lower_msg)
+
+            if num_day_match:
+                duration = int(num_day_match.group(1))
+            elif num_week_match:
+                duration = int(num_week_match.group(1)) * 7
+            elif word_day_match:
+                duration = word_to_num[word_day_match.group(1)]
+            elif word_week_match:
+                duration = word_to_num[word_week_match.group(1)] * 7
+
+        if duration <= 0:
+            duration = 7
         
         if intent == "campaign_post":
             # Immediate posting
@@ -1329,25 +1753,67 @@ def campaign_node(state: MarketingState) -> Dict[str, Any]:
                     )
                 )
 
+            post_status = post_res.get("status", "unknown")
+            post_url = post_res.get("post_url")
+            response_text = f"Campaign post status: **{post_status}**"
+            if post_url:
+                response_text += f"\n\nPublished URL: {post_url}"
+            if post_res.get("error"):
+                response_text += f"\n\nError: {post_res.get('error')}"
+
+            emit_trace(state, "complete", "campaign", {
+                "intent": intent,
+                "status": post_status,
+                "has_post_url": bool(post_url),
+            })
+
             return {
                 "campaign_result": post_res,
-                "response_text": f"Campaign post requested: {post_res.get('status', 'unknown')}",
+                "response_text": response_text,
                 "current_step": "campaign",
                 "steps_completed": state.get("steps_completed", []) + ["campaign"],
             }
         else:
             planner = CampaignPlannerAgent()
-            duration = params.get("duration_days", 7)
-            result = planner.generate_proposals(topic, duration_days=duration)
+            # Use active brand if available for better campaign insights
+            brand_id = brand_info.get("brand_name")
+            result = planner.generate_proposals(topic, duration_days=duration, brand_id=brand_id)
+
+            response_options = []
+            for p in result.get("proposals", []):
+                tier = (p.get("tier") or "balanced").lower()
+                budget = p.get("budget", 0)
+                expected_reward = p.get("expected_reward", 0)
+                creative = p.get("creative", {})
+
+                response_options.append({
+                    "option_id": f"campaign_{tier}",
+                    "label": f"{tier.title()} Tier",
+                    "workflow_name": "campaign_plan",
+                    "cost_display": f"Budget {budget} credits | Return {expected_reward:.1f}",
+                    "preview_text": creative.get("text", ""),
+                    "campaign_data": {
+                        "tier": tier,
+                        "theme": topic,
+                        "duration_days": duration,
+                    },
+                })
+
+            emit_trace(state, "complete", "campaign", {
+                "intent": intent,
+                "proposals": len(result.get("proposals", [])),
+            })
 
             return {
                 "campaign_result": result,
-                "response_text": json.dumps(result, indent=2) if isinstance(result, dict) else str(result),
+                "response_options": response_options,
+                "response_text": "",
                 "current_step": "campaign",
                 "steps_completed": state.get("steps_completed", []) + ["campaign"],
             }
     except Exception as e:
         logger.error(f"Campaign node failed: {e}")
+        emit_trace(state, "error", "campaign", {"error": str(e)})
         return {
             "campaign_result": {"error": str(e)},
             "response_text": f"Campaign planning encountered an error: {e}",
@@ -1366,6 +1832,13 @@ def research_node(state: MarketingState) -> Dict[str, Any]:
 
     params = state.get("extracted_params", {})
     user_message = state.get("user_message", "")
+    user_message_lower = user_message.lower()
+    brand_info = state.get("brand_info", {}) or {}
+
+    emit_trace(state, "start", "research", {
+        "intent": state.get("intent", "competitor_research"),
+        "message": user_message[:100],
+    })
 
     domain = params.get("domain", params.get("url", ""))
     if not domain:
@@ -1375,21 +1848,71 @@ def research_node(state: MarketingState) -> Dict[str, Any]:
         if url_match:
             domain = url_match.group(1)
 
+    # Fallback to brand profile URL
+    if not domain and brand_info.get("website_url"):
+        import urllib.parse
+        parsed = urllib.parse.urlparse(brand_info.get("website_url"))
+        domain = parsed.netloc.replace("www.", "") if parsed.netloc else brand_info.get("website_url").replace("https://", "").replace("http://", "").replace("www.", "").split('/')[0]
+
     if not domain:
+        emit_trace(state, "complete", "research", {
+            "clarification_needed": True,
+            "reason": "missing_domain",
+        })
         return {
             "response_text": "I need a domain or website URL to perform research. Could you share the website you'd like me to analyze?",
             "clarification_needed": True,
             "current_step": "research",
         }
 
-    result = run_deep_research(domain=domain, depth_level="standard")
-    logger.info(f"Research node completed for {domain}")
+    try:
+        wants_more_competitors = any(
+            marker in user_message_lower
+            for marker in ("more competitors", "extract more competitors", "additional competitors", "more rival")
+        )
 
-    return {
-        "research_result": result,
-        "current_step": "research",
-        "steps_completed": state.get("steps_completed", []) + ["research"],
-    }
+        requested_competitors = 8
+        try:
+            import re
+            comp_match = re.search(r"(\d+)\s*(competitor|competitors|rivals)", user_message_lower)
+            if comp_match:
+                requested_competitors = int(comp_match.group(1))
+        except Exception:
+            requested_competitors = 8
+
+        depth_level = "deep" if wants_more_competitors else "standard"
+        use_cache = not wants_more_competitors
+        if wants_more_competitors and requested_competitors < 10:
+            requested_competitors = 12
+
+        result = run_deep_research(
+            domain=domain,
+            depth_level=depth_level,
+            use_cache=use_cache,
+            max_competitors=requested_competitors,
+        )
+        logger.info(f"Research node completed for {domain}")
+
+        emit_trace(state, "complete", "research", {
+            "domain": domain,
+            "competitors_found": len(result.get("competitors_found", [])),
+            "has_error": bool(result.get("error")),
+        })
+
+        return {
+            "research_result": result,
+            "current_step": "research",
+            "steps_completed": state.get("steps_completed", []) + ["research"],
+        }
+    except Exception as e:
+        logger.error(f"Research node failed: {e}")
+        emit_trace(state, "error", "research", {"error": str(e), "domain": domain})
+        return {
+            "research_result": {"error": str(e)},
+            "response_text": f"Research encountered an error: {e}",
+            "current_step": "research",
+            "errors": state.get("errors", []) + [f"Research error: {e}"],
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1404,8 +1927,18 @@ def response_builder_node(state: MarketingState) -> Dict[str, Any]:
     intent = state.get("intent", "general_chat")
     response = state.get("response_text", "")
 
+    emit_trace(state, "start", "response_builder", {
+        "intent": intent,
+        "has_prebuilt_response": bool(response),
+    })
+
     # If response_text was already set by a previous node, use it
     if response:
+        emit_trace(state, "complete", "response_builder", {
+            "intent": intent,
+            "response_length": len(response),
+            "source": "prebuilt",
+        })
         return {"current_step": "response_builder"}
 
     # Build response based on intent and available data
@@ -1414,16 +1947,41 @@ def response_builder_node(state: MarketingState) -> Dict[str, Any]:
     if intent == "seo_analysis":
         seo = state.get("seo_result", {})
         if seo and not seo.get("error"):
-            score = seo.get("overall_score", 0)
+            score = _normalize_score_100(
+                seo.get("overall_score", seo.get("seo_score", (seo.get("scores", {}) or {}).get("overall", 0)))
+            )
             parts.append(f"## SEO Analysis Results\n\n**Overall Score: {score}/100**\n")
             cat_scores = seo.get("category_scores", {})
             for cat, sc in cat_scores.items():
-                parts.append(f"- **{cat.replace('_', ' ').title()}**: {sc}/100")
+                parts.append(f"- **{cat.replace('_', ' ').title()}**: {_normalize_score_100(sc)}/100")
             recs = seo.get("recommendations", [])
             if recs:
                 parts.append("\n### Top Recommendations")
                 for r in recs[:5]:
                     parts.append(f"- [{r.get('priority', '')}] {r.get('issue', '')}: {r.get('suggestion', '')}")
+            if seo.get("detailed_report"):
+                report_url = seo.get("report_url")
+                details = seo.get("details", {}) or {}
+                if isinstance(details, dict) and details:
+                    parts.append("\n### Detailed Audit Highlights")
+                    title_info = details.get("title", {}) if isinstance(details.get("title"), dict) else {}
+                    meta_info = details.get("meta_description", {}) if isinstance(details.get("meta_description"), dict) else {}
+                    headings = details.get("headings", {}) if isinstance(details.get("headings"), dict) else {}
+                    images = details.get("images", {}) if isinstance(details.get("images"), dict) else {}
+                    content = details.get("content", {}) if isinstance(details.get("content"), dict) else {}
+                    links = details.get("links", {}) if isinstance(details.get("links"), dict) else {}
+
+                    highlight_lines = [
+                        f"- **Title Length:** {title_info.get('length', 'N/A')}",
+                        f"- **Meta Description Length:** {meta_info.get('length', 'N/A')}",
+                        f"- **Heading Structure:** H1={headings.get('h1_count', 'N/A')}, H2={headings.get('h2_count', 'N/A')}, H3={headings.get('h3_count', 'N/A')}",
+                        f"- **Content Depth:** {content.get('word_count', 'N/A')} words across {content.get('paragraph_count', 'N/A')} paragraphs",
+                        f"- **Images:** {images.get('total', 'N/A')} total with alt coverage {images.get('alt_coverage', 'N/A')}",
+                        f"- **Links:** {links.get('internal', 'N/A')} internal / {links.get('external', 'N/A')} external",
+                    ]
+                    parts.extend(highlight_lines)
+                if report_url:
+                    parts.append(f"\n[Open Full HTML SEO Report]({report_url})")
         else:
             parts.append(f"SEO analysis could not be completed: {seo.get('error', 'Unknown error')}")
 
@@ -1450,27 +2008,82 @@ def response_builder_node(state: MarketingState) -> Dict[str, Any]:
 
     elif intent == "competitor_research":
         research = state.get("research_result", {})
+        user_message = state.get("user_message", "").lower()
         if research and not research.get("error"):
-            parts.append("## Research Brief\n")
-            parts.append(research.get("research_brief", "No brief generated"))
-            keywords = research.get("top_keywords", [])
-            if keywords:
-                parts.append(f"\n**Top Keywords:** {', '.join(keywords[:10])}")
+            raw_competitors = research.get("competitors_found", [])
+            target_domain = state.get("extracted_params", {}).get("domain", "")
+            brand_info = state.get("brand_info", {}) or {}
+            
+            if not target_domain:
+                import re
+                url_match = re.search(r'(?:https?://)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', user_message)
+                if url_match:
+                    target_domain = url_match.group(1).lower().replace("www.", "")
+
+            # Fallback for displaying competitors filter
+            if not target_domain and brand_info.get("website_url"):
+                import urllib.parse
+                parsed = urllib.parse.urlparse(brand_info.get("website_url"))
+                target_domain = parsed.netloc.replace("www.", "") if parsed.netloc else brand_info.get("website_url").replace("https://", "").replace("http://", "").replace("www.", "").split('/')[0]
+            
+            competitors = []
+            for c in raw_competitors:
+                # Exclude the target domain itself
+                if target_domain and target_domain in c.lower():
+                    continue
+                competitors.append(c)
+            
+            if "analysis" in user_message or "analyze" in user_message:
+                parts.append("## Research Brief\n")
+                parts.append(research.get("research_brief", "No brief generated"))
+                
+                if competitors:
+                    parts.append(f"\n**Identified Competitors:**\n" + "\n".join(f"- {c}" for c in competitors))
+                    
+                keywords = research.get("top_keywords", [])
+                if keywords:
+                    parts.append(f"\n**Top Keywords:** {', '.join(keywords[:10])}")
+            else:
+                if competitors:
+                    # Filter unique competitors to avoid duplicates like the two Workstand entries
+                    unique_comps = list(dict.fromkeys(competitors))
+                    parts.append("**Identified Competitors:**\n" + "\n".join(f"- {c}" for c in unique_comps))
+                else:
+                    parts.append("No competitors could be identified.")
         else:
             parts.append(f"Research could not be completed: {research.get('error', 'Unknown error')}")
 
     elif intent == "campaign_planning":
         campaign = state.get("campaign_result", {})
+        brand_info = state.get("brand_info", {})
+        brand_name = brand_info.get("brand_name", "")
         if campaign and not campaign.get("error"):
-            parts.append("## Campaign Proposals\n")
-            parts.append(json.dumps(campaign, indent=2))
+            brand_header = f" for **{brand_name}**" if brand_name else ""
+            parts.append(f"## Campaign Plan Ready{brand_header}\n")
+            parts.append("I generated 3 tier options. Select one of the cards below to activate the campaign schedule.")
         else:
             parts.append("Campaign planning could not be completed.")
+
+    elif intent == "campaign_post":
+        campaign = state.get("campaign_result", {})
+        if campaign and not campaign.get("error"):
+            status = campaign.get("status", "unknown")
+            parts.append(f"## Campaign Post\nStatus: **{status}**")
+            if campaign.get("post_url"):
+                parts.append(f"Published URL: {campaign.get('post_url')}")
+        else:
+            parts.append(f"Campaign post failed: {campaign.get('error', 'Unknown error')}")
 
     else:
         parts.append("I've processed your request. Please let me know if you need anything else!")
 
     final_response = "\n".join(parts)
+
+    emit_trace(state, "complete", "response_builder", {
+        "intent": intent,
+        "response_length": len(final_response),
+        "source": "assembled",
+    })
 
     return {
         "response_text": final_response,

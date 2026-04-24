@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 from groq import Groq
+from llm_failover import groq_chat_with_failover
 
 # Import database functions for historical analysis
 from database import get_social_metrics
@@ -117,11 +118,13 @@ class CampaignPlannerAgent:
         """
         
         try:
-            response = self.groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            response, _used_model = groq_chat_with_failover(
+                self.groq_client,
                 messages=[{"role": "user", "content": prompt}],
+                primary_model="llama-3.3-70b-versatile",
+                logger=logger,
                 response_format={"type": "json_object"},
-                temperature=0.7
+                temperature=0.7,
             )
             result = json.loads(response.choices[0].message.content)
             trends = result.get("trends", [])
@@ -244,16 +247,17 @@ class CampaignPlannerAgent:
             if competitor_insights.get("status") == "available":
                 recommended_keywords = competitor_insights.get("recommended_keywords", [])[:3]
             
+            brand_suffix = f" for {brand_id}" if brand_id else ""
             proposals.append({
                 "tier": tier.lower(),
                 "budget": est_cost,
                 "expected_cost": est_cost * 0.98,
                 "expected_reward": expected_reward,
                 "expected_ctr": expected_ctr,
-                "recommended_keywords": recommended_keywords,  # From KG
+                "recommended_keywords": recommended_keywords,  # From KG        
                 "creative": {
-                    "text": f"{theme} - {tier} creative",
-                    "image_prompt": f"{theme}, {tier} style, photorealistic",
+                    "text": f"{theme}{brand_suffix} - {tier} creative",
+                    "image_prompt": f"{theme}{brand_suffix}, {tier} style, photorealistic",   
                     "image_model": "runway" if tier != "Budget" else "cheap_vision"
                 },
                 "schedule": {

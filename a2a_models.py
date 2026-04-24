@@ -117,6 +117,8 @@ class AgentCard(BaseModel):
         AgentCardCapability(method="tasks.sendSubscribe", description="Submit a task and receive SSE updates"),
         AgentCardCapability(method="tasks.cancel", description="Cancel a running task"),
         AgentCardCapability(method="tasks.pushNotification.set", description="Register a webhook for task updates"),
+        AgentCardCapability(method="campaigns.propose", description="Submit a campaign proposal for orchestrator review"),
+        AgentCardCapability(method="campaigns.accept", description="Accept a proposed campaign and start execution"),
     ]
 
     @classmethod

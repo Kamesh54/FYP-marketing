@@ -27,6 +27,7 @@ from contextlib import asynccontextmanager
 import tweepy
 from instagrapi import Client as InstaClient
 from fastapi.middleware.cors import CORSMiddleware
+from llm_failover import groq_chat_with_failover
 
 # Optional: LangSmith tracing
 try:
@@ -424,11 +425,19 @@ def run_seo_agent(url: str) -> str:
 
 @traceable(run_type="tool", name="🎨 RunwayML Image Gen")
 def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]] = None) -> str:
-    """Generate image using Runway ML with S3 reference images."""
+    """Generate image using Runway ML with gen3a_turbo model."""
     if not RUNWAY_API_KEY:
         raise ValueError("RUNWAY_API_KEY not set.")
-    headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}", "Content-Type": "application/json", "X-Runway-Version": "2024-11-06"}
-    payload = {"promptText": prompt, "ratio": "1920:1080", "seed": int(datetime.now().timestamp()) % 4294967295, "model": "gen4_image"}
+    headers = {
+        "Authorization": f"Bearer {RUNWAY_API_KEY}",
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"
+    }
+    payload = {
+        "model": "gen4_image",
+        "promptText": prompt,
+        "ratio": "1280:720",
+    }
     if reference_images: 
         # Process reference images - expect S3 URLs or HTTP/HTTPS URLs
         processed_refs = []
@@ -615,11 +624,13 @@ Extract and return JSON with these fields:
 If this is a website, extract the brand name from the domain, title, or content.
 Return ONLY valid JSON. Be thorough and extract all available information."""
 
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        response, _used_model = groq_chat_with_failover(
+            groq_client,
             messages=[{"role": "user", "content": prompt}],
+            primary_model="llama-3.3-70b-versatile",
+            logger=logger,
             response_format={"type": "json_object"},
-            temperature=0.3
+            temperature=0.3,
         )
         
         extracted = json.loads(response.choices[0].message.content)
@@ -706,11 +717,13 @@ async def generate_session_title(messages: List[Dict]) -> str:
 
 Return only the title, nothing else."""
 
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        response, _used_model = groq_chat_with_failover(
+            groq_client,
             messages=[{"role": "user", "content": prompt}],
+            primary_model="llama-3.3-70b-versatile",
+            logger=logger,
             temperature=0.5,
-            max_tokens=20
+            max_tokens=20,
         )
         
         title = response.choices[0].message.content.strip()
@@ -1123,7 +1136,8 @@ Please create a comprehensive, SEO-optimized blog post that:
                                     "preview_url": f"/preview/blog/{content_id}",
                                     "content_id": content_id,
                                     "content_type": "blog",
-                                    "state_hash": state_hash
+                                    "state_hash": state_hash,
+                                    "html_code": blog_html,  # ← Full HTML code included for programmatic use
                                 })
                             except Exception as variant_error:
                                 logger.error(f"Variant generation failed ({variant['label']}): {variant_error}", exc_info=True)

@@ -32,7 +32,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -50,14 +49,57 @@ app.add_middleware(
 _runs: Dict[str, Dict] = {}
 
 # ─── Sentence-transformer (shared, loaded once) ───────────────────────────────
-import logging as _logging, contextlib as _ctx, io as _io
+import logging as _logging, contextlib as _ctx, io as _io, time as _time
 os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_HUB_LOCAL_DIR_USE_SYMLINKS", "False")
 _logging.getLogger("sentence_transformers").setLevel(_logging.ERROR)
 _logging.getLogger("huggingface_hub").setLevel(_logging.ERROR)
-with _ctx.redirect_stderr(_io.StringIO()):
-    _st = SentenceTransformer("all-MiniLM-L6-v2")
+
+_st = None
+_load_error = None
+
+# Try to load sentence transformer with retry logic
+for _model_name in ["all-MiniLM-L6-v2", "all-MiniLM-L12-v2"]:
+    for _attempt in range(3):
+        try:
+            from sentence_transformers import SentenceTransformer
+            with _ctx.redirect_stderr(_io.StringIO()):
+                _st = SentenceTransformer(
+                    _model_name,
+                    cache_folder=os.path.join(os.path.expanduser("~"), ".sentence-transformers-cache"),
+                    trust_remote_code=True
+                )
+            _logging.getLogger(__name__).info(f"Loaded sentence transformer: {_model_name}")
+            break
+        except Exception as e:
+            _load_error = e
+            if _attempt < 2:
+                _logging.getLogger(__name__).warning(f"Attempt {_attempt + 1}/3 failed for {_model_name}, retrying in {2 ** _attempt}s: {e}")
+                _time.sleep(2 ** _attempt)
+    if _st is not None:
+        break
+
+# Fallback embedding if loading failed
+if _st is None:
+    _logging.getLogger(__name__).warning(f"Could not load sentence transformer, using fallback: {_load_error}")
+    class _FallbackEmbedder:
+        def encode(self, texts, normalize_embeddings=False):
+            if isinstance(texts, str):
+                texts = [texts]
+            import hashlib
+            embeddings = []
+            for text in texts:
+                hash_val = hashlib.md5(text.encode()).digest()
+                embedding = np.frombuffer(hash_val, dtype=np.float32)[:384]
+                if normalize_embeddings:
+                    norm = np.linalg.norm(embedding)
+                    if norm > 0:
+                        embedding = embedding / norm
+                embeddings.append(embedding)
+            return np.array(embeddings)
+    _st = _FallbackEmbedder()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

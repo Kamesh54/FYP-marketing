@@ -22,7 +22,7 @@ def run_critique(content_text: str,
     import asyncio
     import uuid
     from critic_agent import _evaluate, CriticRequest
-    from database import get_brand_profile, save_critic_log, create_hitl_event
+    from database import get_brand_profile, save_critic_log, create_hitl_event, get_critic_attempt_count
     from langsmith_tracer import get_current_run_id, record_critic_feedback
 
     try:
@@ -75,7 +75,20 @@ def run_critique(content_text: str,
         overall_s = round((intent_s * 0.4 + brand_s * 0.35 + quality_s * 0.25), 3)
 
         PASS_THRESHOLD = 0.70
-        passed = overall_s >= PASS_THRESHOLD
+        attempt_number = get_critic_attempt_count(cid) + 1
+        decision = "approved" if overall_s >= PASS_THRESHOLD else ("rejected" if attempt_number < 3 else "escalate")
+        passed = decision == "approved"
+
+        content_agent_instructions = []
+        if decision != "approved":
+            if intent_s < 0.70:
+                content_agent_instructions.append("Align the rewritten content tightly to the original user request.")
+            if brand_s < 0.70:
+                content_agent_instructions.append("Apply brand tone, industry language, and USP messaging from profile context.")
+            if quality_s < 0.70:
+                content_agent_instructions.append("Improve grammar/readability and include clear intro-body-conclusion with a CTA.")
+            if content_type == "blog":
+                content_agent_instructions.append("For blogs, keep keyword density in the 1-3% range.")
 
         run_id = get_current_run_id()
 
@@ -90,27 +103,34 @@ def run_critique(content_text: str,
             critique_text=critique_text,
             passed=passed,
             langsmith_run_id=run_id,
+            attempt_number=attempt_number,
         )
 
         # Feed back to LangSmith
         if run_id:
             record_critic_feedback(run_id, intent_s, brand_s, quality_s)
 
-        # Emit HITL event if not passed
+        # Emit HITL event only when automatic retries are exhausted.
         hitl_event_id = None
-        if not passed and session_id and user_id:
+        if decision == "escalate" and session_id and user_id:
             hitl_event_id = str(uuid.uuid4())
             create_hitl_event(
                 event_id=hitl_event_id,
                 session_id=session_id,
                 user_id=user_id,
-                event_type="content_review",
+                event_type="critic_review",
                 payload={
                     "content_id": cid,
                     "content_type": content_type,
                     "overall_score": overall_s,
+                    "intent_score": intent_s,
+                    "brand_score": brand_s,
+                    "quality_score": quality_s,
+                    "attempt_number": attempt_number,
+                    "decision": decision,
                     "critique_text": critique_text,
                     "suggestions": suggestions,
+                    "content_agent_instructions": content_agent_instructions,
                     "original_intent": original_intent,
                     "content_preview": content_text[:500],
                 },
@@ -119,6 +139,9 @@ def run_critique(content_text: str,
         return {
             "content_id": cid,
             "critic_log_id": log_id,
+            "attempt_number": attempt_number,
+            "threshold": PASS_THRESHOLD,
+            "decision": decision,
             "intent_score": intent_s,
             "brand_score": brand_s,
             "quality_score": quality_s,
@@ -126,6 +149,7 @@ def run_critique(content_text: str,
             "passed": passed,
             "critique_text": critique_text,
             "improvement_suggestions": suggestions,
+            "content_agent_instructions": content_agent_instructions,
             "hitl_event_id": hitl_event_id,
             "langsmith_run_id": run_id,
         }

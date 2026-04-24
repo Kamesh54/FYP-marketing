@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Network,
   Workflow,
@@ -253,6 +254,11 @@ export default function ProtocolsPage() {
         <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>
           Real-time monitoring of A2A and MCP protocol communications
         </p>
+        <div className="mt-3">
+          <Link href="/a2a-demo" className="text-cyan-400 hover:text-cyan-300 underline">
+            Open External User-Agent Demo
+          </Link>
+        </div>
       </div>
 
       {/* Protocol Selector */}
@@ -593,6 +599,8 @@ function A2ASpec() {
           <li>• tasks.sendSubscribe</li>
           <li>• tasks.cancel</li>
           <li>• tasks.pushNotification.set</li>
+          <li>• campaigns.propose</li>
+          <li>• campaigns.accept</li>
         </ul>
       </div>
     </div>

@@ -1,0 +1,35 @@
+{
+  "posts": {
+    "twitter": {
+      "copy": "Experience quality & service with bikes 90! Get the best automotive solutions from our store. #bikes90 #automotive #QualityMatters",
+      "length": 280,
+      "call_to_action": "Visit our store today!",
+      "hashtags": [
+        "#bikes90",
+        "#automotive",
+        "#QualityMatters"
+      ]
+    },
+    "instagram": {
+      "copy": "At bikes 90, we prioritize quality and service. Explore our wide range of automotive products, designed to meet your needs. With a focus on customer satisfaction, we ensure you have a seamless experience. #bikes90 #automotive #QualityAndService",
+      "length": 300,
+      "call_to_action": "Shop now and discover the bikes 90 difference!",
+      "hashtags": [
+        "#bikes90",
+        "#automotive",
+        "#QualityAndService",
+        "#YouthOnWheels"
+      ]
+    }
+  },
+  "image_prompts": [
+    "Photorealistic image of a young person riding a bike from bikes 90, with a cityscape in the background, highlighting the brand's focus on quality and service.",
+    "Photorealistic image of the bikes 90 store, showcasing various automotive products and a team of experts ready to assist customers, emphasizing the unique selling points of quality and service."
+  ],
+  "meta": {
+    "brand_name": "bikes 90",
+    "location": "N/A",
+    "industry": "automotive",
+    "generated_at": "2026-04-01T06:44:42.814762Z"
+  }
+}

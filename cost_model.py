@@ -3,10 +3,13 @@ Cost Estimation Model
 Estimates workflow costs based on agent usage, tokens, and API calls
 """
 import logging
+from math import ceil
 from typing import List, Dict, Any
 from database import get_db_connection
 
 logger = logging.getLogger(__name__)
+CREDITS_PER_USD = 1000
+MIN_REQUEST_CREDITS = 1
 
 # Cost model for each agent (default values, can be updated in database)
 DEFAULT_AGENT_COSTS = {
@@ -179,6 +182,7 @@ def estimate_workflow_cost(agents: List[str]) -> Dict[str, Any]:
         "agents": agent_costs,
         "total_cost": round(total_cost, 4),
         "total_time": round(total_time, 1),
+        "credits_estimate": usd_cost_to_credits(total_cost),
         "breakdown": {
             "time_cost": round(total_time_cost, 6),
             "token_cost": round(total_token_cost, 6),
@@ -186,6 +190,21 @@ def estimate_workflow_cost(agents: List[str]) -> Dict[str, Any]:
         },
         "cost_usd": f"${round(total_cost, 4)}"
     }
+
+
+def usd_cost_to_credits(cost: float) -> int:
+    """Convert estimated USD cost to integer credits."""
+    try:
+        numeric_cost = float(cost)
+    except (TypeError, ValueError):
+        numeric_cost = 0.0
+    return max(MIN_REQUEST_CREDITS, int(ceil(max(0.0, numeric_cost) * CREDITS_PER_USD)))
+
+
+def format_credits_display(credits: int) -> str:
+    """Format an integer credit amount for the UI."""
+    credits = max(0, int(credits))
+    return f"{credits} credit" if credits == 1 else f"{credits} credits"
 
 def calculate_actual_cost(agent_name: str, execution_time: float, tokens_used: int = 0) -> float:
     """
@@ -215,6 +234,11 @@ def format_cost_display(cost: float) -> str:
         return f"${cost:.4f} (~{int(cost * 100)}¢)"
     else:
         return f"${cost:.2f}"
+
+
+def format_cost_display(cost: float) -> str:
+    """Format estimated cost as credits for user-facing display."""
+    return format_credits_display(usd_cost_to_credits(cost))
 
 def get_cost_tier(total_cost: float) -> str:
     """Categorize cost into tiers for UI display."""

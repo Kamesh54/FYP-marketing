@@ -1,0 +1,166 @@
+{
+    "company_info": {
+        "name": "bikes 90",
+        "url": "",
+        "product_description": "automotive in None. all brand bikes are available here"
+    },
+    "company_keywords": {
+        "short_keywords": [
+            "automotive in",
+            "in none",
+            "none all",
+            "all brand",
+            "brand bikes",
+            "bikes are",
+            "are available",
+            "available here",
+            "automotive",
+            "in",
+            "none",
+            "all",
+            "brand",
+            "bikes",
+            "are",
+            "available",
+            "here"
+        ],
+        "long_tail_keywords": [
+            "automotive in none all",
+            "in none all brand",
+            "none all brand bikes",
+            "all brand bikes are",
+            "brand bikes are available",
+            "bikes are available here",
+            "automotive in none",
+            "in none all",
+            "none all brand",
+            "all brand bikes",
+            "brand bikes are",
+            "bikes are available",
+            "are available here"
+        ]
+    },
+    "competitor_analysis": {
+        "competitors_analyzed": 5,
+        "competitor_details": [
+            {
+                "name": "Software for e-bikes — Comodule: IoT for E-bikes",
+                "url": "https://www.comodule.com/software",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Workstand | Bike Shop Software and Marketing",
+                "url": "https://workstand.com/",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Bike Shop POS & Management Software",
+                "url": "https://www.lightspeedhq.com/pos/retail/bike-shop/",
+                "short_keywords_count": 0,
+                "long_tail_keywords_count": 0
+            },
+            {
+                "name": "Outdoor Retail Software | Inventory, Point of Sale & eCommerce",
+                "url": "https://coreware.com/outdoorsports-retailer",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            },
+            {
+                "name": "Sporting Goods Retail Software",
+                "url": "https://www.fieldstack.com/sporting-goods-retail-software",
+                "short_keywords_count": 25,
+                "long_tail_keywords_count": 25
+            }
+        ]
+    },
+    "gap_analysis": {
+        "missing_keywords": {
+            "short": [
+                "retailer running",
+                "seamlessly integrates",
+                "module communicates",
+                "increase sales",
+                "rich website",
+                "including images",
+                "renys youre",
+                "product details",
+                "optimize performance",
+                "including many"
+            ],
+            "long_tail": [
+                "outdoor retailers conduct full",
+                "retail systems run smoothly",
+                "coreware outdoor sports",
+                "comodule software solutions",
+                "integrate custom software solutions",
+                "seamlessly integrate comodule iot",
+                "every major supplier",
+                "marketing company solely focused",
+                "athletic gear especially forretailers",
+                "create impactful customer experiences"
+            ]
+        },
+        "unique_company_keywords": {
+            "short": [
+                "automotive in",
+                "in none",
+                "none all",
+                "all brand",
+                "brand bikes",
+                "bikes are",
+                "are available",
+                "available here",
+                "automotive",
+                "in"
+            ],
+            "long_tail": [
+                "automotive in none all",
+                "in none all brand",
+                "none all brand bikes",
+                "all brand bikes are",
+                "brand bikes are available",
+                "bikes are available here",
+                "automotive in none",
+                "in none all",
+                "none all brand",
+                "all brand bikes"
+            ]
+        },
+        "organic_opportunities": {
+            "short": [
+                "retailer running",
+                "seamlessly integrates",
+                "module communicates",
+                "increase sales",
+                "rich website"
+            ],
+            "long_tail": [
+                "outdoor retailers conduct full",
+                "retail systems run smoothly",
+                "coreware outdoor sports",
+                "comodule software solutions",
+                "integrate custom software solutions"
+            ]
+        },
+        "recommendations": [
+            "Optimize website content to include missing short and long-tail keywords",
+            "Develop a content marketing strategy to target unique company keywords",
+            "Improve product pages with detailed descriptions and high-quality images",
+            "Enhance user experience by seamlessly integrating comodule IoT solutions",
+            "Create impactful customer experiences through targeted marketing campaigns"
+        ],
+        "competitive_insights": [
+            "Competitors are focusing on retailer running and seamless integration of modules",
+            "Competitors are prioritizing increase in sales and optimization of performance",
+            "Competitors are using rich website content, including images, to attract customers"
+        ]
+    },
+    "summary": {
+        "missing_short_keywords": 10,
+        "missing_long_tail_keywords": 10,
+        "unique_company_keywords": 20,
+        "organic_opportunities": 10
+    }
+}

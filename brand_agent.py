@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from groq import Groq
+from llm_failover import groq_chat_with_failover
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -403,9 +404,11 @@ Return a JSON object with exactly these keys (no extras):
 Respond ONLY with valid JSON. No markdown, no explanation."""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
+        resp, _used_model = groq_chat_with_failover(
+            groq_client,
             messages=[{"role": "user", "content": prompt}],
+            primary_model=GROQ_MODEL,
+            logger=logger,
             temperature=0.2,
             max_tokens=800,
         )

@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import logging
 import json
 from typing import Dict, Any, Optional, List
-from content_agent import safe_groq_chat, build_blog_prompt, format_kg_context_for_prompt, get_brand_knowledge_context  # type: ignore
+from content_agent import safe_groq_chat, build_blog_prompt, format_kg_context_for_prompt, get_brand_knowledge_context, _clean_markdown_wrapped_html  # type: ignore
 
 
 logger = logging.getLogger("adapter.content")
@@ -55,12 +55,16 @@ def generate_blog(business_details: str,
             kg_context=kg_context
         )
 
-        result = safe_groq_chat(prompt)
+        result = safe_groq_chat(prompt, strict_json=False)
 
         if isinstance(result, dict):
             # The original content_agent.py prompt returns {"html_content": "<html...>"}
             # We need to map this to "html" for compatibility with LangGraph and the UI.
             raw_html = result.get("html_content", "") or result.get("html", "") or result.get("raw_text", "")
+            
+            # Clean markdown-wrapped responses
+            raw_html = _clean_markdown_wrapped_html(raw_html)
+            
             return {
                 "html": raw_html,
                 "title": result.get("title", "Generated Blog"),
@@ -89,6 +93,36 @@ def generate_social(keywords: Optional[Dict] = None,
     if platforms is None:
         platforms = ["linkedin", "x", "instagram"]
 
+    def _build_fallback_posts() -> Dict[str, Any]:
+        brand = brand_name or (brand_context[:40].strip() if brand_context else "Our brand")
+        subject = topic.strip() or "our latest update"
+        posts: Dict[str, Any] = {}
+        for platform in platforms:
+            p = (platform or "social").lower()
+            copy = f"{brand}: {subject}. Discover how we can help you improve results today."
+            hashtags = ["#marketing", "#growth"]
+            if p in ("twitter", "x"):
+                copy = f"{brand}: {subject}. Improve results today."
+                hashtags = ["#growth", "#marketing"]
+            elif p == "instagram":
+                copy = f"{brand} - {subject}\n\nBuilt for better outcomes."
+                hashtags = ["#instagram", "#business", "#marketing"]
+            elif p == "linkedin":
+                copy = f"{brand}: {subject}. We help teams improve marketing performance with practical execution."
+                hashtags = ["#linkedin", "#marketing", "#business"]
+
+            posts[p] = {
+                "copy": copy,
+                "hashtags": hashtags,
+            }
+
+        return {
+            "posts": posts,
+            "image_prompts": [f"Brand marketing visual for {brand_name or 'business'}"],
+            "fallback": True,
+            "fallback_reason": "groq_unavailable_or_rate_limited",
+        }
+
     try:
         # Pull brand memory from knowledge graph
         kg_context = ""
@@ -115,9 +149,12 @@ def generate_social(keywords: Optional[Dict] = None,
         result = safe_groq_chat(prompt)
 
         if isinstance(result, dict):
+            if result.get("error") or not result.get("posts"):
+                logger.warning("Using fallback social post generation due to Groq error or missing posts")
+                return _build_fallback_posts()
             return result
         return {"error": "Unexpected response format", "raw": str(result)}
 
     except Exception as e:
         logger.error(f"Social content generation adapter failed: {e}")
-        return {"error": str(e)}
+        return _build_fallback_posts()

@@ -15,14 +15,27 @@ logger = logging.getLogger(__name__)
 # Database file path
 DB_PATH = "database/app.db"
 DB_VERSION = 1
-from graph import (
-    sync_new_user,
-    sync_new_brand,
-    sync_new_campaign,
-    sync_new_content,
-    sync_new_metric,
-    create_kg_relationship,
-)
+DEFAULT_USER_CREDITS = 1000
+# Optional: Neo4j graph database integration (commented out if not used)
+# from graph import (
+#     sync_new_user,
+#     sync_new_brand,
+#     sync_new_campaign,
+#     sync_new_content,
+#     sync_new_metric,
+#     create_kg_relationship,
+# )
+
+# Optional Neo4j hooks: keep DB operations safe even when graph integration is disabled.
+def _noop(*args, **kwargs):
+    return None
+
+sync_new_user = _noop
+sync_new_brand = _noop
+sync_new_campaign = _noop
+sync_new_content = _noop
+sync_new_metric = _noop
+create_kg_relationship = _noop
 
 # Thread-safe connection pool
 _connection_lock = Lock()
@@ -58,9 +71,14 @@ def initialize_database():
             password_hash TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP,
-            preferences TEXT DEFAULT '{}'
+            preferences TEXT DEFAULT '{}',
+            credits_balance INTEGER NOT NULL DEFAULT 1000
         )
         """)
+
+        user_columns = {row["name"] for row in cursor.execute("PRAGMA table_info(users)").fetchall()}
+        if "credits_balance" not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN credits_balance INTEGER NOT NULL DEFAULT 1000")
         
         # Sessions table
         cursor.execute("""
@@ -158,6 +176,19 @@ def initialize_database():
             cost REAL DEFAULT 0,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_credit_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            delta INTEGER NOT NULL,
+            balance_after INTEGER NOT NULL,
+            reason TEXT,
+            metadata TEXT DEFAULT '{}',
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
         """)
         
@@ -365,12 +396,32 @@ def initialize_database():
         )
         """)
 
+        # Prompt executions table (tracks each time a prompt is used with brand context)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS prompt_executions (
+            execution_id TEXT PRIMARY KEY,
+            prompt_id TEXT,
+            agent_name TEXT NOT NULL,
+            context_type TEXT NOT NULL,
+            brand_info TEXT DEFAULT '{}',
+            performance_score REAL,
+            quality_score REAL,
+            brand_alignment_score REAL,
+            overall_score REAL,
+            feedback TEXT,
+            execution_time REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (prompt_id) REFERENCES prompt_versions(id)
+        )
+        """)
+
         # Critic logs table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS critic_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             content_id TEXT NOT NULL,
             session_id TEXT,
+            attempt_number INTEGER NOT NULL DEFAULT 1,
             intent_score REAL NOT NULL,
             brand_score REAL NOT NULL,
             quality_score REAL NOT NULL,
@@ -410,7 +461,7 @@ def initialize_database():
         CREATE TABLE IF NOT EXISTS research_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             domain TEXT NOT NULL,
-            depth_level TEXT NOT NULL CHECK(depth_level IN ('deep', 'medium', 'short')),
+            depth_level TEXT NOT NULL CHECK(depth_level IN ('quick', 'standard', 'deep')),
             result_json TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             expires_at TIMESTAMP NOT NULL,
@@ -486,6 +537,33 @@ def initialize_database():
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE brand_profiles ADD COLUMN {col} {col_def}")
                 logger.info(f"Migration: added brand_profiles.{col}")
+
+        # Critic logs migrations
+        cursor.execute("PRAGMA table_info(critic_logs)")
+        critic_cols = {row[1] for row in cursor.fetchall()}
+        if "attempt_number" not in critic_cols:
+            cursor.execute("ALTER TABLE critic_logs ADD COLUMN attempt_number INTEGER NOT NULL DEFAULT 1")
+            logger.info("Migration: added critic_logs.attempt_number")
+        # ────────────────────────────────────────────────────────────────────
+
+        # ── Migration: fix research_cache depth_level constraint ──────────
+        # Old constraint was ('deep','medium','short') but code uses ('quick','standard','deep')
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='research_cache'")
+        rc_row = cursor.fetchone()
+        if rc_row and rc_row[0] and "'medium'" in rc_row[0]:
+            logger.info("Migration: recreating research_cache with corrected depth_level constraint")
+            cursor.execute("DROP TABLE IF EXISTS research_cache")
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS research_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain TEXT NOT NULL,
+                depth_level TEXT NOT NULL CHECK(depth_level IN ('quick', 'standard', 'deep')),
+                result_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                UNIQUE(domain, depth_level)
+            )
+            """)
         # ────────────────────────────────────────────────────────────────────
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_critic_logs_content ON critic_logs(content_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_campaign_schedules_user ON campaign_schedules(user_id)")
@@ -544,9 +622,9 @@ def create_user(email: str, password_hash: str) -> int:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-        INSERT INTO users (email, password_hash, created_at)
-        VALUES (?, ?, ?)
-        """, (email, password_hash, datetime.now()))
+        INSERT INTO users (email, password_hash, created_at, credits_balance)
+        VALUES (?, ?, ?, ?)
+        """, (email, password_hash, datetime.now(), DEFAULT_USER_CREDITS))
         user_id = cursor.lastrowid
         # Non-blocking sync to Neo4j (pass minimal user info)
         try:
@@ -578,6 +656,57 @@ def update_last_login(user_id: int):
         cursor.execute("""
         UPDATE users SET last_login = ? WHERE id = ?
         """, (datetime.now(), user_id))
+
+
+def get_user_credit_balance(user_id: int) -> int:
+    """Return the user's current credit balance."""
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError(f"User {user_id} not found")
+    return int(user.get("credits_balance", 0) or 0)
+
+
+def change_user_credits(user_id: int, delta: int, reason: str = "", metadata: Optional[Dict[str, Any]] = None) -> int:
+    """Adjust a user's credits and return the new balance."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT credits_balance FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError(f"User {user_id} not found")
+
+        current_balance = int(row["credits_balance"] or 0)
+        new_balance = current_balance + int(delta)
+        if new_balance < 0:
+            raise ValueError("Insufficient credits")
+
+        cursor.execute(
+            "UPDATE users SET credits_balance = ? WHERE id = ?",
+            (new_balance, user_id),
+        )
+        cursor.execute(
+            """
+            INSERT INTO user_credit_transactions (user_id, delta, balance_after, reason, metadata, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                int(delta),
+                new_balance,
+                reason,
+                json.dumps(metadata or {}),
+                datetime.now(),
+            ),
+        )
+        return new_balance
+
+
+def consume_user_credits(user_id: int, amount: int, reason: str = "", metadata: Optional[Dict[str, Any]] = None) -> int:
+    """Deduct credits from a user and return the remaining balance."""
+    amount = max(0, int(amount))
+    if amount == 0:
+        return get_user_credit_balance(user_id)
+    return change_user_credits(user_id, -amount, reason=reason, metadata=metadata)
 
 # ==================== SESSION OPERATIONS ====================
 
@@ -1156,6 +1285,35 @@ def get_campaign(campaign_id: str) -> Optional[Dict[str, Any]]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+def get_campaigns_for_user(user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+    """Return campaigns for a user with agenda summary stats."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                c.*,
+                COALESCE(COUNT(ca.id), 0) AS agenda_total,
+                COALESCE(SUM(CASE WHEN ca.status = 'completed' THEN 1 ELSE 0 END), 0) AS agenda_completed,
+                COALESCE(SUM(CASE WHEN ca.status = 'pending' THEN 1 ELSE 0 END), 0) AS agenda_pending,
+                COALESCE(SUM(CASE WHEN ca.status = 'failed' THEN 1 ELSE 0 END), 0) AS agenda_failed,
+                MAX(ca.scheduled_time) AS last_scheduled_time
+            FROM campaigns c
+            LEFT JOIN campaign_agenda ca ON ca.campaign_id = c.id
+            WHERE c.user_id = ?
+            GROUP BY c.id
+            ORDER BY datetime(c.created_at) DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        )
+
+        rows = cursor.fetchall()
+        result: List[Dict[str, Any]] = []
+        for row in rows:
+            result.append({k: row[k] for k in row.keys()})
+        return result
+
 def update_campaign_status(campaign_id: str, status: str):
     """Update campaign status."""
     with get_db_connection() as conn:
@@ -1335,23 +1493,112 @@ def get_best_prompt(agent_name: str, context_type: str) -> Optional[Dict[str, An
         row = cursor.fetchone()
         return dict(row) if row else None
 
+def log_prompt_execution(
+    execution_id: str,
+    prompt_id: Optional[str],
+    agent_name: str,
+    context_type: str,
+    brand_info: Optional[Dict[str, Any]] = None,
+    performance_score: Optional[float] = None,
+    quality_score: Optional[float] = None,
+    brand_alignment_score: Optional[float] = None,
+    overall_score: Optional[float] = None,
+    feedback: Optional[str] = None,
+    execution_time: Optional[float] = None
+) -> str:
+    """Log a prompt execution with brand context."""
+    import json as json_lib
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        INSERT INTO prompt_executions
+        (execution_id, prompt_id, agent_name, context_type, brand_info, 
+         performance_score, quality_score, brand_alignment_score, overall_score, 
+         feedback, execution_time, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            execution_id,
+            prompt_id,
+            agent_name,
+            context_type,
+            json_lib.dumps(brand_info or {}),
+            performance_score,
+            quality_score,
+            brand_alignment_score,
+            overall_score,
+            feedback,
+            execution_time,
+            datetime.now()
+        ))
+    return execution_id
+
+def get_prompt_executions(agent_name: Optional[str] = None, context_type: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+    """Get recent prompt executions with brand context."""
+    import json as json_lib
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        conn.row_factory = sqlite3.Row
+        
+        where_clauses = []
+        params = []
+        
+        if agent_name:
+            where_clauses.append("agent_name = ?")
+            params.append(agent_name)
+        if context_type:
+            where_clauses.append("context_type = ?")
+            params.append(context_type)
+        
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        
+        cursor.execute(f"""
+        SELECT execution_id, prompt_id, agent_name, context_type, brand_info,
+               performance_score, quality_score, brand_alignment_score, overall_score,
+               feedback, execution_time, created_at
+        FROM prompt_executions
+        {where_sql}
+        ORDER BY created_at DESC
+        LIMIT ?
+        """, params + [limit])
+        
+        rows = []
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            # Parse brand_info JSON
+            try:
+                row_dict['brand_info'] = json_lib.loads(row_dict['brand_info'] or '{}')
+            except:
+                row_dict['brand_info'] = {}
+            rows.append(row_dict)
+        
+        return rows
+
 
 # ==================== CRITIC LOGS ====================
 
 def save_critic_log(content_id: str, session_id: Optional[str],
                     intent_score: float, brand_score: float, quality_score: float,
                     overall_score: float, critique_text: str, passed: bool,
-                    langsmith_run_id: Optional[str] = None) -> int:
+                    langsmith_run_id: Optional[str] = None,
+                    attempt_number: int = 1) -> int:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
         INSERT INTO critic_logs
-            (content_id, session_id, intent_score, brand_score, quality_score,
+            (content_id, session_id, attempt_number, intent_score, brand_score, quality_score,
              overall_score, critique_text, passed, langsmith_run_id, created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
-        """, (content_id, session_id, intent_score, brand_score, quality_score,
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (content_id, session_id, attempt_number, intent_score, brand_score, quality_score,
               overall_score, critique_text, 1 if passed else 0, langsmith_run_id, datetime.now()))
         return cursor.lastrowid
+
+def get_critic_attempt_count(content_id: str) -> int:
+    """Return total number of critic attempts logged for a content item."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(1) FROM critic_logs WHERE content_id = ?", (content_id,))
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
 
 def update_critic_decision(content_id: str, decision: str):
     with get_db_connection() as conn:
@@ -1373,6 +1620,7 @@ def get_recent_critic_logs(limit: int = 100) -> list:
         cursor = conn.cursor()
         cursor.execute("""
         SELECT cl.id, cl.content_id, cl.session_id,
+             cl.attempt_number,
                cl.intent_score, cl.brand_score, cl.quality_score, cl.overall_score,
                cl.critique_text, cl.passed, cl.user_decision, cl.created_at,
                gc.type AS content_type,

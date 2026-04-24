@@ -13,6 +13,7 @@ from collections import Counter
 from datetime import datetime
 from groq import Groq
 from dotenv import load_dotenv
+from llm_failover import groq_chat_with_failover
 import time
 try:
     from graph.dual_write_helper import sync_new_competitor
@@ -322,10 +323,12 @@ class GapAnalyzer:
             - competitive_insights: list of insights
             """
 
-            response = self.groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            response, _used_model = groq_chat_with_failover(
+                self.groq_client,
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}  # enforce JSON response
+                primary_model="llama-3.3-70b-versatile",
+                logger=logger,
+                response_format={"type": "json_object"},  # enforce JSON response
             )
 
             # Parse JSON safely

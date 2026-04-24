@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FYP Marketing - A2A & MCP API</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,700|Roboto+Mono:400,700&display=swap" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #fafafa;
+            font-family: "Roboto", sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #003366 0%, #00A0D2 100%);
+            padding: 40px 20px;
+            color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .section {
+            background: white;
+            margin-bottom: 30px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .section-header {
+            background: #f5f5f5;
+            padding: 20px;
+            border-left: 4px solid #00A0D2;
+            font-size: 1.3em;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .section-header:hover {
+            background: #efefef;
+        }
+        .section-content {
+            padding: 20px;
+            display: none;
+        }
+        .section-content.active {
+            display: block;
+        }
+        .endpoint {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .method {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 0.9em;
+            margin-right: 10px;
+            color: white;
+        }
+        .method.get { background: #61affe; }
+        .method.post { background: #49cc90; }
+        .method.put { background: #fca130; }
+        .method.delete { background: #f93e3e; }
+        .path {
+            font-family: "Roboto Mono", monospace;
+            font-size: 0.95em;
+            color: #333;
+            font-weight: 500;
+        }
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: "Roboto Mono", monospace;
+            font-size: 0.85em;
+            line-height: 1.5;
+            margin: 10px 0;
+        }
+        .code-title {
+            font-weight: 600;
+            color: #666;
+            margin: 15px 0 10px 0;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin: 0 0 15px 0;
+        }
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: 500;
+            color: #666;
+        }
+        .tab.active {
+            color: #00A0D2;
+            border-bottom-color: #00A0D2;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .schema-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .schema-table th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .schema-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .schema-table tr:hover {
+            background: #fafafa;
+        }
+        .property-type {
+            background: #e3f2fd;
+            color: #00A0D2;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Roboto Mono", monospace;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .description {
+            color: #666;
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #721c24;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #155724;
+        }
+        .tag {
+            display: inline-block;
+            background: #e0e0e0;
+            color: #333;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        .tag.a2a { background: #bbdefb; color: #01579b; }
+        .tag.mcp { background: #c8e6c9; color: #1b5e20; }
+        .tag.health { background: #ffe0b2; color: #e65100; }
+        .response-status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .response-status.ok { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+        .response-status.error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+        .response-status.info { background: #d1ecf1; color: #0c5460; border-left: 4px solid #17a2b8; }
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .quick-link {
+            background: white;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .quick-link:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: #00A0D2;
+        }
+        .quick-link h4 {
+            margin: 0 0 8px 0;
+            color: #00A0D2;
+        }
+        .quick-link p {
+            margin: 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .toc {
+            background: white;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+            border-left: 4px solid #00A0D2;
+        }
+        .toc h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .toc ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .toc li {
+            margin: 8px 0;
+        }
+        .toc a {
+            color: #00A0D2;
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            background: #263238;
+            color: #fff;
+            text-align: center;
+            padding: 30px 20px;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="container">
+        <h1>🚀 FYP Marketing Platform - API Documentation</h1>
+        <p>A2A Protocol & MCP (Model Context Protocol) - RESTful API Specification</p>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- Quick Navigation -->
+    <div class="toc">
+        <h3>📋 Quick Navigation</h3>
+        <ul>
+            <li><a href="#overview">Overview & Authentication</a></li>
+            <li><a href="#a2a-discovery">A2A Protocol - Discovery</a></li>
+            <li><a href="#a2a-tasks">A2A Protocol - Task Management</a></li>
+            <li><a href="#a2a-campaigns">A2A Protocol - Campaigns</a></li>
+            <li><a href="#mcp-tools">MCP - Tools</a></li>
+            <li><a href="#mcp-resources">MCP - Resources</a></li>
+            <li><a href="#mcp-prompts">MCP - Prompts</a></li>
+            <li><a href="#examples">Implementation Examples</a></li>
+            <li><a href="#status">Health & Status</a></li>
+        </ul>
+    </div>
+
+    <!-- Overview Section -->
+    <div class="section" id="overview">
+        <div class="section-header" onclick="toggleSection(this)">
+            📌 Overview & Authentication
+        </div>
+        <div class="section-content active">
+            <div class="description">
+                The FYP Marketing Platform provides two primary communication protocols for system integration:
+            </div>
+
+            <h4>Architecture Overview</h4>
+            <table class="schema-table">
+                <tr>
+                    <th>Protocol</th>
+                    <th>Base URL</th>
+                    <th>Purpose</th>
+                    <th>Use Case</th>
+                </tr>
+                <tr>
+                    <td><span class="tag a2a">A2A</span></td>
+                    <td><code>POST /a2a</code></td>
+                    <td>Agent-to-Agent communication</td>
+                    <td>Task delegation between agents</td>
+                </tr>
+                <tr>
+                    <td><span class="tag mcp">MCP</span></td>
+                    <td><code>POST /mcp/*</code></td>
+                    <td>LLM tool invocation</td>
+                    <td>Groq LLM accessing platform tools</td>
+                </tr>
+            </table>
+
+            <h4>Authentication (JWT Bearer)</h4>
+            <div class="code-block">Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</div>
+
+            <div class="note">
+                <strong>ℹ️ Note:</strong> Endpoints <code>/.well-known/agent.json</code> and <code>/health</code> do NOT require authentication.
+            </div>
+
+            <h4>Base URLs</h4>
+            <ul>
+                <li><strong>Production:</strong> <code>http://localhost:8004</code></li>
+                <li><strong>Local Dev:</strong> <code>http://127.0.0.1:8004</code></li>
+            </ul>
+
+            <h4>Response Format</h4>
+            <p>All responses follow JSON-RPC 2.0 specification:</p>
+            <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "request-id",
+  "result": { ... }  // or
+  "error": { "code": -32600, "message": "..." }
+}</div>
+        </div>
+    </div>
+
+    <!-- A2A Discovery -->
+    <div class="section" id="a2a-discovery">
+        <div class="section-header" onclick="toggleSection(this)">
+            🔍 A2A Protocol - Agent Discovery
+        </div>
+        <div class="section-content">
+            <span class="tag a2a">A2A Protocol</span>
+
+            <div class="endpoint">
+                <div><span class="method get">GET</span> <span class="path">/.well-known/agent.json</span></div>
+                <div class="description">Discover agent capabilities (no authentication required)</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">curl http://localhost:8004/.well-known/agent.json</div>
+
+                <div class="code-title">Example Response (200 OK):</div>
+                <div class="code-block">{
+  "name": "FYP Orchestrator",
+  "description": "Multi-agent marketing automation",
+  "a2aVersion": "0.1",
+  "a2aEndpointUrl": "http://localhost:8004/a2a",
+  "authentication": {
+    "schemes": ["bearer"],
+    "description": "JWT Bearer token required"
+  },
+  "capabilities": [
+    { "method": "tasks.send", "description": "Submit task" },
+    { "method": "tasks.sendSubscribe", "description": "Subscribe to updates" },
+    { "method": "tasks.cancel", "description": "Cancel task" },
+    { "method": "campaigns.propose", "description": "Propose campaign" },
+    { "method": "campaigns.accept", "description": "Accept campaign" }
+  ]
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- A2A Tasks -->
+    <div class="section" id="a2a-tasks">
+        <div class="section-header" onclick="toggleSection(this)">
+            📋 A2A Protocol - Task Management
+        </div>
+        <div class="section-content">
+            <span class="tag a2a">A2A Protocol</span>
+            <p class="description">Submit, monitor, and cancel tasks using JSON-RPC 2.0</p>
+
+            <!-- Submit Task -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/a2a</span></div>
+                <div class="description">Submit task using method: "tasks.send" (polling pattern)</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "req-001",
+  "method": "tasks.send",
+  "params": {
+    "task": {
+      "messages": [{
+        "role": "user",
+        "parts": [{
+          "type": "text",
+          "text": "Generate a blog post about AI marketing"
+        }]
+      }],
+      "metadata": {
+        "intent": "blog_generation",
+        "brand_name": "TechCorp",
+        "duration_days": 7
+      }
+    }
+  }
+}</div>
+
+                <div class="code-title">Example Response (200 OK):</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "req-001",
+  "result": {
+    "taskId": "task-blog-ai-20260407-a8c3f9e1",
+    "status": {
+      "state": "submitted",
+      "message": "Task queued for processing"
+    }
+  }
+}</div>
+
+                <div class="success">
+                    ✅ Use this for short tasks (&lt;30s). For longer tasks, use SSE subscription.
+                </div>
+            </div>
+
+            <!-- Poll Task Status -->
+            <div class="endpoint">
+                <div><span class="method get">GET</span> <span class="path">/a2a/tasks/{task_id}</span></div>
+                <div class="description">Poll task status (repeat every 2-5 seconds)</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8004/a2a/tasks/task-blog-ai-20260407-a8c3f9e1</div>
+
+                <div class="code-title">Response - Working (200 OK):</div>
+                <div class="code-block">{
+  "id": "task-blog-ai-20260407-a8c3f9e1",
+  "status": {
+    "state": "working",
+    "message": "Generating content (step 3/5)...",
+    "progress_percent": 60
+  }
+}</div>
+
+                <div class="code-title">Response - Completed (200 OK):</div>
+                <div class="code-block">{
+  "id": "task-blog-ai-20260407-a8c3f9e1",
+  "status": {
+    "state": "completed",
+    "progress_percent": 100
+  },
+  "artifacts": [{
+    "name": "blog_post.html",
+    "parts": [{"type": "file", ...}]
+  }]
+}</div>
+
+                <h4>Task States</h4>
+                <table class="schema-table">
+                    <tr>
+                        <th>State</th>
+                        <th>Description</th>
+                        <th>Terminal</th>
+                    </tr>
+                    <tr>
+                        <td><code>submitted</code></td>
+                        <td>Queued for processing</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td><code>working</code></td>
+                        <td>Currently executing</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td><code>completed</code></td>
+                        <td>Success - artifacts available</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>failed</code></td>
+                        <td>Error occurred</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>canceled</code></td>
+                        <td>User cancelled</td>
+                        <td>Yes</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Subscribe Task (SSE) -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/a2a/tasks/{task_id}/subscribe</span></div>
+                <div class="description">Subscribe to real-time task updates (Server-Sent Events)</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8004/a2a/tasks/task-blog-ai-20260407-a8c3f9e1/subscribe</div>
+
+                <div class="code-title">Response Stream (200 OK, text/event-stream):</div>
+                <div class="code-block">event: status
+data: {"type":"status","taskId":"task-001","status":{"state":"working"}}
+
+event: artifact
+data: {"type":"artifact","taskId":"task-001","artifact":{"name":"keywords.json"}}
+
+event: status
+data: {"type":"status","taskId":"task-001","status":{"state":"completed"}}</div>
+
+                <h4>Event Types</h4>
+                <table class="schema-table">
+                    <tr>
+                        <th>Event</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td><code>status</code></td>
+                        <td>Task state changed</td>
+                    </tr>
+                    <tr>
+                        <td><code>artifact</code></td>
+                        <td>Content artifact generated</td>
+                    </tr>
+                    <tr>
+                        <td><code>error</code></td>
+                        <td>Task encountered error</td>
+                    </tr>
+                </table>
+
+                <div class="success">
+                    ✅ Recommended for long-running tasks. Real-time updates without polling.
+                </div>
+            </div>
+
+            <!-- Cancel Task -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/a2a/tasks/{task_id}/cancel</span></div>
+                <div class="description">Cancel a running or queued task</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "User cancellation"}' \
+  http://localhost:8004/a2a/tasks/task-blog-ai-20260407-a8c3f9e1/cancel</div>
+
+                <div class="code-title">Response (200 OK):</div>
+                <div class="code-block">{
+  "id": "task-blog-ai-20260407-a8c3f9e1",
+  "status": {
+    "state": "canceled",
+    "message": "Task cancelled by user"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- A2A Campaigns -->
+    <div class="section" id="a2a-campaigns">
+        <div class="section-header" onclick="toggleSection(this)">
+            📅 A2A Protocol - Campaign Management
+        </div>
+        <div class="section-content">
+            <span class="tag a2a">A2A Protocol</span>
+            <p class="description">Propose and execute marketing campaigns</p>
+
+            <!-- Campaign Propose -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/a2a</span></div>
+                <div class="description">Propose campaign strategy using method: "campaigns.propose"</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "req-campaign",
+  "method": "campaigns.propose",
+  "params": {
+    "campaign": {
+      "theme": "Sustainable Products Q2 2026",
+      "tier": "balanced",
+      "duration_days": 28,
+      "budget": 5000,
+      "platforms": ["twitter", "instagram", "tiktok"]
+    }
+  }
+}</div>
+
+                <div class="code-title">Example Response (200 OK):</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "req-campaign",
+  "result": {
+    "taskId": "task-campaign-20260407-b7d3f8e2",
+    "campaign": {
+      "id": "campaign-001",
+      "tier": "balanced",
+      "estimated_engagement": 8500,
+      "estimated_roi": 2.3,
+      "posting_schedule": [...]
+    }
+  }
+}</div>
+
+                <h4>Campaign Tiers</h4>
+                <table class="schema-table">
+                    <tr>
+                        <th>Tier</th>
+                        <th>Content/Day</th>
+                        <th>Budget Range</th>
+                        <th>ROI Target</th>
+                    </tr>
+                    <tr>
+                        <td>minimal</td>
+                        <td>1-2</td>
+                        <td>$500-$1000</td>
+                        <td>1.5x</td>
+                    </tr>
+                    <tr>
+                        <td>balanced</td>
+                        <td>3-5</td>
+                        <td>$2000-$10000</td>
+                        <td>2.0-2.5x</td>
+                    </tr>
+                    <tr>
+                        <td>premium</td>
+                        <td>6-8</td>
+                        <td>$10000+</td>
+                        <td>3.0x+</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Campaign Accept -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/a2a</span></div>
+                <div class="description">Accept proposed campaign using method: "campaigns.accept"</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "req-accept",
+  "method": "campaigns.accept",
+  "params": {
+    "campaignId": "campaign-001",
+    "approvedBy": "user@example.com"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MCP Tools -->
+    <div class="section" id="mcp-tools">
+        <div class="section-header" onclick="toggleSection(this)">
+            🔧 MCP Protocol - Tools
+        </div>
+        <div class="section-content">
+            <span class="tag mcp">MCP</span>
+            <p class="description">Tool invocation for LLM integration (Groq)</p>
+
+            <!-- List Tools -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/mcp/tools/list</span></div>
+                <div class="description">Get all available tools</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-001",
+  "method": "tools/list"
+}</div>
+
+                <div class="code-title">Example Response (200 OK):</div>
+                <div class="code-block">{
+  "tools": [
+    {
+      "name": "seo_analyze",
+      "description": "Comprehensive SEO analysis on URL",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "analyze_competitors": {"type": "boolean"}
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "name": "content_generate_blog",
+      "description": "Generate blog post",
+      "inputSchema": {...}
+    },
+    {
+      "name": "keywords_extract",
+      "description": "Extract keywords from text/URL",
+      "inputSchema": {...}
+    }
+  ]
+}</div>
+
+                <h4>Available Tools</h4>
+                <table class="schema-table">
+                    <tr>
+                        <th>Tool Name</th>
+                        <th>Purpose</th>
+                        <th>Primary Agent</th>
+                    </tr>
+                    <tr>
+                        <td><code>seo_analyze</code></td>
+                        <td>SEO audit and optimization</td>
+                        <td>SEO Agent</td>
+                    </tr>
+                    <tr>
+                        <td><code>content_generate_blog</code></td>
+                        <td>Blog post generation</td>
+                        <td>Content Agent</td>
+                    </tr>
+                    <tr>
+                        <td><code>keywords_extract</code></td>
+                        <td>Keyword research</td>
+                        <td>Keyword Extraction Agent</td>
+                    </tr>
+                    <tr>
+                        <td><code>gap_analyzer_run</code></td>
+                        <td>Competitive analysis</td>
+                        <td>Gap Analyzer Agent</td>
+                    </tr>
+                    <tr>
+                        <td><code>webcrawler_extract</code></td>
+                        <td>Web scraping</td>
+                        <td>Webcrawler Agent</td>
+                    </tr>
+                    <tr>
+                        <td><code>query_knowledge_graph</code></td>
+                        <td>Semantic search (Neo4j)</td>
+                        <td>Research Agent</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Call Tool -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/mcp/tools/call</span></div>
+                <div class="description">Invoke a specific tool with arguments</div>
+                
+                <div class="code-title">Example: SEO Analysis</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-002",
+  "method": "tools/call",
+  "params": {
+    "name": "seo_analyze",
+    "arguments": {
+      "url": "https://example.com",
+      "analyze_competitors": true
+    }
+  }
+}</div>
+
+                <div class="code-title">Response (200 OK):</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-002",
+  "result": {
+    "score": 78,
+    "metrics": {
+      "performance": 85,
+      "accessibility": 92,
+      "seo": 75
+    },
+    "issues": [...],
+    "recommendations": [...]
+  }
+}</div>
+
+                <div class="code-title">Example: Generate Blog</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-003",
+  "method": "tools/call",
+  "params": {
+    "name": "content_generate_blog",
+    "arguments": {
+      "topic": "AI in Marketing",
+      "brand": "TechCorp",
+      "tone": "professional",
+      "length": 1500
+    }
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MCP Resources -->
+    <div class="section" id="mcp-resources">
+        <div class="section-header" onclick="toggleSection(this)">
+            📦 MCP Protocol - Resources
+        </div>
+        <div class="section-content">
+            <span class="tag mcp">MCP</span>
+            <p class="description">Access platform data resources via URI scheme</p>
+
+            <!-- List Resources -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/mcp/resources/list</span></div>
+                <div class="description">Discover available resources</div>
+                
+                <div class="code-title">Available Resource URIs:</div>
+                <div class="code-block">brand://id                 - Brand profile
+content://id              - Generated content
+campaign://id             - Campaign data
+metrics://scope           - Engagement metrics
+knowledge://graph         - Neo4j knowledge graph</div>
+            </div>
+
+            <!-- Read Resource -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/mcp/resources/read</span></div>
+                <div class="description">Read resource by URI</div>
+                
+                <div class="code-title">Example: Brand Profile</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-004",
+  "method": "resources/read",
+  "params": {"uri": "brand://42"}
+}</div>
+
+                <div class="code-title">Response (200 OK):</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-004",
+  "result": {
+    "brand_id": 42,
+    "name": "TechCorp",
+    "tagline": "Innovation in Every Solution",
+    "voice": {
+      "tone": "professional",
+      "personality_traits": ["innovative", "trustworthy"]
+    },
+    "target_audience": "Tech professionals"
+  }
+}</div>
+
+                <div class="code-title">Example: Metrics Overview</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-005",
+  "method": "resources/read",
+  "params": {"uri": "metrics://overview"}
+}</div>
+
+                <div class="code-title">Response Contains:</div>
+                <div class="code-block">- total_content_generated
+- total_engagement
+- average_engagement_rate
+- campaigns_active
+- content_by_type
+- top_performing_content
+- roi</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MCP Prompts -->
+    <div class="section" id="mcp-prompts">
+        <div class="section-header" onclick="toggleSection(this)">
+            📝 MCP Protocol - Prompts
+        </div>
+        <div class="section-content">
+            <span class="tag mcp">MCP</span>
+            <p class="description">Workflow prompt templates with parameter substitution</p>
+
+            <!-- List Prompts -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/mcp/prompts/list</span></div>
+                <div class="description">Get available workflow prompts</div>
+                
+                <div class="code-title">Available Workflows:</div>
+                <table class="schema-table">
+                    <tr>
+                        <th>Workflow</th>
+                        <th>Parameters</th>
+                        <th>Agent Chain</th>
+                    </tr>
+                    <tr>
+                        <td>blog_generation</td>
+                        <td>topic, brand, audience</td>
+                        <td>Keyword → Content → SEO</td>
+                    </tr>
+                    <tr>
+                        <td>social_campaign</td>
+                        <td>theme, platforms, days</td>
+                        <td>Gap → Content → Campaign</td>
+                    </tr>
+                    <tr>
+                        <td>competitor_analysis</td>
+                        <td>brand, competitors</td>
+                        <td>Crawl → Gap → Research</td>
+                    </tr>
+                    <tr>
+                        <td>content_optimization</td>
+                        <td>content_id, keywords</td>
+                        <td>SEO → Critic → Content</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Get Prompt -->
+            <div class="endpoint">
+                <div><span class="method post">POST</span> <span class="path">/mcp/prompts/get</span></div>
+                <div class="description">Get rendered prompt template</div>
+                
+                <div class="code-title">Example Request:</div>
+                <div class="code-block">{
+  "jsonrpc": "2.0",
+  "id": "mcp-006",
+  "method": "prompts/get",
+  "params": {
+    "name": "blog_generation_workflow",
+    "arguments": {
+      "topic": "AI",
+      "brand": "TechCorp",
+      "audience": "Tech professionals"
+    }
+  }
+}</div>
+
+                <div class="code-title">Response Contains:</div>
+                <div class="code-block">- template (with placeholders)
+- rendered (substituted values)
+- steps (execution plan)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Examples -->
+    <div class="section" id="examples">
+        <div class="section-header" onclick="toggleSection(this)">
+            💻 Implementation Examples
+        </div>
+        <div class="section-content">
+            <h4>Python: A2A Task Submission</h4>
+            <div class="code-block">import requests
+import json
+from time import sleep
+
+class A2AClient:
+    def __init__(self, token):
+        self.token = token
+        self.headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+    
+    def submit_and_poll(self, description, metadata=None):
+        # Submit task
+        payload = {
+            "jsonrpc": "2.0",
+            "id": "req-001",
+            "method": "tasks.send",
+            "params": {
+                "task": {
+                    "messages": [{"role": "user", 
+                                 "parts": [{"type": "text", "text": description}]}],
+                    "metadata": metadata or {}
+                }
+            }
+        }
+        
+        response = requests.post(
+            "http://localhost:8004/a2a",
+            headers=self.headers,
+            json=payload
+        )
+        task_id = response.json()["result"]["taskId"]
+        
+        # Poll task
+        while True:
+            r = requests.get(
+                f"http://localhost:8004/a2a/tasks/{task_id}",
+                headers=self.headers
+            )
+            task = r.json()
+            print(f"State: {task['status']['state']}")
+            
+            if task['status']['state'] in ["completed", "failed"]:
+                return task
+            sleep(5)
+
+# Usage
+client = A2AClient(token="your_jwt_token")
+result = client.submit_and_poll(
+    "Generate blog about AI",
+    {"brand": "TechCorp"}
+)</div>
+
+            <h4>JavaScript: MCP Tool Call</h4>
+            <div class="code-block">async function callTool(toolName, args) {
+  const response = await fetch(
+    "http://localhost:8004/mcp/tools/call",
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "tool-001",
+        method: "tools/call",
+        params: { name: toolName, arguments: args }
+      })
+    }
+  );
+  return await response.json();
+}
+
+// Usage
+const result = await callTool("seo_analyze", {
+  url: "https://example.com"
+});
+console.log(`SEO Score: ${result.result.score}`);
+</div>
+        </div>
+    </div>
+
+    <!-- Status -->
+    <div class="section" id="status">
+        <div class="section-header" onclick="toggleSection(this)">
+            ❤️ Health & Status
+        </div>
+        <div class="section-content">
+            <span class="tag health">Health & Status</span>
+
+            <div class="endpoint">
+                <div><span class="method get">GET</span> <span class="path">/health</span></div>
+                <div class="description">System health check (no authentication)</div>
+                
+                <div class="code-title">Response (200 OK):</div>
+                <div class="code-block">{
+  "status": "healthy",
+  "timestamp": "2026-04-07T10:30:00Z",
+  "services": {
+    "database": "healthy",
+    "langgraph": "healthy",
+    "mabo": "healthy"
+  }
+}</div>
+            </div>
+
+            <div class="endpoint">
+                <div><span class="method get">GET</span> <span class="path">/status</span></div>
+                <div class="description">Detailed system status with agent info</div>
+                
+                <div class="code-title">Response (200 OK):</div>
+                <div class="code-block">{
+  "uptime_seconds": 86400,
+  "active_tasks": 3,
+  "agents": {
+    "content_agent": "ready",
+    "seo_agent": "ready",
+    "campaign_agent": "ready"
+  },
+  "last_updated": "2026-04-07T10:30:00Z"
+}</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="footer">
+    <p><strong>FYP Marketing Platform - REST API Documentation v1.0</strong></p>
+    <p>A2A Protocol & Model Context Protocol (MCP) Integration</p>
+    <p style="opacity: 0.7; font-size: 0.9em;">Last Updated: 2026-04-07 | <a href="#" style="color: #fff;">.well-known/agent.json</a> | <a href="#" style="color: #fff;">OpenAPI Spec</a></p>
+</div>
+
+<script>
+function toggleSection(header) {
+    const content = header.nextElementSibling;
+    content.classList.toggle('active');
+}
+
+// Auto-expand first section on load
+document.addEventListener('DOMContentLoaded', function() {
+    const headers = document.querySelectorAll('.section-header');
+    if (headers.length > 0) {
+        headers[0].nextElementSibling.classList.add('active');
+    }
+});
+</script>
+
+</body>
+</html>

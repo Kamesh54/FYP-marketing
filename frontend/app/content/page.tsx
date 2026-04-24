@@ -17,10 +17,14 @@ interface CriticScore {
   quality_score: number
   critique: string
   suggestions: string[]
+  content_agent_instructions?: string[]
 }
 
 interface HitlEvent {
-  id: number
+  id: string
+  event_type?: string
+  attempt_number?: number
+  decision?: string
   content_id: string
   content_text: string
   content_type: string
@@ -77,7 +81,7 @@ export default function ContentApprovalPage() {
     return () => { if (pollerRef.current) clearInterval(pollerRef.current) }
   }, [sessionId, fetchPending])
 
-  async function respond(eventId: number, decision: "approved" | "rejected", editedText?: string) {
+  async function respond(eventId: string, decision: "approved" | "rejected", editedText?: string) {
     setLoading(true)
     setMsg("")
     try {
@@ -88,7 +92,10 @@ export default function ContentApprovalPage() {
       if (editedText) body.edited_content = editedText
       const r = await fetch(`${ORCHESTRATOR}/hitl/respond/${eventId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
         body: JSON.stringify(body),
       })
       if (r.ok) {
@@ -171,6 +178,12 @@ export default function ContentApprovalPage() {
                       {ev.content_type && <Badge variant="outline" className="mr-2 text-xs">{ev.content_type}</Badge>}
                       {ev.platform && <Badge variant="secondary" className="mr-2 text-xs">{ev.platform}</Badge>}
                       <span className="text-xs text-gray-500">{new Date(ev.created_at).toLocaleString()}</span>
+                      {typeof ev.attempt_number === "number" && (
+                        <Badge variant="outline" className="ml-2 text-xs">Attempt {ev.attempt_number}</Badge>
+                      )}
+                      {ev.decision && (
+                        <Badge variant="outline" className="ml-2 text-xs">{ev.decision}</Badge>
+                      )}
                     </CardDescription>
                   </div>
                   {ev.composite_score !== undefined && (
@@ -218,6 +231,14 @@ export default function ContentApprovalPage() {
                           <ul className="text-xs text-gray-400 list-disc list-inside space-y-0.5">
                             {ev.critic_data.suggestions.map((s, i) => <li key={i}>{s}</li>)}
                           </ul>
+                        )}
+                        {ev.critic_data.content_agent_instructions && ev.critic_data.content_agent_instructions.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-amber-300 uppercase tracking-wider">Rewrite Instructions</p>
+                            <ul className="text-xs text-amber-200 list-disc list-inside space-y-0.5">
+                              {ev.critic_data.content_agent_instructions.map((s, i) => <li key={i}>{s}</li>)}
+                            </ul>
+                          </div>
                         )}
                       </div>
                     </div>

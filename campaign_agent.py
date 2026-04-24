@@ -18,7 +18,9 @@ import uuid
 import asyncio
 import logging
 import httpx
+import re
 from datetime import datetime
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -78,6 +80,29 @@ _PLATFORM_DB_MAP: Dict[str, Optional[str]] = {
     "facebook": "facebook", "reddit": None,  # not in DB constraint
 }
 
+
+def _normalize_run_at(run_at: str) -> datetime:
+    """
+    Parse incoming run_at strings into a datetime accepted by APScheduler.
+
+    Supports:
+    - YYYY-MM-DDTHH:MM
+    - YYYY-MM-DDTHH:MM:SS
+    - YYYY-MM-DDTHH:MM:SSZ
+    - YYYY-MM-DD HH:MM[:SS]
+    """
+    v = (run_at or "").strip()
+    if not v:
+        raise ValueError("run_at is required")
+
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", v):
+        v = f"{v}:00"
+
+    if v.endswith("Z"):
+        v = v[:-1] + "+00:00"
+
+    return datetime.fromisoformat(v)
+
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
 class ScheduleRequest(BaseModel):
@@ -89,6 +114,7 @@ class ScheduleRequest(BaseModel):
     trigger_type: str                       # once | recurring
     run_at: Optional[str] = None            # ISO datetime for 'once'
     cron_expr: Optional[str] = None         # cron string for 'recurring'
+    recurring_days: Optional[int] = None    # optional end window for recurring schedule
     ai_generate: bool = False               # generate fresh content+image each run
     brand_name: Optional[str] = None        # brand context for generation
     metadata: Optional[Dict[str, Any]] = {}
@@ -220,14 +246,40 @@ def create_schedule(req: ScheduleRequest):
     _validate_platform(req.platform)
 
     next_run = None
+    end_at = None
+    normalized_run_at: Optional[str] = None
     if req.trigger_type == "once" and req.run_at:
-        next_run = req.run_at
+        try:
+            run_dt = _normalize_run_at(req.run_at)
+        except Exception as e:
+            raise HTTPException(400, f"Invalid run_at format: {e}")
+        now_dt = datetime.now(run_dt.tzinfo) if run_dt.tzinfo else datetime.now()
+        if run_dt <= now_dt:
+            raise HTTPException(400, "run_at must be in the future")
+        normalized_run_at = run_dt.isoformat()
+        next_run = normalized_run_at
     elif req.trigger_type == "recurring" and req.cron_expr:
         from apscheduler.triggers.cron import CronTrigger as _CT
         try:
             _CT.from_crontab(req.cron_expr)
         except Exception as e:
             raise HTTPException(400, f"Invalid cron expression: {e}")
+        if req.recurring_days is not None:
+            if req.recurring_days <= 0:
+                raise HTTPException(400, "recurring_days must be greater than 0")
+            if req.recurring_days > 365:
+                raise HTTPException(400, "recurring_days cannot exceed 365")
+            start_anchor = datetime.now()
+            if req.run_at:
+                try:
+                    start_anchor = datetime.fromisoformat(req.run_at)
+                except Exception:
+                    pass
+            end_at = (start_anchor + timedelta(days=req.recurring_days)).isoformat()
+    elif req.trigger_type == "once" and not req.run_at:
+        raise HTTPException(400, "run_at is required for trigger_type='once'")
+    elif req.trigger_type == "recurring" and not req.cron_expr:
+        raise HTTPException(400, "cron_expr is required for trigger_type='recurring'")
 
     schedule_id = str(uuid.uuid4())
     # Map 'x' -> 'twitter' for DB CHECK constraint; store display name in metadata
@@ -237,6 +289,10 @@ def create_schedule(req: ScheduleRequest):
     if req.brand_name:
         metadata["brand_name"] = req.brand_name
     metadata["display_platform"] = req.platform  # preserve 'x'
+    if req.recurring_days is not None:
+        metadata["recurring_days"] = req.recurring_days
+    if end_at:
+        metadata["end_at"] = end_at
     create_campaign_schedule(
         schedule_id=schedule_id,
         user_id=req.user_id,
@@ -244,17 +300,30 @@ def create_schedule(req: ScheduleRequest):
         platform=db_platform,
         content_template=req.resolved_content or req.name,
         trigger_type=req.trigger_type,
-        run_at=req.run_at,
+        run_at=normalized_run_at if req.trigger_type == "once" else req.run_at,
         cron_expr=req.cron_expr,
         next_run=next_run,
         metadata=metadata,
     )
-    _add_to_scheduler(schedule_id, req.platform, req.content_template,
-                      req.trigger_type, req.run_at, req.cron_expr, req.user_id,
-                      ai_generate=req.ai_generate, brand_name=req.brand_name)
+    try:
+        _add_to_scheduler(
+            schedule_id,
+            req.platform,
+            req.content_template,
+            req.trigger_type,
+            normalized_run_at if req.trigger_type == "once" else req.run_at,
+            req.cron_expr,
+            req.user_id,
+            ai_generate=req.ai_generate,
+            brand_name=req.brand_name,
+            end_at=end_at,
+        )
+    except Exception as e:
+        cancel_campaign_schedule(schedule_id, req.user_id)
+        raise HTTPException(500, f"Failed to register schedule job: {e}")
 
     return {"status": "created", "schedule_id": schedule_id, "next_run": next_run,
-            "ai_generate": req.ai_generate}
+            "ai_generate": req.ai_generate, "end_at": end_at}
 
 
 @app.get("/schedules/{user_id}")
@@ -353,7 +422,7 @@ def _validate_platform(platform: str):
 # ── AI content + image generation ─────────────────────────────────────────────
 
 async def _ai_generate_content_and_image(
-    topic: str, platform: str, brand_name: Optional[str] = None
+    topic: str, platform: str, brand_name: Optional[str] = None, user_id: Optional[int] = None
 ) -> tuple:
     """
     Given a campaign topic/brief, use Groq to write platform-specific post text
@@ -365,6 +434,7 @@ async def _ai_generate_content_and_image(
         return topic, None
 
     from groq import Groq as _Groq
+    from llm_failover import groq_chat_with_failover
     client = _Groq(api_key=GROQ_API_KEY)
 
     platform_hints = {
@@ -387,10 +457,12 @@ async def _ai_generate_content_and_image(
         "image_prompt: a vivid, detailed Stable Diffusion / RunwayML prompt for a complementary visual."
     )
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    response, _used_model = groq_chat_with_failover(
+        client,
         messages=[{"role": "system", "content": prompt_sys},
                   {"role": "user",   "content": prompt_user}],
+        primary_model="llama-3.3-70b-versatile",
+        logger=logger,
         temperature=0.7,
         max_tokens=512,
     )
@@ -410,10 +482,26 @@ async def _ai_generate_content_and_image(
             async with httpx.AsyncClient(timeout=180) as cli:
                 r = await cli.post(
                     f"{_ORCHESTRATOR_URL}/generate-image",
-                    json={"prompt": image_prompt},
+                    json={
+                        "prompt": image_prompt,
+                        "brand_name": brand_name,
+                        "user_id": user_id,
+                    },
                 )
                 if r.status_code == 200:
-                    image_url = r.json().get("preview_url")
+                    payload = r.json()
+                    image_url = payload.get("preview_url") or payload.get("image_path")
+                    # Backward compatibility: older orchestrator versions wrapped
+                    # direct image URLs as /preview/image/<absolute-url>.
+                    if isinstance(image_url, str) and "/preview/image/http" in image_url:
+                        marker = "/preview/image/"
+                        wrapped = image_url.split(marker, 1)[-1]
+                        if wrapped.startswith("http://") or wrapped.startswith("https://"):
+                            image_url = wrapped
+                else:
+                    logger.warning(
+                        f"Image generation endpoint returned {r.status_code}: {r.text[:300]}"
+                    )
         except Exception as img_err:
             logger.warning(f"Image generation failed (non-fatal): {img_err}")
 
@@ -425,27 +513,39 @@ async def _ai_generate_content_and_image(
 def _add_to_scheduler(schedule_id: str, platform: str, content: str,
                       trigger_type: str, run_at: Optional[str],
                       cron_expr: Optional[str], user_id: int,
-                      ai_generate: bool = False, brand_name: Optional[str] = None):
-    try:
-        if trigger_type == "once" and run_at:
-            trigger = DateTrigger(run_date=run_at)
-        elif trigger_type == "recurring" and cron_expr:
-            trigger = CronTrigger.from_crontab(cron_expr)
-        else:
-            return
-        scheduler.add_job(
-            _scheduled_post_callback,
-            trigger=trigger,
-            id=schedule_id,
-            replace_existing=True,
-            args=[schedule_id, platform, content, user_id, ai_generate, brand_name],
-        )
-    except Exception as e:
-        logger.warning(f"Scheduler add_job failed for {schedule_id}: {e}")
+                      ai_generate: bool = False, brand_name: Optional[str] = None,
+                      end_at: Optional[str] = None):
+    if trigger_type == "once" and run_at:
+        trigger = DateTrigger(run_date=_normalize_run_at(run_at))
+    elif trigger_type == "recurring" and cron_expr:
+        parts = cron_expr.split()
+        if len(parts) != 5:
+            raise ValueError("cron_expr must have 5 fields: minute hour day month day_of_week")
+        minute, hour, day, month, day_of_week = parts
+        trigger_kwargs: Dict[str, Any] = {
+            "minute": minute,
+            "hour": hour,
+            "day": day,
+            "month": month,
+            "day_of_week": day_of_week,
+        }
+        if end_at:
+            trigger_kwargs["end_date"] = datetime.fromisoformat(end_at)
+        trigger = CronTrigger(**trigger_kwargs)
+    else:
+        raise ValueError("Invalid schedule trigger configuration")
+
+    scheduler.add_job(
+        _scheduled_post_callback,
+        trigger=trigger,
+        id=schedule_id,
+        replace_existing=True,
+        args=[schedule_id, platform, content, user_id, ai_generate, brand_name],
+    )
 
 
 async def _reload_schedules_from_db():
-    """On startup, reload active recurring schedules from DB."""
+    """On startup, reload active schedules from DB and recover missed one-time runs."""
     try:
         active = get_all_active_schedules()
         for s in active:
@@ -456,7 +556,44 @@ async def _reload_schedules_from_db():
                     "recurring", None, s["cron_expr"], s["user_id"],
                     ai_generate=meta.get("ai_generate", False),
                     brand_name=meta.get("brand_name"),
+                    end_at=meta.get("end_at"),
                 )
+            elif s.get("trigger_type") == "once" and s.get("status") == "active" and int(s.get("run_count", 0)) == 0:
+                meta = s.get("metadata") or {}
+                run_at_val = s.get("next_run") or s.get("run_at")
+                if not run_at_val:
+                    continue
+                try:
+                    run_dt = _normalize_run_at(run_at_val)
+                except Exception as parse_err:
+                    logger.warning(f"Skipping invalid one-time schedule {s.get('id')}: {parse_err}")
+                    continue
+
+                now = datetime.now(run_dt.tzinfo) if run_dt.tzinfo else datetime.now()
+                if run_dt <= now:
+                    logger.info(f"Recovering missed one-time schedule immediately: {s['id']}")
+                    asyncio.create_task(
+                        _scheduled_post_callback(
+                            s["id"],
+                            (meta.get("display_platform") or s["platform"]),
+                            s["content_template"],
+                            s["user_id"],
+                            bool(meta.get("ai_generate", False)),
+                            meta.get("brand_name"),
+                        )
+                    )
+                else:
+                    _add_to_scheduler(
+                        s["id"],
+                        (meta.get("display_platform") or s["platform"]),
+                        s["content_template"],
+                        "once",
+                        run_dt.isoformat(),
+                        None,
+                        s["user_id"],
+                        ai_generate=bool(meta.get("ai_generate", False)),
+                        brand_name=meta.get("brand_name"),
+                    )
         logger.info(f"Reloaded {len(active)} active schedules from DB")
     except Exception as e:
         logger.error(f"Failed to reload schedules: {e}")
@@ -516,7 +653,10 @@ async def _post_content(job_id: str, req: PostRequest):
         if req.ai_generate and resolved:
             try:
                 resolved, image_url = await _ai_generate_content_and_image(
-                    topic=resolved, platform=platform, brand_name=req.brand_name
+                    topic=resolved,
+                    platform=platform,
+                    brand_name=req.brand_name,
+                    user_id=req.user_id,
                 )
                 logger.info(f"[{job_id}] AI generated content ({len(resolved)} chars), image: {image_url}")
                 # Store back so status endpoint can return them

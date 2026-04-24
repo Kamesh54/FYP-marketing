@@ -61,8 +61,13 @@ export default function LoginPage() {
       localStorage.setItem("authToken", data.token)
       localStorage.setItem("userId", data.user_id)
       localStorage.setItem("userEmail", data.email)
+      localStorage.setItem("creditsBalance", String(data.credits_balance ?? 0))
 
-      setSuccess(isLogin ? "Login successful! Redirecting..." : "Account created! Redirecting...")
+      setSuccess(
+        isLogin
+          ? `Login successful. ${data.credits_balance ?? 0} credits available. Redirecting...`
+          : `Account created with ${data.credits_balance ?? 1000} starting credits. Redirecting...`
+      )
 
       setTimeout(() => {
         window.location.href = "/"

@@ -24,6 +24,21 @@ interface AuditResult {
   audited_at?: string
 }
 
+const COUNT_FIELDS = new Set([
+  "recommendations",
+  "high_priority",
+  "medium_priority",
+  "low_priority",
+  "issues",
+  "opportunities",
+])
+
+function normalizeScore(value: number) {
+  if (!Number.isFinite(value)) return 0
+  const normalized = value <= 1 ? value * 100 : value
+  return Math.max(0, Math.min(100, Math.round(normalized)))
+}
+
 const SCORE_LABELS: Record<string, string> = {
   onpage:      "On-Page SEO",
   links:       "Links",
@@ -35,7 +50,7 @@ const SCORE_LABELS: Record<string, string> = {
 }
 
 function ScoreBar({ label, score }: { label: string; score: number }) {
-  const pct = Math.round(score * 100)
+  const pct = normalizeScore(score)
   const color =
     pct >= 75 ? "#22c55e" :
     pct >= 50 ? "#f59e0b" :
@@ -58,11 +73,10 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
 }
 
 function overallGrade(scores: Record<string, number>) {
-  const vals = Object.values(scores)
-  if (!vals.length) return null
-  const avg = vals.reduce((a, b) => a + b, 0) / vals.length
-  const pct = Math.round(avg * 100)
-  return pct
+  // Only use the 'overall' score, not the count metrics
+  const overall = scores.overall
+  if (overall === undefined || overall === null) return null
+  return normalizeScore(overall)
 }
 
 export default function SEOAuditPage() {
@@ -71,16 +85,34 @@ export default function SEOAuditPage() {
   const [result, setResult]     = useState<AuditResult | null>(null)
   const [error, setError]       = useState("")
 
-  // Load last audit result pushed from the chat (stored in localStorage)
+  // Load last audit result pushed from the chat (stored in localStorage) OR extract URL from query/message
   useEffect(() => {
     if (typeof window === "undefined") return
+    
+    // Check for stored result first
     const stored = localStorage.getItem("lastSeoAudit")
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as AuditResult
         setResult(parsed)
         if (parsed.url || parsed.final_url) setUrl(parsed.url || parsed.final_url || "")
+        return
       } catch {}
+    }
+
+    // Extract URL from query params (seo?url=...)
+    const params = new URLSearchParams(window.location.search)
+    const queryUrl = params.get("url")
+    if (queryUrl) {
+      setUrl(queryUrl)
+      return
+    }
+
+    // Extract URL from hash fragment (seo#https://example.com)
+    const hashUrl = window.location.hash.replace("#", "")
+    if (hashUrl && (hashUrl.startsWith("http://") || hashUrl.startsWith("https://"))) {
+      setUrl(hashUrl)
+      return
     }
   }, [])
 
@@ -97,17 +129,23 @@ export default function SEOAuditPage() {
     setResult(null)
     setError("")
     try {
-      const res = await fetch("http://localhost:5000/analyze", {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 300000) // 5-minute timeout for detailed analysis
+      
+      // Use detailed analysis endpoint for comprehensive report
+      const res = await fetch("http://localhost:8004/seo/analyze/detailed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),
+        signal: controller.signal,
       })
-      if (!res.ok) throw new Error(`SEO agent returned ${res.status}`)
+      clearTimeout(timeout)
+      if (!res.ok) throw new Error(`SEO analysis returned ${res.status}`)
       const data: AuditResult = await res.json()
       if (data.status === "error") throw new Error(data.error || "Audit failed")
       setResult(data)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Audit failed. Is the SEO agent running on port 5000?")
+      setError(e instanceof Error ? e.message : "Audit failed. Is the orchestrator running on port 8004?")
     } finally {
       setLoading(false)
     }
@@ -170,7 +208,7 @@ export default function SEOAuditPage() {
               style={{ background: "rgba(var(--primary), 1)", color: "#fff" }}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              <span className="ml-2">{loading ? "Auditing…" : "Run Audit"}</span>
+              <span className="ml-2">{loading ? "Auditing..." : "Run Audit"}</span>
             </Button>
           </div>
         </Card>
@@ -194,7 +232,7 @@ export default function SEOAuditPage() {
           >
             <div className="flex items-center gap-2" style={{ color: "rgba(var(--text-secondary), 1)" }}>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">Running full SEO audit — this may take 15–30 seconds…</span>
+              <span className="text-sm">Running comprehensive SEO audit - this may take 20-30 seconds...</span>
             </div>
             {[...Array(7)].map((_, i) => (
               <div key={i} className="space-y-1 animate-pulse">
@@ -215,7 +253,7 @@ export default function SEOAuditPage() {
                 style={{ background: "rgba(var(--primary), 0.1)", border: "1px solid rgba(var(--primary), 0.25)" }}
               >
                 <span style={{ color: "rgba(var(--primary), 1)" }}>
-                  ✦ Results loaded from chat · {new Date(result.audited_at).toLocaleString()}
+                  Results loaded from chat - {new Date(result.audited_at).toLocaleString()}
                 </span>
                 <button
                   onClick={clearResult}
@@ -247,12 +285,34 @@ export default function SEOAuditPage() {
               <p className="text-xs mb-4" style={{ color: "rgba(var(--text-secondary), 1)" }}>
                 Audited: <a href={result.final_url || result.url} target="_blank" rel="noopener noreferrer" className="underline">{result.final_url || result.url}</a>
               </p>
-              {/* Score bars */}
+              {/* Score bars - only actual scores, exclude counts */}
               <div className="space-y-3">
-                {Object.entries(result.scores || {}).map(([key, val]) => (
-                  <ScoreBar key={key} label={SCORE_LABELS[key] || key} score={val} />
-                ))}
+                {Object.entries(result.scores || {}).map(([key, val]) => {
+                  // Skip count fields
+                  if (COUNT_FIELDS.has(key)) {
+                    return null
+                  }
+                  if (typeof val !== 'number' || val < 0 || val > 100) return null
+                  return <ScoreBar key={key} label={SCORE_LABELS[key] || key} score={val} />
+                })}
               </div>
+              {/* Issue counts summary */}
+              {(result.scores?.high_priority || result.scores?.medium_priority || result.scores?.low_priority) && (
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(var(--border), 0.4)' }}>
+                  <p style={{ fontSize: '12px', color: "rgba(var(--text-secondary), 1)", marginBottom: '8px' }}>Issues by Priority:</p>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    {result.scores?.high_priority ? (
+                      <span style={{ fontSize: '13px', color: '#ef4444' }}>High: <strong>{result.scores.high_priority}</strong></span>
+                    ) : null}
+                    {result.scores?.medium_priority ? (
+                      <span style={{ fontSize: '13px', color: '#f59e0b' }}>Medium: <strong>{result.scores.medium_priority}</strong></span>
+                    ) : null}
+                    {result.scores?.low_priority ? (
+                      <span style={{ fontSize: '13px', color: '#22c55e' }}>Low: <strong>{result.scores.low_priority}</strong></span>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </Card>
 
             {/* Recommendations */}

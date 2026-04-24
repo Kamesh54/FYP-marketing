@@ -18,6 +18,103 @@ from dotenv import load_dotenv
 from datetime import datetime
 import unicodedata
 from groq import Groq
+from llm_failover import groq_chat_with_failover
+
+_PLACEHOLDER_BRANDS = {
+    "",
+    "company",
+    "my business",
+    "business",
+    "brand",
+    "unknown",
+    "n/a",
+    "na",
+    "none",
+}
+
+
+def _extract_seed_value(statement: str, labels: List[str]) -> str:
+    if not statement:
+        return ""
+    for line in statement.splitlines():
+        raw = line.strip()
+        if not raw or ":" not in raw:
+            continue
+        key, value = raw.split(":", 1)
+        if key.strip().lower() in labels:
+            return value.strip()
+    return ""
+
+
+def _is_valid_brand_seed(name: str) -> bool:
+    if not name:
+        return False
+    return name.strip().lower() not in _PLACEHOLDER_BRANDS
+
+
+def _tokenize_seed(text: str) -> List[str]:
+    if not text:
+        return []
+    tokens = re.findall(r"[a-zA-Z0-9]{3,}", text.lower())
+    stop = {"and", "the", "with", "for", "from", "best", "top", "brand", "brands", "company", "companies"}
+    return [t for t in tokens if t not in stop]
+
+
+def _build_fallback_domains(brand_seed: str, industry_seed: str) -> List[str]:
+    if _is_valid_brand_seed(brand_seed):
+        if industry_seed:
+            return [
+                f"{brand_seed} {industry_seed} competitors",
+                f"top {industry_seed} brands",
+                f"{industry_seed} alternatives to {brand_seed}",
+            ]
+        return [
+            f"{brand_seed} competitors",
+            f"alternatives to {brand_seed}",
+            f"brands similar to {brand_seed}",
+        ]
+    if industry_seed:
+        return [
+            f"top {industry_seed} brands",
+            f"{industry_seed} companies",
+            f"best {industry_seed} manufacturers",
+        ]
+    return ["top brands in this market", "direct competitors in this industry"]
+
+
+def _filter_domains_by_seed(domains: List[str], brand_seed: str, industry_seed: str) -> List[str]:
+    """
+    Filter domains by brand/industry seed tokens. 
+    If filtering removes too many results, return Groq output as-is.
+    Only use fallback if BOTH seed is empty AND Groq returned nothing valid.
+    """
+    cleaned = [d.strip() for d in domains if isinstance(d, str) and d.strip()]
+    if not cleaned:
+        return _build_fallback_domains(brand_seed, industry_seed)
+
+    # If we have a valid brand seed, filter by it
+    seed_tokens = set(_tokenize_seed(brand_seed) + _tokenize_seed(industry_seed))
+    
+    # If no meaningful seed tokens, return Groq's output as-is
+    # (Groq is smart enough to stay in the category with just industry hint)
+    if not seed_tokens:
+        logger.info(f"No seed tokens found, trusting Groq output as-is")
+        return cleaned[:5]
+
+    # Filter domains: each must contain at least one seed token
+    filtered = [
+        d for d in cleaned
+        if any(token in d.lower() for token in seed_tokens)
+    ]
+
+    # If filtering removed everything, log and return Groq output anyway
+    if not filtered:
+        logger.warning(f"Seed filter removed all domains. Groq output: {cleaned}")
+        logger.warning(f"Seed tokens: {seed_tokens}")
+        # Return Groq output instead of fallback (Groq is better informed)
+        return cleaned[:5]
+    
+    return filtered[:5]
 
 # ---------------- Utility ----------------
 def clean_text(text: str) -> str:
@@ -113,29 +210,57 @@ load_job_status()
 
 # ---------------- Groq Domain Normalizer ----------------
 def extract_domains_with_groq(statement: str) -> List[str]:
-    print("statement", statement)
-    """Use Groq to identify product/market domains from customer statement."""
-    prompt = f"""
-    Analyze the customer statement: "{statement}".
-    Identify the relevant product/market domains with location (like cloud kitchen, online grocery, etc).
-    Return ONLY a JSON list of strings (domains).
-    Example: ["CRM chennai", "ERP chennai"]
-    """
+    """Use Groq to identify the brand's industry and generate competitor search queries."""
+    # Truncate very long crawled text to avoid token limits
+    truncated = statement[:3000] if len(statement) > 3000 else statement
+    brand_seed = _extract_seed_value(truncated, ["business", "brand", "brand name", "business name", "company", "company name", "product", "product name"])
+    industry_seed = _extract_seed_value(truncated, ["industry", "niche", "category"])
 
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    logger.info(f"[EXTRACT_DOMAINS] Extracted seeds from statement: brand_seed='{brand_seed}', industry_seed='{industry_seed}'")
+
+    prompt = f"""
+Analyze the following text from a company's website and identify:
+1. What industry/niche this company operates in (e.g. bicycles, cosmetics, packaged water)
+2. What specific products or services they offer
+3. Identify the primary country or market region they operate in (e.g., India, US). If the text suggests they are based in a specific country (like India), make sure the competitors you find are local to that same country.
+4. Generate search queries that would find their direct competitors (other brands/companies selling similar products in their specific market).
+
+Website text: "{truncated}"
+
+Return ONLY a JSON object with a "domains" key containing a list of 3-5 search queries to find real competitor brands.
+For example, if the company is based in India, the queries MUST include "India" (e.g. "top bicycle brands in India", "best Indian cycle manufacturers").
+Focus on the company's PRIMARY business. Do NOT include generic terms like "e-commerce", "software", or "online grocery" unless that IS their core business.
+
+Primary brand/product seed (must stay in this same market): "{brand_seed or 'Not provided'}"
+Industry seed (if provided): "{industry_seed or 'Not provided'}"
+IMPORTANT: Every query must stay in the same category as the seed. If seed indicates helmets/cycling gear, do not output queries for water, food, software, or unrelated products.
+
+Example for an Indian bicycle company: {{"domains": ["top bicycle brands India", "best cycling companies in India", "mountain bike manufacturers India"]}}
+Example for a global cosmetics brand: {{"domains": ["top skincare brands", "best cosmetics companies", "beauty product brands"]}}
+"""
+
+    response, _used_model = groq_chat_with_failover(
+        groq_client,
         messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}
+        primary_model="llama-3.3-70b-versatile",
+        logger=logger,
+        response_format={"type": "json_object"},
     )
 
     try:
         parsed = json.loads(response.choices[0].message.content)
         domains = parsed.get("domains", []) if isinstance(parsed, dict) else parsed
-        logger.info(f"Groq extracted domains: {domains}")
-        return domains
+        logger.info(f"[EXTRACT_DOMAINS] Groq output: {domains}")
+        filtered_domains = _filter_domains_by_seed(domains, brand_seed, industry_seed)
+        logger.info(f"[EXTRACT_DOMAINS] Groq extracted competitor search queries: {domains}")
+        if filtered_domains != domains:
+            logger.info(f"[EXTRACT_DOMAINS] Seed-filtered competitor queries: {filtered_domains}")
+        return filtered_domains
     except Exception as e:
         logger.error(f"Failed to parse Groq response: {e}")
-        return []
+        fallback = _build_fallback_domains(brand_seed, industry_seed)
+        logger.info(f"[EXTRACT_DOMAINS] Using fallback queries: {fallback}")
+        return fallback
 
 # ---------------- SerpAPI ----------------
 @retry(
@@ -247,25 +372,36 @@ async def extract_keywords_background(customer_statement: str, max_results: int,
             raise Exception("No domains extracted")
 
         all_competitor_data = []
+        seen_urls = set()  # dedup by URL
 
-        # Step 2: For each domain, search competitors
+        # Step 2: For each domain query, collect multiple competitors
         for d in domains:
             logger.info(f"Searching for competitors in domain: {d}")
-            query = f"{d} software site"
+            query = d  # Already a well-formed search query from Groq
             serp_results = get_serpapi_results(query, max_results=max_results)
-            if serp_results:
-              comp = serp_results[0]  # Take only the first result
-              content = crawl_url_with_service(comp["url"], max_pages=max_pages)
-              if content:
-                kws = extract_keywords_from_text(content, max_keywords=50)
-                all_competitor_data.append({
-            "domain": d,
-            "competitor_name": comp["name"],
-            "url": comp["url"],
-            "short_keywords": kws["short_keywords"],
-            "long_tail_keywords": kws["long_tail_keywords"],
-            "content_length": len(content)
-        })
+            for comp in serp_results:
+                url = comp.get("url", "")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                content = crawl_url_with_service(url, max_pages=max_pages)
+                if content:
+                    kws = extract_keywords_from_text(content, max_keywords=50)
+                    all_competitor_data.append({
+                        "domain": d,
+                        "competitor_name": comp["name"],
+                        "url": url,
+                        "short_keywords": kws["short_keywords"],
+                        "long_tail_keywords": kws["long_tail_keywords"],
+                        "content_length": len(content)
+                    })
+
+                # Stop at 10 unique competitors
+                if len(all_competitor_data) >= 10:
+                    break
+
+            if len(all_competitor_data) >= 10:
+                break
 
         output_file = f"competitor_keywords_{job_id[:8]}.json"
         with open(output_file, "w", encoding="utf-8") as f:

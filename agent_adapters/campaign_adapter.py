@@ -17,6 +17,7 @@ def generate_campaign_post(topic: str,
     import os
     import json
     from groq import Groq
+    from llm_failover import groq_chat_with_failover
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     if not GROQ_API_KEY:
@@ -34,8 +35,8 @@ def generate_campaign_post(topic: str,
         hint = platform_hints.get(platform.lower(), "engaging social media post")
         brand_ctx = f" The brand is: {brand_name}." if brand_name else ""
 
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        response, _used_model = groq_chat_with_failover(
+            client,
             messages=[
                 {"role": "system", "content": "You are an expert social media copywriter. Reply with valid JSON only."},
                 {"role": "user", "content": (
@@ -45,6 +46,8 @@ def generate_campaign_post(topic: str,
                     "image_prompt: vivid Stable Diffusion / RunwayML prompt for complementary visual."
                 )},
             ],
+            primary_model="llama-3.3-70b-versatile",
+            logger=logger,
             temperature=0.7,
             max_tokens=512,
         )
@@ -106,7 +109,7 @@ def schedule_campaign(user_id: int,
                 scheduler.start()
                 
             _add_to_scheduler(
-                schedule_id, db_platform, content_template,
+                schedule_id, platform, content_template,
                 trigger_type, run_at, cron_expr, user_id,
                 ai_generate, brand_name
             )

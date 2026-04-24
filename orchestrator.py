@@ -10,7 +10,7 @@ import logging
 import re
 import subprocess
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from urllib.parse import urlparse
 
@@ -50,6 +50,7 @@ from langsmith_tracer import (
     tracer_status,
 )
 from trace_manager import get_trace_manager
+from llm_failover import groq_chat_with_failover
 
 # Import new modules
 import auth
@@ -76,23 +77,42 @@ import mabo_agent
 import mabo_agent
 from scheduler import start_scheduler, get_scheduler_status
 
-# Import graph modules for knowledge graph integration
-try:
-    from graph import initialize_graph_db, close_graph_db, get_graph_queries, is_graph_db_available
-    from graph_routes import create_graph_routes
-    GRAPH_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"Graph database module not available: {e}")
-    GRAPH_AVAILABLE = False
-    create_graph_routes = None
+# Optional: Graph modules for knowledge graph integration (requires neo4j package)
+# Commented out if neo4j is not installed
+# try:
+#     from graph import initialize_graph_db, close_graph_db, get_graph_queries, is_graph_db_available
+#     from graph_routes import create_graph_routes
+#     GRAPH_AVAILABLE = True
+# except Exception as e:
+#     GRAPH_AVAILABLE = False
+#     create_graph_routes = None
+
+# Setup logging FIRST before using logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+GRAPH_AVAILABLE = False
+create_graph_routes = None
+
 from metrics_collector import get_aggregated_metrics, collect_metrics_for_post, MetricsCollector
 from campaign_planner import CampaignPlannerAgent
+from campaign_agent import (
+    ScheduleRequest as CampaignScheduleRequest,
+    PostRequest as CampaignPostRequest,
+    get_brands as campaign_get_brands,
+    create_schedule as campaign_create_schedule,
+    list_schedules as campaign_list_schedules,
+    delete_schedule as campaign_delete_schedule,
+    post_now as campaign_post_now,
+    post_status as campaign_post_status,
+    list_posts as campaign_list_posts,
+    startup as campaign_runtime_startup,
+    shutdown as campaign_runtime_shutdown,
+)
 
 
 # --- Configuration & Setup ---
 load_dotenv()
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # ── LangGraph Integration ────────────────────────────────────────────────────
 USE_LANGGRAPH = True # Forced to True to bypass dotenv caching in long-running uvicorn
@@ -124,16 +144,22 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 
-# --- Microservice Base URLs ---
-CRAWLER_BASE           = "http://127.0.0.1:8000"
-KEYWORD_EXTRACTOR_BASE = "http://127.0.0.1:8001"
-GAP_ANALYZER_BASE      = "http://127.0.0.1:8002"
-CONTENT_AGENT_BASE     = "http://127.0.0.1:8003"
-IMAGE_AGENT_BASE       = "http://127.0.0.1:8005"
-BRAND_AGENT_BASE       = "http://127.0.0.1:8006"
-CRITIC_AGENT_BASE      = "http://127.0.0.1:8007"
-CAMPAIGN_AGENT_BASE    = "http://127.0.0.1:8008"
-REDDIT_AGENT_BASE      = "http://127.0.0.1:8010"
+# --- LANGGRAPH MIGRATION NOTICE ---
+# All microservices have been consolidated into LangGraph orchestrator.
+# HTTP calls to separate services are DEPRECATED.
+# See agent_adapters.py for direct agent invocation (no HTTP).
+# LangGraph handles all orchestration internally.
+
+# --- Legacy Microservice Base URLs (DEPRECATED - DO NOT USE) ---
+# CRAWLER_BASE           = "http://127.0.0.1:8000"
+# KEYWORD_EXTRACTOR_BASE = "http://127.0.0.1:8001"
+# GAP_ANALYZER_BASE      = "http://127.0.0.1:8002"
+# CONTENT_AGENT_BASE     = "http://127.0.0.1:8003"
+# IMAGE_AGENT_BASE       = "http://127.0.0.1:8005"
+# BRAND_AGENT_BASE       = "http://127.0.0.1:8006"
+# CRITIC_AGENT_BASE      = "http://127.0.0.1:8007"
+# CAMPAIGN_AGENT_BASE    = "http://127.0.0.1:8008"
+# REDDIT_AGENT_BASE      = "http://127.0.0.1:8010"
 
 
 def _call_reddit_research(keywords: list, brand_name: str, max_subreddits: int = 3) -> dict:
@@ -229,6 +255,8 @@ async def lifespan(app: FastAPI):
     try:
         db.initialize_database()
         start_scheduler()
+        # Start embedded campaign runtime so /campaigns UI can use orchestrator only.
+        await campaign_runtime_startup()
         
         # Initialize graph database
         if GRAPH_AVAILABLE:
@@ -246,6 +274,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Orchestrator shutting down...")
+    try:
+        await campaign_runtime_shutdown()
+    except Exception as e:
+        logger.warning(f"Campaign runtime shutdown warning: {e}")
     if GRAPH_AVAILABLE:
         try:
             close_graph_db()
@@ -277,6 +309,23 @@ def _detect_platform_from_text(text: str) -> Optional[str]:
     return None
 
 
+def _is_blog_instagram_combo_request(text: str) -> bool:
+    """Detect requests that explicitly ask for both a blog and an Instagram post."""
+    if not text:
+        return False
+
+    lower = text.lower()
+    blog_markers = ["blog", "blog post", "article", "seo blog"]
+    instagram_markers = ["instagram", "insta", "ig post", "instagram post"]
+    combo_markers = ["both", "together", "along with", "and", "also"]
+
+    has_blog = any(marker in lower for marker in blog_markers)
+    has_instagram = any(marker in lower for marker in instagram_markers)
+    has_combo = any(marker in lower for marker in combo_markers)
+
+    return has_blog and has_instagram and has_combo
+
+
 # Attach graph routes for knowledge graph insights
 if GRAPH_AVAILABLE and create_graph_routes:
     try:
@@ -300,12 +349,14 @@ class AuthResponse(BaseModel):
     user_id: int
     email: str
     expires_at: str
+    credits_balance: int
 
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
     active_brand: Optional[str] = None  # Brand name to use for this request
     platform: Optional[str] = None  # Platform for social posts
+    intent: Optional[str] = None  # Optional intent override for trusted callers
 
 class ChatResponse(BaseModel):
     session_id: str
@@ -314,6 +365,8 @@ class ChatResponse(BaseModel):
     intent: Optional[str] = None
     content_preview_id: Optional[str] = None
     workflow_cost: Optional[Dict] = None
+    credits_charged: Optional[int] = None
+    credits_balance: Optional[int] = None
     response_options: Optional[List[Dict[str, Any]]] = None
     clarification_request: Optional[Dict[str, Any]] = None
     seo_result: Optional[Dict[str, Any]] = None
@@ -363,6 +416,31 @@ class PromptEvolveRequest(BaseModel):
     feedback: str
     current_score: float = 0.5
 
+
+def _estimate_chat_credit_cost(intent: str, extracted_params: Optional[Dict[str, Any]] = None) -> int:
+    """Estimate the credit cost for a chat request before execution."""
+    extracted_params = extracted_params or {}
+
+    if intent == "blog_instagram_combo":
+        agents = [
+            "keyword_extractor",
+            "content_agent_blog",
+            "content_agent_social",
+            "image_generator",
+            "critic_agent",
+        ]
+    elif intent == "general_chat":
+        return 1
+    else:
+        workflow_plan = router.get_workflow_plan(intent, extracted_params) if hasattr(router, "get_workflow_plan") else None
+        agents = workflow_plan.agents if workflow_plan else []
+
+    if not agents:
+        return 1
+
+    estimate = cost_model.estimate_workflow_cost(agents)
+    return int(estimate.get("credits_estimate") or cost_model.usd_cost_to_credits(estimate.get("total_cost", 0)))
+
 @app.post("/auth/signup", response_model=AuthResponse)
 async def signup(req: SignupRequest):
     """Create new user account."""
@@ -387,6 +465,7 @@ async def signup(req: SignupRequest):
         
         # Generate JWT
         token_data = auth.generate_jwt(user_id, req.email)
+        token_data["credits_balance"] = db.get_user_credit_balance(user_id)
         
         logger.info(f"New user created: {req.email} (ID: {user_id})")
         return AuthResponse(**token_data)
@@ -415,6 +494,7 @@ async def login(req: LoginRequest):
         
         # Generate JWT
         token_data = auth.generate_jwt(user['id'], user['email'])
+        token_data["credits_balance"] = int(user.get("credits_balance", 0) or 0)
         
         logger.info(f"User logged in: {req.email}")
         return AuthResponse(**token_data)
@@ -438,7 +518,8 @@ async def get_current_user_info(authorization: str = Header(None)):
             "user_id": user['id'],
             "email": user['email'],
             "created_at": user['created_at'],
-            "last_login": user['last_login']
+            "last_login": user['last_login'],
+            "credits_balance": int(user.get("credits_balance", 0) or 0),
         }
     except HTTPException:
         raise
@@ -684,76 +765,36 @@ def run_seo_agent(url: str) -> str:
 
 @traceable(run_type="tool", name="ðŸŽ¨ RunwayML Image Gen")
 def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]] = None) -> str:
-    """Generate image using Runway ML with S3 reference images."""
+    """Generate image using Runway ML with gen3a_turbo model."""
     if not RUNWAY_API_KEY:
         raise ValueError("RUNWAY_API_KEY not set.")
-    headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}", "Content-Type": "application/json", "X-Runway-Version": "2024-11-06"}
-    # Use gen4_image_turbo - requires referenceImages array with uri/tag objects
-    payload = {
-        "promptText": prompt,
-        "ratio": "1920:1080",
-        "seed": int(datetime.now().timestamp()) % 4294967295,
-        "model": "gen4_image_turbo",
-        "referenceImages": []  # Will be populated below if reference_images provided
+    headers = {
+        "Authorization": f"Bearer {RUNWAY_API_KEY}",
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"
     }
-    if reference_images:
-        # Process reference images - expect S3 URLs or HTTP/HTTPS URLs
-        processed_refs = []
-        for img in reference_images:
-            if not img:
-                continue
-            # Check if it's a URL (starts with http:// or https://)
-            if img.startswith(('http://', 'https://')):
-                # It's already a URL (S3 or other), use it directly
-                processed_refs.append(img)
-                logger.info(f"Using reference image URL: {img}")
-            elif os.path.exists(img) and os.path.isfile(img):
-                # Local file - upload to S3 first, then use S3 URL
-                try:
-                    logger.info(f"Uploading local reference image to S3: {img}")
-                    # Generate S3 key
-                    file_ext = os.path.splitext(img)[1]
-                    unique_id = uuid.uuid4().hex[:8]
-                    timestamp = datetime.now().strftime("%Y%m%d")
-                    s3_key = f"reference-images/{timestamp}_{unique_id}{file_ext}"
-                    
-                    # Determine content type
-                    content_type_map = {
-                        '.jpg': 'image/jpeg',
-                        '.jpeg': 'image/jpeg',
-                        '.png': 'image/png',
-                        '.gif': 'image/gif',
-                        '.webp': 'image/webp'
-                    }
-                    content_type = content_type_map.get(file_ext.lower(), 'image/jpeg')
-                    
-                    # Upload to S3
-                    if s3_client and AWS_S3_BUCKET_NAME:
-                        s3_client.upload_file(img, AWS_S3_BUCKET_NAME, s3_key, ExtraArgs={'ContentType': content_type, 'ACL': 'public-read'})
-                        s3_url = f"https://{AWS_S3_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
-                        processed_refs.append(s3_url)
-                        logger.info(f"Local image uploaded to S3: {s3_url}")
-                    else:
-                        logger.warning(f"S3 not configured, skipping local file: {img}")
-                except Exception as upload_error:
-                    logger.warning(f"Failed to upload local image to S3: {upload_error}, skipping")
-            else:
-                logger.warning(f"Invalid reference image (not a URL or local file): {img}, skipping")
-        
-        if processed_refs:
-            payload["referenceImages"] = [{"uri": img, "tag": f"ref_{i}"} for i, img in enumerate(processed_refs)]
-            logger.info(f"Using {len(processed_refs)} reference image(s) for Runway generation")
-        else:
-            # No valid reference images provided - use a placeholder
-            # Gen4 Image requires at least one reference image
-            logger.info("No reference images provided, using default placeholder")
-            # Use a simple white background as default reference
-            payload["referenceImages"] = [{
-                "uri": "https://via.placeholder.com/1920x1080/FFFFFF/FFFFFF",
-                "tag": "placeholder"
-            }]
+    # Use gen4_image model
+    payload = {
+        "model": "gen4_image",
+        "promptText": prompt,
+        "ratio": "1280:720",
+    }
+    valid_reference_images = [
+        ref for ref in (reference_images or [])
+        if isinstance(ref, str) and ref.startswith(("http://", "https://"))
+    ]
+    if valid_reference_images:
+        # Best effort: include uploaded logo/reference images when supported by the API.
+        payload["referenceImages"] = [{"uri": ref} for ref in valid_reference_images[:3]]
     try:
         response = requests.post("https://api.dev.runwayml.com/v1/text_to_image", json=payload, headers=headers)
+        if response.status_code >= 400 and payload.get("referenceImages"):
+            logger.warning(
+                f"Runway rejected referenceImages ({response.status_code}); retrying prompt-only generation"
+            )
+            fallback_payload = dict(payload)
+            fallback_payload.pop("referenceImages", None)
+            response = requests.post("https://api.dev.runwayml.com/v1/text_to_image", json=fallback_payload, headers=headers)
         response.raise_for_status()
         task_id = response.json().get("id")
         for _ in range(60):
@@ -763,9 +804,9 @@ def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]
             data = status_res.json()
             if data['status'] == 'SUCCEEDED':
                 image_url = data['output'][0]
-                local_path = f"generated_images/{task_id}.jpg"
-                save_file_from_url(image_url, local_path)
-                return local_path
+                # Return Runway URL directly (it's already public with JWT auth, no need to download locally)
+                logger.info(f"Image generated successfully: {image_url}")
+                return image_url
             elif data['status'] in ['FAILED', 'CANCELLED']:
                 raise Exception(f"Runway task failed with status: {data['status']}")
         raise TimeoutError("Runway image generation timed out.")
@@ -777,14 +818,37 @@ def generate_image_with_runway(prompt: str, reference_images: Optional[List[str]
 def post_to_social(platform: str, text: str, image_path: str) -> str:
     """Post to social media."""
     try:
+        # If image_path is a URL, download it first
+        local_image_path = image_path
+        if image_path and (image_path.startswith('http://') or image_path.startswith('https://')):
+            logger.info(f"Downloading image from URL: {image_path}")
+            try:
+                import uuid
+                local_filename = f"generated_images/{uuid.uuid4().hex[:12]}.png"
+                os.makedirs("generated_images", exist_ok=True)
+                response = requests.get(image_path, timeout=120)
+                response.raise_for_status()
+                with open(local_filename, 'wb') as f:
+                    f.write(response.content)
+                local_image_path = local_filename
+                logger.info(f"Image downloaded to: {local_image_path}")
+            except Exception as e:
+                logger.warning(f"Failed to download image from URL: {e}, attempting to post anyway")
+                # Continue without image if download fails
+                local_image_path = None
+        
         if platform == "twitter":
             if not all([TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET]):
                 raise ValueError("Twitter credentials not configured")
             auth = tweepy.OAuth1UserHandler(TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
             api_v1 = tweepy.API(auth)
             client = tweepy.Client(consumer_key=TWITTER_API_KEY, consumer_secret=TWITTER_API_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_TOKEN_SECRET)
-            media = api_v1.media_upload(filename=image_path)
-            post_result = client.create_tweet(text=text, media_ids=[media.media_id_string])
+            if local_image_path and os.path.exists(local_image_path):
+                media = api_v1.media_upload(filename=local_image_path)
+                post_result = client.create_tweet(text=text, media_ids=[media.media_id_string])
+            else:
+                # Post without image if not available
+                post_result = client.create_tweet(text=text)
             post_url = f"https://twitter.com/user/status/{post_result.data['id']}"
         elif platform == "instagram":
             # Check if Instagram is available and credentials are set
@@ -801,8 +865,11 @@ def post_to_social(platform: str, text: str, image_path: str) -> str:
             else:
                 temp_insta_client.load_settings("instagram.json")
                 temp_insta_client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-            media = temp_insta_client.photo_upload(path=image_path, caption=text)
-            post_url = f"https://www.instagram.com/p/{media.code}/"
+            if local_image_path and os.path.exists(local_image_path):
+                media = temp_insta_client.photo_upload(path=local_image_path, caption=text)
+                post_url = f"https://www.instagram.com/p/{media.code}/"
+            else:
+                raise ValueError("Image required for Instagram posting")
         return post_url
     except Exception as e:
         logger.error(f"Social Post Error ({platform}): {e}")
@@ -997,12 +1064,12 @@ def _build_user_context_summary(user_id: int, brand_name: Optional[str] = None) 
         return ""
 
 
-async def extract_brand_info(user_id: int, user_input: str, url: Optional[str] = None, crawled_data: Optional[str] = None, conversation_history: Optional[List[Dict]] = None, force_new: bool = False) -> Dict[str, Any]:
+async def extract_brand_info(user_id: int, user_input: str, url: Optional[str] = None, crawled_data: Optional[str] = None, conversation_history: Optional[List[Dict]] = None, force_new: bool = False, active_brand: Optional[str] = None) -> Dict[str, Any]:
     """Extract and save brand information using LLM from user input, conversation history, and/or crawled website data."""
     try:
         # Check if brand profile already exists (skip if force_new=True)
         if not force_new:
-            existing_profile = db.get_brand_profile(user_id)
+            existing_profile = db.get_brand_profile(user_id, active_brand)
             if existing_profile:
                 # If a URL was provided, check whether it belongs to a DIFFERENT brand
                 if url:
@@ -1086,11 +1153,13 @@ If this is a website, extract the brand name from the domain, title, or content.
 NEVER use placeholder text like "Not specified", "Unknown", "N/A" for any field â€” omit the field instead.
 Return ONLY valid JSON. Be thorough and extract all available information."""
 
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        response, _used_model = groq_chat_with_failover(
+            groq_client,
             messages=[{"role": "user", "content": prompt}],
+            primary_model="llama-3.3-70b-versatile",
+            logger=logger,
             response_format={"type": "json_object"},
-            temperature=0.3
+            temperature=0.3,
         )
         
         extracted = json.loads(response.choices[0].message.content)
@@ -1111,7 +1180,7 @@ Return ONLY valid JSON. Be thorough and extract all available information."""
             brand_name = "My Business"
 
         # If an existing profile already has a real brand_name, never downgrade it
-        _current = db.get_brand_profile(user_id)
+        _current = db.get_brand_profile(user_id, active_brand)
         if _current:
             _cur_norm = normalize_brand_info(_current)
             _cur_name = (_cur_norm.get("brand_name") or "").strip()
@@ -1235,10 +1304,15 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
     """
     Main chat endpoint with intelligent routing.
     """
+    user_id = None
+    session_id = req.session_id
+    credits_charged = 0
+    credits_balance = None
     try:
         # Authenticate user
         payload = auth.get_current_user(authorization)
         user_id = payload['user_id']
+        credits_balance = db.get_user_credit_balance(user_id)
         
         # Get or create session
         session_id = req.session_id
@@ -1295,17 +1369,91 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                     "intent": "social_post",
                     "content_preview_id": None,
                     "workflow_cost": None,
+                    "credits_charged": 0,
+                    "credits_balance": credits_balance,
                     "seo_result": None,
                     "response_options": None
                 }
         else:
-            # Normal routing
-            routing_result = await router.route_user_query(req.message, history_for_router)
-            intent = routing_result["intent"]
-            confidence = routing_result["confidence"]
-            extracted_params = routing_result["extracted_params"]
+            # Normal routing (or trusted intent override)
+            forced_intent = (req.intent or "").strip().lower()
+            allowed_forced_intents = {
+                "general_chat",
+                "brand_setup",
+                "campaign_planning",
+                "daily_schedule",
+                "seo_analysis",
+                "blog_generation",
+                "blog_instagram_combo",
+                "social_post",
+                "metrics_report",
+            }
+            if forced_intent in allowed_forced_intents:
+                intent = forced_intent
+                confidence = 1.0
+                extracted_params = {"platform": req.platform} if forced_intent == "social_post" and req.platform else {}
+                routing_result = {
+                    "intent": intent,
+                    "confidence": confidence,
+                    "requires_url": False,
+                    "requires_brand_info": False,
+                    "extracted_params": extracted_params,
+                    "suggested_response": "",
+                }
+                logger.info(f"Using forced intent override: {intent}")
+            elif _is_blog_instagram_combo_request(req.message):
+                intent = "blog_instagram_combo"
+                confidence = 1.0
+                extracted_params = {"platform": "instagram"}
+                routing_result = {
+                    "intent": intent,
+                    "confidence": confidence,
+                    "requires_url": False,
+                    "requires_brand_info": True,
+                    "extracted_params": extracted_params,
+                    "suggested_response": "Routing to combined blog + Instagram workflow.",
+                }
+                logger.info("Detected combined blog + Instagram request")
+            else:
+                routing_result = await router.route_user_query(req.message, history_for_router)
+                intent = routing_result["intent"]
+                confidence = routing_result["confidence"]
+                extracted_params = routing_result["extracted_params"]
         
         logger.info(f"Routed to intent: {intent} (confidence: {confidence})")
+
+        estimated_credits = _estimate_chat_credit_cost(intent, extracted_params)
+        try:
+            credits_balance = db.consume_user_credits(
+                user_id,
+                estimated_credits,
+                reason=f"chat:{intent}",
+                metadata={
+                    "session_id": session_id,
+                    "message": req.message[:200],
+                    "intent": intent,
+                },
+            )
+            credits_charged = estimated_credits
+        except ValueError:
+            response_text = (
+                f"You need {estimated_credits} credits for this request, but only have {credits_balance} left. "
+                f"Please top up or try a lighter request."
+            )
+            db.save_message(session_id, "assistant", response_text, formatted_content=response_text)
+            return ChatResponse(
+                session_id=session_id,
+                response=response_text,
+                formatted_response=response_text,
+                intent=intent,
+                content_preview_id=None,
+                workflow_cost=None,
+                credits_charged=0,
+                credits_balance=credits_balance,
+                response_options=None,
+                clarification_request=None,
+                seo_result=None,
+            )
         
         response_text = ""
         content_preview_id = None
@@ -1315,7 +1463,7 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
         clarification_request: Optional[Dict[str, Any]] = None
 
         # ══════════════ LangGraph path (feature-flagged) ══════════════
-        if USE_LANGGRAPH and LANGGRAPH_AVAILABLE:
+        if USE_LANGGRAPH and LANGGRAPH_AVAILABLE and intent != "blog_instagram_combo":
             try:
                 # Build brand context
                 brand_info_dict = None
@@ -1364,6 +1512,16 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                         brand_context_summary=_brand_ctx,
                         trace_id=trace_id,  # Pass trace_id to graph
                     )
+
+                    # Update trace metadata with resolved intent/workflow for accurate visualization.
+                    try:
+                        resolved_intent = graph_result.get("intent") or intent
+                        if trace_id in trace_mgr.trace_metadata:
+                            trace_mgr.trace_metadata[trace_id]["intent"] = resolved_intent
+                            trace_mgr.trace_metadata[trace_id]["workflow"] = "langgraph"
+                    except Exception as trace_meta_err:
+                        logger.warning(f"Failed to update trace metadata for {trace_id}: {trace_meta_err}")
+
                     trace_mgr.complete_trace(trace_id, success=True)
                 except Exception as graph_err:
                     trace_mgr.complete_trace(trace_id, success=False, error=str(graph_err))
@@ -1398,6 +1556,8 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                     intent=intent,
                     content_preview_id=content_preview_id,
                     workflow_cost=workflow_cost,
+                    credits_charged=credits_charged,
+                    credits_balance=credits_balance,
                     response_options=response_options,
                     clarification_request=clarification_request,
                     seo_result=seo_result,
@@ -1516,7 +1676,8 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                         url=url,
                         crawled_data=crawled_data,
                         conversation_history=history,
-                        force_new=True
+                        force_new=True,
+                        active_brand=req.active_brand
                     )
                     
                     response_text = f"I've set up your business profile for **{extracted.get('brand_name')}**.\n\n"
@@ -1530,9 +1691,27 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
         
         elif intent == "campaign_planning":
             # Extract parameters
-            theme = extracted_params.get("theme", "General Promotion")
-            duration_str = extracted_params.get("duration", "7 days")
+            theme = extracted_params.get("theme", "")
+            duration_str = extracted_params.get("duration", "")
             domain = extracted_params.get("domain", "")
+
+            # Fallback parse from natural language message when router params are sparse
+            msg_lower = req.message.lower()
+            if not theme:
+                m_theme = re.search(r"theme\s+is\s+(.+)", req.message, re.IGNORECASE)
+                if m_theme:
+                    theme = m_theme.group(1).strip().rstrip(".")
+            if not theme:
+                # Strip leading instruction phrase and keep intent payload as theme
+                theme = re.sub(r"^(build|create|plan|make)\s+(a\s+)?campaign\s+(for|about)?\s*", "", req.message, flags=re.IGNORECASE).strip()
+            if not theme:
+                theme = "General Promotion"
+
+            if not duration_str:
+                if "this week" in msg_lower or "week" in msg_lower:
+                    duration_str = "7 days"
+                else:
+                    duration_str = "7 days"
             
             # Parse duration
             try:
@@ -1551,21 +1730,22 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
             proposals_data = planner_agent.generate_workflow_proposals(theme, duration_days)
             tiers = proposals_data["proposals"]
             
-            response_text = f"I've designed 3 campaign strategies for **{theme}** ({duration_days} days).\n\n"
-            response_text += "Please select a tier to proceed:"
+            response_text = f"I designed 3 campaign tiers for **{theme}** over **{duration_days} days**.\n\nSelect one card to activate the plan."
             
             # Format options for UI
             response_options = []
             for tier_name, details in tiers.items():
                 response_options.append({
-                    "id": tier_name,  # Use tier name as ID for simplicity
-                    "title": f"{tier_name} Tier",
-                    "description": details["description"],
-                    "meta": f"{details['frequency']} | Est. Cost: ${details['estimated_api_cost']:.2f}",
-                    "strategy": details["strategy"],
-                    "content_mix": details["content_mix"],
-                    "data": {
-                        "tier": tier_name,
+                    "option_id": f"campaign_{tier_name.lower()}",
+                    "label": f"{tier_name} Tier",
+                    "preview_text": details["description"],
+                    "workflow_name": "campaign_plan",
+                    "cost_display": (
+                        f"{details['frequency']} | Est. "
+                        f"{cost_model.format_credits_display(cost_model.usd_cost_to_credits(details['estimated_api_cost']))}"
+                    ),
+                    "campaign_data": {
+                        "tier": tier_name.lower(),
                         "theme": theme,
                         "duration_days": duration_days
                     }
@@ -1593,11 +1773,22 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                 workflow_cost = cost_estimate
 
                 try:
+                    # Normalize URL
+                    if not url.startswith(("http://", "https://")):
+                        url = f"https://{url}"
+                    
+                    # Detect if user is asking for detailed/comprehensive analysis
+                    message_lower = req.message.lower()
+                    detailed_keywords = ["detailed", "comprehensive", "full", "in-depth", "complete", "thorough", "deep", "all metrics", "full analysis", "full report"]
+                    wants_detailed = any(keyword in message_lower for keyword in detailed_keywords)
+                    
                     import requests as _sreq
+                    # Route to detailed endpoint if keywords detected, otherwise use fast endpoint
+                    endpoint = "/seo/analyze/detailed" if wants_detailed else "/seo/analyze"
                     _seo_resp = _sreq.post(
-                        "http://127.0.0.1:5000/analyze",
+                        f"http://127.0.0.1:8004{endpoint}",
                         json={"url": url},
-                        timeout=90
+                        timeout=300  # Increased from 90 to 300 seconds (5 minutes) for comprehensive analysis
                     )
                     _seo_data = _seo_resp.json() if _seo_resp.ok else {}
                     if _seo_data.get("status") == "error":
@@ -1629,6 +1820,298 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                 except Exception as e:
                     response_text = f"âš ï¸ Analysis encountered an error: {str(e)}\n\nPlease try again or provide a different URL."
         
+        elif intent == "blog_instagram_combo":
+            url = extracted_params.get("url") or await router.extract_url_from_message(req.message)
+            crawled_data = None
+            brand_profile = db.get_brand_profile(user_id, req.active_brand)
+            brand_info = normalize_brand_info(brand_profile) if brand_profile else None
+
+            if url:
+                try:
+                    logger.info(f"Crawling website for combo workflow: {url}")
+                    crawl_result = call_agent_job(
+                        "WebCrawler",
+                        f"{CRAWLER_BASE}/crawl",
+                        {"start_url": url, "max_pages": 3},
+                        download_path_template="/download/{job_id}"
+                    )
+                    crawled_data = crawl_result.get("extracted_text", "")
+                    logger.info(f"Combo workflow crawl completed: {len(crawled_data)} characters")
+                except Exception as e:
+                    logger.warning(f"Combo workflow crawl failed: {e}")
+
+            try:
+                extracted_brand = await extract_brand_info(
+                    user_id,
+                    req.message,
+                    url=url,
+                    crawled_data=crawled_data,
+                    conversation_history=history_for_router,
+                    force_new=bool(url),
+                    active_brand=req.active_brand
+                )
+                if extracted_brand:
+                    brand_info = extracted_brand
+            except Exception as e:
+                logger.warning(f"Combo brand extraction skipped: {e}")
+
+            if not brand_info or not brand_info.get("brand_name") or brand_info.get("brand_name") == "My Business":
+                response_text = "I need your business name to generate both the blog and Instagram post. What's your business or brand name?"
+            elif not brand_info.get("industry") or brand_info.get("industry") in ["General", ""]:
+                response_text = f"Thanks! I have your business name ({brand_info.get('brand_name')}). What industry is your business in?"
+            else:
+                try:
+                    business_context_for_keywords = f"""
+Business: {brand_info.get('brand_name', 'My Business')}
+Industry: {brand_info.get('industry', 'General')}
+Location: {brand_info.get('location', 'N/A')}
+Description: {brand_info.get('description', '')}
+Target Audience: {brand_info.get('target_audience', '')}
+Unique Selling Points: {', '.join(brand_info.get('unique_selling_points', []))}
+
+User Request: {req.message}
+
+{"Website Content Summary: " + crawled_data[:2000] if crawled_data else ""}
+"""
+                    keywords_data = call_agent_job(
+                        "KeywordExtractor",
+                        f"{KEYWORD_EXTRACTOR_BASE}/extract-keywords",
+                        {"customer_statement": business_context_for_keywords, "max_results": 10},
+                        download_path_template="/download/{job_id}",
+                        session_id=session_id
+                    )
+
+                    gap_analysis = None
+                    try:
+                        gap_analysis = call_agent_job(
+                            "CompetitorGapAnalyzer",
+                            f"{GAP_ANALYZER_BASE}/analyze-keyword-gap",
+                            {
+                                "company_name": brand_info.get("brand_name", "My Business"),
+                                "product_description": f"{brand_info.get('industry', 'Business')} in {brand_info.get('location', 'N/A')}. {brand_info.get('description', '')}",
+                                "company_url": brand_info.get("website", ""),
+                                "max_competitors": 3,
+                                "max_pages_per_site": 1,
+                            },
+                            download_path_template="/download/json/{job_id}",
+                            session_id=session_id
+                        )
+                    except Exception as e:
+                        logger.warning(f"Combo gap analysis failed: {e}")
+
+                    reddit_insights = {}
+                    try:
+                        kw_list = keywords_data.get("keywords", [])[:8] if isinstance(keywords_data, dict) else []
+                        if kw_list:
+                            reddit_insights = _call_reddit_research(
+                                kw_list, brand_info.get("brand_name", "")
+                            )
+                    except Exception as e:
+                        logger.warning(f"Combo Reddit research skipped: {e}")
+
+                    blog_business_context = f"""
+=== BUSINESS PROFILE ===
+Brand: {brand_info.get('brand_name', 'My Business')}
+Industry: {brand_info.get('industry', 'General')}
+Location: {brand_info.get('location', 'N/A')}
+Description: {brand_info.get('description', req.message)}
+Target Audience: {brand_info.get('target_audience', 'General audience')}
+Unique Selling Points:
+{chr(10).join(['- ' + usp for usp in brand_info.get('unique_selling_points', ['Quality products', 'Excellent service'])])}
+
+=== USER REQUEST ===
+{req.message}
+
+=== COMPETITOR INSIGHTS ===
+{gap_analysis.get('content_gaps_summary', 'Focus on unique value proposition') if gap_analysis else 'Emphasize unique strengths and local presence'}
+
+=== REDDIT COMMUNITY INTELLIGENCE ===
+{('Trending topics: ' + ', '.join(reddit_insights.get('trending_topics', []))) if reddit_insights.get('trending_topics') else 'No Reddit data available'}
+{('Community language: ' + ', '.join(reddit_insights.get('community_language', []))) if reddit_insights.get('community_language') else ''}
+{('Competitor mentions: ' + ', '.join(reddit_insights.get('competitor_mentions', []))) if reddit_insights.get('competitor_mentions') else ''}
+"""
+
+                    blog_html = call_agent_job(
+                        "ContentAgent",
+                        f"{CONTENT_AGENT_BASE}/generate-blog",
+                        {
+                            "business_details": blog_business_context,
+                            "keywords": keywords_data,
+                            "target_tone": "informative",
+                            "blog_length": "medium",
+                            "variant_label": "Blog + Instagram Combo",
+                        },
+                        download_path_template="/download/html/{job_id}",
+                        result_format="html",
+                        session_id=session_id
+                    )
+
+                    blog_content_id = str(uuid.uuid4())
+                    blog_preview_path = f"previews/blog_{blog_content_id}.html"
+                    with open(blog_preview_path, "w", encoding="utf-8") as f:
+                        f.write(blog_html)
+
+                    blog_metadata = {
+                        "brand_name": brand_info.get("brand_name", "My Business"),
+                        "industry": brand_info.get("industry"),
+                        "location": brand_info.get("location"),
+                        "topic": req.message,
+                        "keywords_used": keywords_data.get("keywords", [])[:5] if isinstance(keywords_data, dict) else [],
+                        "bundle_type": "blog_instagram_combo",
+                        "bundle_role": "blog",
+                    }
+                    db.save_generated_content(
+                        content_id=blog_content_id,
+                        session_id=session_id,
+                        content_type="blog",
+                        content=blog_html,
+                        preview_url=f"/preview/blog/{blog_content_id}",
+                        metadata=blog_metadata
+                    )
+
+                    blog_critic = _call_critic_sync(
+                        blog_content_id,
+                        blog_html[:1000] if blog_html else "",
+                        "blog",
+                        brand_info.get("brand_name", ""),
+                        req.message
+                    )
+
+                    social_data = call_agent_job(
+                        "ContentAgent",
+                        f"{CONTENT_AGENT_BASE}/generate-social",
+                        {
+                            "keywords": keywords_data,
+                            "brand_name": brand_info.get("brand_name", "My Business"),
+                            "industry": brand_info.get("industry", ""),
+                            "location": brand_info.get("location", ""),
+                            "target_audience": brand_info.get("target_audience", ""),
+                            "unique_selling_points": brand_info.get("unique_selling_points", []),
+                            "competitor_insights": gap_analysis.get("content_gaps_summary", "") if gap_analysis else "",
+                            "user_request": req.message,
+                            "platforms": ["instagram"],
+                            "tone": "professional",
+                        }
+                    )
+
+                    instagram_post = (social_data.get("posts") or {}).get("instagram", {})
+                    instagram_copy = instagram_post.get("copy", "")
+                    image_prompts = social_data.get("image_prompts", [])
+                    image_prompt = image_prompts[0] if image_prompts else f"Professional Instagram post image for {brand_info.get('brand_name', 'brand')}"
+
+                    reference_images = []
+                    try:
+                        latest_profile = db.get_brand_profile(user_id, req.active_brand)
+                        if latest_profile:
+                            logo_url = latest_profile.get("logo_url")
+                            if logo_url:
+                                reference_images.append(logo_url)
+                            metadata = latest_profile.get("metadata", {})
+                            if isinstance(metadata, dict):
+                                assets = metadata.get("assets", {})
+                                for asset_group in ("reference_image", "item"):
+                                    for asset in assets.get(asset_group, []):
+                                        if isinstance(asset, dict) and asset.get("url"):
+                                            reference_images.append(asset["url"])
+                    except Exception as e:
+                        logger.debug(f"Combo reference image lookup skipped: {e}")
+
+                    image_path = None
+                    preview_url = None
+                    try:
+                        detailed_prompt = (
+                            f"{image_prompt}. You MUST prominently include the text '{brand_info.get('brand_name', '')}' exactly as spelled. "
+                            f"Brand: {brand_info.get('brand_name', '')}. Industry: {brand_info.get('industry', '')}. "
+                            f"Target audience: {brand_info.get('target_audience', '')}."
+                        )
+                        image_path = generate_image_with_runway(
+                            detailed_prompt,
+                            reference_images if reference_images else None
+                        )
+                        if image_path:
+                            preview_url = image_path if image_path.startswith(("http://", "https://")) else f"/preview/image/{image_path}"
+                    except Exception as e:
+                        logger.warning(f"Combo Instagram image generation failed: {e}")
+
+                    social_content_id = str(uuid.uuid4())
+                    social_metadata = {
+                        "brand_name": brand_info.get("brand_name", "My Business"),
+                        "industry": brand_info.get("industry"),
+                        "location": brand_info.get("location"),
+                        "target_audience": brand_info.get("target_audience"),
+                        "unique_selling_points": brand_info.get("unique_selling_points", []),
+                        "platforms": ["instagram"],
+                        "hashtags": instagram_post.get("hashtags", []),
+                        "image_prompt": image_prompt,
+                        "image_path": image_path,
+                        "reference_images": reference_images,
+                        "post_copy": {"instagram": instagram_copy},
+                        "bundle_type": "blog_instagram_combo",
+                        "bundle_role": "instagram",
+                    }
+                    db.save_generated_content(
+                        content_id=social_content_id,
+                        session_id=session_id,
+                        content_type="post",
+                        content=json.dumps({"instagram": instagram_copy}),
+                        preview_url=preview_url,
+                        metadata=social_metadata
+                    )
+
+                    social_critic = _call_critic_sync(
+                        social_content_id,
+                        instagram_copy,
+                        "social_post",
+                        brand_info.get("brand_name", ""),
+                        req.message
+                    )
+
+                    response_options = [
+                        {
+                            "option_id": f"combo_blog_{uuid.uuid4().hex[:8]}",
+                            "label": "SEO Blog Draft",
+                            "tone": "Informative",
+                            "cost_display": "Long-form article",
+                            "workflow_name": "blog_instagram_combo",
+                            "preview_text": "SEO-focused blog draft ready for review.",
+                            "preview_url": f"/preview/blog/{blog_content_id}",
+                            "content_id": blog_content_id,
+                            "content_type": "blog",
+                            "html_code": blog_html,
+                            "critic": blog_critic,
+                            "bundle_type": "blog_instagram_combo",
+                            "direct_action": True,
+                        },
+                        {
+                            "option_id": f"combo_instagram_{uuid.uuid4().hex[:8]}",
+                            "label": "Instagram Post",
+                            "tone": "Professional",
+                            "cost_display": "Caption + image",
+                            "workflow_name": "blog_instagram_combo",
+                            "preview_text": "Instagram copy and image ready to publish.",
+                            "preview_url": preview_url,
+                            "content_id": social_content_id,
+                            "content_type": "post",
+                            "instagram_copy": instagram_copy,
+                            "hashtags": instagram_post.get("hashtags", []),
+                            "critic": social_critic,
+                            "bundle_type": "blog_instagram_combo",
+                            "direct_action": True,
+                            "platform": "instagram",
+                        },
+                    ]
+
+                    response_text = (
+                        f"Content kit ready for **{brand_info.get('brand_name', 'your brand')}**.\n\n"
+                        "I've generated both pieces from the same brief:\n"
+                        "1. An SEO-friendly blog draft\n"
+                        "2. An Instagram post with image and caption\n\n"
+                        "Review each card below and publish either one when you're ready."
+                    )
+                except Exception as e:
+                    logger.error(f"Combined blog + Instagram generation failed: {e}", exc_info=True)
+                    response_text = f"Blog + Instagram generation encountered an error: {str(e)}"
+
         elif intent == "blog_generation":
             # If a URL is present in this message, check whether it belongs to a different
             # brand than what's stored â€” if so, re-extract before generating.
@@ -1668,7 +2151,8 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                             user_id, req.message, url=url,
                             crawled_data=crawled_for_brand,
                             conversation_history=history_for_router,
-                            force_new=True
+                            force_new=True,
+                            active_brand=req.active_brand
                         )
                 except Exception as _ue:
                     logger.warning(f"URL brand-check failed: {_ue}")
@@ -1731,7 +2215,8 @@ async def chat_endpoint(req: ChatRequest, authorization: str = Header(None)):
                     req.message,
                     url=url,
                     crawled_data=crawled_data,
-                    conversation_history=history_for_router
+                    conversation_history=history_for_router,
+                    active_brand=req.active_brand
                 )
                 
                 # Check if essential fields are present
@@ -2000,11 +2485,15 @@ Please create a comprehensive, SEO-optimized blog post that:
                                     "workflow_name": variant["workflow"]["workflow_name"],
                                     "workflow_agents": variant["workflow"]["agents"],
                                     "cost": workflow_cost_estimate["total_cost"],
-                                    "cost_display": cost_model.format_cost_display(workflow_cost_estimate["total_cost"]),
+                                    "cost_display": cost_model.format_credits_display(
+                                        workflow_cost_estimate.get("credits_estimate")
+                                        or cost_model.usd_cost_to_credits(workflow_cost_estimate["total_cost"])
+                                    ),
                                     "preview_url": f"/preview/blog/{content_id}",
                                     "content_id": content_id,
                                     "content_type": "blog",
                                     "state_hash": state_hash,
+                                    "html_code": blog_html,  # ← Full HTML code included for programmatic use
                                     "critic": _critic_data,
                                 })
                             except Exception as variant_error:
@@ -2106,7 +2595,8 @@ Tap a card to preview and lock in your preferred option. Once you choose, I'll t
                             user_id, req.message, url=url,
                             crawled_data=crawled_for_brand,
                             conversation_history=history_for_router,
-                            force_new=True
+                            force_new=True,
+                            active_brand=req.active_brand
                         )
                 except Exception as _ue:
                     logger.warning(f"URL brand-check failed (social): {_ue}")
@@ -2169,7 +2659,8 @@ Tap a card to preview and lock in your preferred option. Once you choose, I'll t
                     req.message,
                     url=url,
                     crawled_data=crawled_data,
-                    conversation_history=history_for_router
+                    conversation_history=history_for_router,
+                    active_brand=req.active_brand
                 )
                 
                 # Check if essential fields are present
@@ -2267,7 +2758,7 @@ User Request: {req.message}
                             ("Competitor mentions: " + ", ".join(reddit_insights_social.get("competitor_mentions", []))) if reddit_insights_social.get("competitor_mentions") else "",
                         ])),
                         "user_request": req.message,
-                        "platforms": [chosen_platform],
+                        "platforms": req.platforms if hasattr(req, 'platforms') and req.platforms else ["twitter", "instagram"],
                         "tone": "professional"
                     }
                     
@@ -2342,14 +2833,34 @@ User Request: {req.message}
                             except Exception as e:
                                 logger.debug(f"Error getting reference images from brand profile: {e}")
                             
-                            # Generate image during preview (before approval)
+                            # Generate image during preview (before approval) - SEQUENTIAL (1 per variant)
+                            image_paths = []
                             image_path = None
                             try:
-                                logger.info(f"Generating preview image for variant {variant['label']}...")
+                                logger.info(f"Generating preview image for variant {variant['label']} [SEQUENTIAL]...")
                                 # Build comprehensive image prompt with business context
-                                detailed_prompt = f"{image_prompt}. Brand: {brand_info.get('brand_name', '')}. Industry: {brand_info.get('industry', '')}. Location: {brand_info.get('location', '')}. Target audience: {brand_info.get('target_audience', '')}. Unique selling points: {', '.join(brand_info.get('unique_selling_points', []))}"
-                                image_path = generate_image_with_runway(detailed_prompt, reference_images if reference_images else None)
-                                logger.info(f"Preview image generated: {image_path}")
+                                # Generate only 1 image per variant sequentially
+                                if image_prompts:
+                                    single_image_prompt = image_prompts[0]  # Take first prompt only
+                                    detailed_prompt = f"{single_image_prompt}. You MUST prominently include the text '{brand_info.get('brand_name', '')}' exactly as spelled. Brand: {brand_info.get('brand_name', '')}. Industry: {brand_info.get('industry', '')}. Location: {brand_info.get('location', '')}. Target audience: {brand_info.get('target_audience', '')}. Unique selling points: {', '.join(brand_info.get('unique_selling_points', []))}"
+                                    logger.info(f"[SEQ] Generating image {len(response_options)+1}/{len(variant_configs)} (variant: {variant['label']})...")
+                                    path = generate_image_with_runway(detailed_prompt, reference_images if reference_images else None)
+                                    if path:
+                                        image_paths.append(path)
+                                        logger.info(f"[SEQ] ✓ Image generated: {path}")
+                                    else:
+                                        logger.warning(f"[SEQ] ✗ Image generation returned None")
+                                else:
+                                    # Fallback if no prompts provided
+                                    detailed_prompt = f"{image_prompt}. You MUST prominently include the text '{brand_info.get('brand_name', '')}' exactly as spelled. Brand: {brand_info.get('brand_name', '')}. Industry: {brand_info.get('industry', '')}. Location: {brand_info.get('location', '')}. Target audience: {brand_info.get('target_audience', '')}. Unique selling points: {', '.join(brand_info.get('unique_selling_points', []))}"
+                                    logger.info(f"[SEQ] Using fallback image prompt...")
+                                    path = generate_image_with_runway(detailed_prompt, reference_images if reference_images else None)
+                                    if path:
+                                        image_paths.append(path)
+                                        logger.info(f"[SEQ] ✓ Fallback image generated: {path}")
+                                
+                                image_path = image_paths[0] if image_paths else None
+                                logger.info(f"[SEQ] Image generation complete for variant {variant['label']}")
                             except Exception as img_error:
                                 logger.warning(f"Preview image generation failed (will generate on approval): {img_error}")
                                 image_path = None
@@ -2365,7 +2876,8 @@ User Request: {req.message}
                                 "hashtags": twitter_post.get('hashtags', []),
                                 "keywords_used": keywords_data.get("keywords", [])[:5] if isinstance(keywords_data, dict) else [],
                                 "image_prompt": image_prompt,
-                                "image_path": image_path,  # Store generated image path
+                                "image_path": image_path,  # Store primary generated image path
+                                "image_paths": image_paths if 'image_paths' in locals() and image_paths else ([image_path] if image_path else []), # All generated image paths
                                 "reference_images": reference_images if reference_images else [],
                                 "option_id": option_id,
                                 "selection_group": state_hash,
@@ -2382,7 +2894,14 @@ User Request: {req.message}
                             }
                             
                             # Set preview_url to image if available
-                            preview_url = f"/preview/image/{image_path}" if image_path else None
+                            # If image_path is already a full URL (Runway CDN), use it directly; otherwise wrap it
+                            if image_path:
+                                if image_path.startswith('http://') or image_path.startswith('https://'):
+                                    preview_url = image_path  # Use Runway URL directly
+                                else:
+                                    preview_url = f"/preview/image/{image_path}"  # Wrap local paths
+                            else:
+                                preview_url = None
                             
                             db.save_generated_content(
                                 content_id=content_id,
@@ -2484,7 +3003,10 @@ User Request: {req.message}
                                 "workflow_name": variant["workflow"]["workflow_name"],
                                 "workflow_agents": variant["workflow"]["agents"],
                                 "cost": workflow_cost_estimate["total_cost"],
-                                "cost_display": cost_model.format_cost_display(workflow_cost_estimate["total_cost"]),
+                                "cost_display": cost_model.format_credits_display(
+                                    workflow_cost_estimate.get("credits_estimate")
+                                    or cost_model.usd_cost_to_credits(workflow_cost_estimate["total_cost"])
+                                ),
                                 "content_id": content_id,
                                 "content_type": "post",
                                 "state_hash": state_hash,
@@ -2513,37 +3035,44 @@ User Request: {req.message}
                 pass
         
         elif intent == "campaign_post":
-            # User wants to post/publish content to social platforms
-            ig_configured = bool(INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD)
-            tw_configured = bool(TWITTER_API_KEY and TWITTER_ACCESS_TOKEN)
-
-            status_lines = []
-            if ig_configured:
-                status_lines.append(f"âœ… **Instagram** â€” connected as `{INSTAGRAM_USERNAME}`")
-            else:
-                status_lines.append("âŒ **Instagram** â€” add `INSTAGRAM_USERNAME` and `INSTAGRAM_PASSWORD` to your .env")
-            if tw_configured:
-                status_lines.append("âœ… **Twitter / X** â€” connected")
-            else:
-                status_lines.append("âŒ **Twitter / X** â€” add Twitter API keys to your .env")
-
-            status_text = "\n".join(status_lines)
-            connected_platforms = []
-            if ig_configured:
-                connected_platforms.append("Instagram")
-            if tw_configured:
-                connected_platforms.append("Twitter/X")
-            platform_str = " & ".join(connected_platforms) if connected_platforms else "any platform"
-
-            response_text = (
-                f"ðŸ“± **Social Media Publishing**\n\n"
-                f"**Platform Status:**\n{status_text}\n\n"
-                f"**How to publish:**\n"
-                f"1. Say **\"Create a social post about [your topic]\"** to generate platform-specific copy\n"
-                f"2. Review the two draft options that appear\n"
-                f"3. Click **Approve & Post** on the card you like â€” it will publish to {platform_str} automatically\n\n"
-                f"Would you like me to generate a social post for you right now?"
+            # Execute immediate campaign post from chat
+            platform = (extracted_params.get("platform") or "instagram").lower()
+            topic = (
+                extracted_params.get("content_text")
+                or extracted_params.get("topic")
+                or extracted_params.get("theme")
+                or req.message
             )
+
+            # Basic normalization for common platform aliases
+            if platform in {"twitter", "x", "tweet"}:
+                platform = "x"
+            elif platform in {"ig", "insta"}:
+                platform = "instagram"
+
+            if not topic or len(topic.strip()) < 5:
+                response_text = "Please provide what you want to post. Example: Post campaign about eco-friendly water bottles on Instagram."
+            else:
+                try:
+                    from agent_adapters.campaign_adapter import execute_campaign_post
+                    post_result = await execute_campaign_post(
+                        user_id=user_id,
+                        platform=platform,
+                        content=topic,
+                        content_id=None,
+                        ai_generate=True,
+                        brand_name=req.active_brand or (brand_info.get("brand_name") if 'brand_info' in locals() else None),
+                    )
+
+                    status = post_result.get("status", "unknown")
+                    response_text = f"Campaign post status: **{status}** on **{platform}**."
+                    if post_result.get("post_url"):
+                        response_text += f"\n\nPublished URL: {post_result.get('post_url')}"
+                    if post_result.get("error"):
+                        response_text += f"\n\nError: {post_result.get('error')}"
+                except Exception as e:
+                    logger.error(f"campaign_post execution failed: {e}", exc_info=True)
+                    response_text = f"Couldn't post the campaign right now: {str(e)}"
 
         elif intent == "image_generation":
             _brand_ctx = _build_user_context_summary(user_id, req.active_brand)
@@ -2703,14 +3232,38 @@ User Request: {req.message}
             intent=intent,
             content_preview_id=content_preview_id,
             workflow_cost=workflow_cost,
+            credits_charged=credits_charged,
+            credits_balance=credits_balance,
             response_options=response_options,
             clarification_request=clarification_request,
             seo_result=seo_result
         )
     
     except HTTPException:
+        if credits_charged > 0 and user_id is not None:
+            try:
+                credits_balance = db.change_user_credits(
+                    user_id,
+                    credits_charged,
+                    reason="refund:chat_failure",
+                    metadata={"session_id": session_id if 'session_id' in locals() else None},
+                )
+                credits_charged = 0
+            except Exception:
+                logger.exception("Failed to refund credits after HTTPException")
         raise
     except Exception as e:
+        if credits_charged > 0 and user_id is not None:
+            try:
+                credits_balance = db.change_user_credits(
+                    user_id,
+                    credits_charged,
+                    reason="refund:chat_failure",
+                    metadata={"session_id": session_id if 'session_id' in locals() else None},
+                )
+                credits_charged = 0
+            except Exception:
+                logger.exception("Failed to refund credits after chat exception")
         logger.error(f"Chat error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2779,14 +3332,98 @@ async def generate_image_endpoint(request: Request):
         prompt = body.get("prompt", "").strip()
         if not prompt:
             raise HTTPException(status_code=400, detail="prompt is required")
+
         reference_images = body.get("reference_images") or []
+
+        # Optional brand context for better image consistency.
+        user_id_raw = body.get("user_id")
+        brand_name = body.get("brand_name")
+        try:
+            user_id = int(user_id_raw) if user_id_raw is not None else None
+        except (TypeError, ValueError):
+            user_id = None
+
+        if user_id:
+            try:
+                brand_profile = db.get_brand_profile(user_id, brand_name)
+                if brand_profile:
+                    brand_ctx = normalize_brand_info(brand_profile)
+
+                    # If caller didn't pass references, auto-use uploaded logo/reference assets.
+                    if not reference_images:
+                        logo_url = brand_profile.get("logo_url")
+                        if isinstance(logo_url, str) and logo_url.startswith(("http://", "https://")):
+                            reference_images.append(logo_url)
+
+                        metadata = brand_profile.get("metadata", {})
+                        if isinstance(metadata, str):
+                            try:
+                                metadata = json.loads(metadata) if metadata else {}
+                            except Exception:
+                                metadata = {}
+
+                        if isinstance(metadata, dict):
+                            assets = metadata.get("assets", {})
+                            for bucket in ("logo", "reference_image", "item"):
+                                for asset in assets.get(bucket, [])[:3]:
+                                    if isinstance(asset, dict) and isinstance(asset.get("url"), str):
+                                        reference_images.append(asset["url"])
+
+                    # Append brand details (including color palette) to prompt.
+                    colors = brand_ctx.get("colors", [])
+                    if not isinstance(colors, list):
+                        colors = [str(colors)] if colors else []
+                    colors_text = ", ".join([str(c) for c in colors if c])
+
+                    usp = brand_ctx.get("unique_selling_points", [])
+                    if not isinstance(usp, list):
+                        usp = [str(usp)] if usp else []
+                    usp_text = ", ".join([str(u) for u in usp[:3] if u])
+
+                    brand_context_lines = []
+                    if brand_ctx.get("brand_name"):
+                        brand_context_lines.append(f"Brand name: {brand_ctx.get('brand_name')}")
+                    if brand_ctx.get("industry"):
+                        brand_context_lines.append(f"Industry: {brand_ctx.get('industry')}")
+                    if brand_ctx.get("target_audience"):
+                        brand_context_lines.append(f"Target audience: {brand_ctx.get('target_audience')}")
+                    if colors_text:
+                        brand_context_lines.append(f"Brand colors: {colors_text}")
+                    if usp_text:
+                        brand_context_lines.append(f"Brand strengths: {usp_text}")
+
+                    if brand_context_lines:
+                        prompt = (
+                            f"{prompt}. Keep the visual identity consistent with this brand context: "
+                            + " | ".join(brand_context_lines)
+                        )
+            except Exception as ctx_err:
+                logger.warning(f"Could not enrich image prompt from brand profile: {ctx_err}")
+
+        # De-duplicate references while preserving order.
+        dedup_refs = []
+        seen_refs = set()
+        for ref in reference_images:
+            if not isinstance(ref, str):
+                continue
+            ref = ref.strip()
+            if not ref or ref in seen_refs:
+                continue
+            seen_refs.add(ref)
+            dedup_refs.append(ref)
+        reference_images = dedup_refs
+
         # generate_image_with_runway is blocking — run in thread pool
         import asyncio
         loop = asyncio.get_event_loop()
         image_path = await loop.run_in_executor(
             None, lambda: generate_image_with_runway(prompt, reference_images or None)
         )
-        preview_url = f"http://127.0.0.1:8004/preview/image/{image_path}"
+        # Runway can return a direct https URL; keep it as-is.
+        if isinstance(image_path, str) and image_path.startswith(("http://", "https://")):
+            preview_url = image_path
+        else:
+            preview_url = f"http://127.0.0.1:8004/preview/image/{image_path}"
         return {"image_path": image_path, "preview_url": preview_url, "status": "ok"}
     except HTTPException:
         raise
@@ -2899,7 +3536,11 @@ async def regenerate_image(content_id: str, authorization: str = Header(None)):
             logger.error(f"Image regeneration failed: {img_err}")
             raise HTTPException(status_code=500, detail=f"Image generation failed: {str(img_err)}")
 
-        new_preview_url = f"/preview/image/{new_image_path}"
+        # If image path is already a full URL (Runway CDN), use it directly; otherwise wrap it
+        if new_image_path.startswith('http://') or new_image_path.startswith('https://'):
+            new_preview_url = new_image_path  # Use Runway URL directly
+        else:
+            new_preview_url = f"/preview/image/{new_image_path}"  # Wrap local paths
 
         # Persist new image path to DB
         metadata['image_path'] = new_image_path
@@ -3007,8 +3648,9 @@ async def approve_content(content_id: str, req: ContentApprovalRequest, backgrou
                     hashtags = metadata.get('hashtags', [])
                     platforms = metadata.get('platforms', ['twitter', 'instagram'])
                     
-                    # Generate image if not exists
-                    if not image_path or not os.path.exists(image_path):
+                    # Generate image if not exists (skip generation if already have a valid URL)
+                    is_valid_image = image_path and (image_path.startswith('http://') or image_path.startswith('https://') or os.path.exists(image_path))
+                    if not is_valid_image:
                         logger.info("Image not found, generating new image...")
                         # Use the stored image_prompt from metadata, or build a comprehensive one
                         stored_prompt = metadata.get('image_prompt')
@@ -3335,6 +3977,110 @@ async def scheduler_status():
     """Get scheduler status."""
     return get_scheduler_status()
 
+
+# ==================== CRITIC ROUTES (ORCHESTRATOR-HOSTED) ====================
+
+@app.get("/critic/logs")
+async def critic_logs(limit: int = 200):
+    """Return recent critic logs for dashboard."""
+    try:
+        return db.get_recent_critic_logs(limit=limit)
+    except Exception as e:
+        logger.error(f"Failed to fetch critic logs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch critic logs")
+
+
+@app.get("/critic/log/{content_id}")
+async def critic_log(content_id: str):
+    """Return latest critic log by content_id."""
+    try:
+        log = db.get_critic_log(content_id)
+        if not log:
+            raise HTTPException(status_code=404, detail=f"No critic log for content {content_id}")
+        return log
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch critic log for {content_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch critic log")
+
+
+class CriticDecisionRequest(BaseModel):
+    decision: str  # approved | rejected | edited
+
+
+@app.post("/critic/decision/{content_id}")
+async def critic_decision(content_id: str, req: CriticDecisionRequest):
+    """Record user decision for a critic log entry."""
+    try:
+        if req.decision not in ("approved", "rejected", "edited"):
+            raise HTTPException(status_code=400, detail="decision must be approved, rejected, or edited")
+        db.update_critic_decision(content_id, req.decision)
+        return {"status": "recorded", "content_id": content_id, "decision": req.decision}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to record critic decision for {content_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to record decision")
+
+
+# ==================== CAMPAIGN ROUTES (ORCHESTRATOR-HOSTED) ====================
+
+@app.get("/brands/{user_id}")
+async def campaign_brands(user_id: int):
+    """List brand profiles for Campaigns UI via orchestrator."""
+    return campaign_get_brands(user_id)
+
+
+@app.post("/schedule", status_code=201)
+async def campaign_schedule_create(req: CampaignScheduleRequest):
+    """Create campaign schedule via orchestrator."""
+    return campaign_create_schedule(req)
+
+
+@app.get("/schedules/{user_id}")
+async def campaign_schedules(user_id: int, status: Optional[str] = None):
+    """List campaign schedules via orchestrator."""
+    return campaign_list_schedules(user_id, status)
+
+
+@app.delete("/schedule/{schedule_id}")
+async def campaign_schedule_delete(schedule_id: str, user_id: int):
+    """Cancel campaign schedule via orchestrator."""
+    return campaign_delete_schedule(schedule_id, user_id)
+
+
+@app.post("/post")
+async def campaign_post_create(req: CampaignPostRequest):
+    """Create immediate social post job via orchestrator."""
+    return await campaign_post_now(req)
+
+
+@app.get("/post/status/{job_id}")
+async def campaign_post_job_status(job_id: str):
+    """Get post job status via orchestrator."""
+    return campaign_post_status(job_id)
+
+
+@app.get("/posts")
+async def campaign_posts(user_id: Optional[int] = None, platform: Optional[str] = None):
+    """List social post history via orchestrator."""
+    return campaign_list_posts(user_id=user_id, platform=platform)
+
+
+@app.get("/campaigns/history/{user_id}")
+async def campaigns_history(user_id: int, limit: int = 50):
+    """List campaign history records for Campaigns UI."""
+    try:
+        campaigns = db.get_campaigns_for_user(user_id, limit=limit)
+        return {
+            "campaigns": campaigns,
+            "count": len(campaigns),
+        }
+    except Exception as e:
+        logger.error(f"Campaign history fetch failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load campaign history")
+
 @app.get("/user/assets")
 async def get_user_assets(authorization: str = Header(None), asset_type: Optional[str] = Query(None, description="Filter by asset type: logo, item, reference_image, or general")):
     """Get user's uploaded assets (S3 URLs)."""
@@ -3458,7 +4204,32 @@ async def get_pending_hitl(session_id: str):
     """Return pending HITL events for a session (polled by frontend â€” no auth required)."""
     from database import get_pending_hitl_events
     events = get_pending_hitl_events(session_id)
-    return {"events": events, "count": len(events)}
+
+    normalized = []
+    for ev in events:
+        payload = ev.get("payload") or {}
+        normalized.append({
+            "id": ev.get("id"),
+            "event_type": ev.get("event_type"),
+            "content_id": payload.get("content_id"),
+            "content_text": payload.get("content_preview", ""),
+            "content_type": payload.get("content_type", "content"),
+            "platform": payload.get("platform"),
+            "attempt_number": payload.get("attempt_number", 1),
+            "decision": payload.get("decision", "escalate"),
+            "critic_data": {
+                "intent_score": payload.get("intent_score", 0),
+                "brand_score": payload.get("brand_score", 0),
+                "quality_score": payload.get("quality_score", 0),
+                "critique": payload.get("critique_text", ""),
+                "suggestions": payload.get("suggestions", []),
+                "content_agent_instructions": payload.get("content_agent_instructions", []),
+            },
+            "composite_score": payload.get("overall_score"),
+            "created_at": ev.get("created_at"),
+        })
+
+    return {"events": normalized, "count": len(normalized)}
 
 
 @app.post("/hitl/respond/{event_id}")
@@ -3476,8 +4247,8 @@ async def respond_hitl(event_id: str, req: HitlRespondRequest,
         "user_id": payload["user_id"],
         "responded_at": datetime.now().isoformat(),
     })
-    # If approved/edited, also record decision in critic_logs
-    if event.get("event_type") == "content_review":
+    # If approved/edited/rejected on critic review, also record decision in critic_logs.
+    if event.get("event_type") == "critic_review":
         content_id = event["payload"].get("content_id")
         if content_id:
             from database import update_critic_decision
@@ -3573,7 +4344,7 @@ async def _call_agent(agent_name: str, message: str, brand_name: Optional[str],
     elif agent_name == "seo_agent":
         payload = {"url": target_url}
     elif agent_name == "research_agent":
-        payload = {"domain": target_url, "topic": message, "depth_level": params.get("depth_level", 2)}
+        payload = {"domain": target_url, "topic": message, "depth_level": params.get("depth_level", "standard")}
     elif agent_name in ("content_agent_blog", "content_agent_social"):
         payload = {
             "message": message,
@@ -3640,9 +4411,14 @@ async def get_prompt_log(limit: int = 100, agent_name: Optional[str] = None,
                          context_type: Optional[str] = None):
     """Return prompt version history for the UI log page (no auth â€” read-only telemetry)."""
     try:
-        from database import get_db_connection
+        import json
+        from database import get_db_connection, get_prompt_executions
+        
         with get_db_connection() as conn:
+            conn.row_factory = lambda c, r: dict(zip([col[0] for col in c.description], r))
             cursor = conn.cursor()
+            
+            # Get template prompts
             where_clauses, params = [], []
             if agent_name:
                 where_clauses.append("agent_name = ?")
@@ -3651,6 +4427,7 @@ async def get_prompt_log(limit: int = 100, agent_name: Optional[str] = None,
                 where_clauses.append("context_type = ?")
                 params.append(context_type)
             where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            
             cursor.execute(
                 f"""
                 SELECT id, agent_name, context_type, prompt_text,
@@ -3662,16 +4439,169 @@ async def get_prompt_log(limit: int = 100, agent_name: Optional[str] = None,
                 """,
                 params + [limit],
             )
-            rows = [dict(r) for r in cursor.fetchall()]
-            # Also fetch distinct agent+context combos for filter options
+            templates = [dict(r) for r in cursor.fetchall()]
+            
+            # Get distinct agents for filters
             cursor.execute(
                 "SELECT DISTINCT agent_name, context_type FROM prompt_versions ORDER BY agent_name, context_type"
             )
-            agents = [{"agent_name": r[0], "context_type": r[1]} for r in cursor.fetchall()]
-        return {"versions": rows, "total": len(rows), "agents": agents}
+            agents = [{"agent_name": row["agent_name"], "context_type": row["context_type"]} for row in cursor.fetchall()]
+        
+        # Get recent executions with brand context
+        executions = get_prompt_executions(
+            agent_name=agent_name,
+            context_type=context_type,
+            limit=limit
+        )
+        
+        # Format executions for display
+        formatted_executions = []
+        for exec_row in executions:
+            formatted_executions.append({
+                "execution_id": exec_row.get("execution_id"),
+                "agent_name": exec_row.get("agent_name"),
+                "context_type": exec_row.get("context_type"),
+                "brand_info": exec_row.get("brand_info", {}),
+                "performance_score": exec_row.get("performance_score"),
+                "quality_score": exec_row.get("quality_score"),
+                "brand_alignment_score": exec_row.get("brand_alignment_score"),
+                "overall_score": exec_row.get("overall_score"),
+                "feedback": exec_row.get("feedback"),
+                "execution_time": exec_row.get("execution_time"),
+                "created_at": exec_row.get("created_at"),
+            })
+        
+        return {
+            "templates": templates,
+            "total_templates": len(templates),
+            "executions": formatted_executions,
+            "total_executions": len(formatted_executions),
+            "agents": agents
+        }
     except Exception as e:
         logger.error(f"/prompt-log failed: {e}")
-        return {"versions": [], "total": 0, "agents": [], "error": str(e)}
+        return {
+            "templates": [],
+            "total_templates": 0,
+            "executions": [],
+            "total_executions": 0,
+            "agents": [],
+            "error": str(e)
+        }
+
+
+@app.post("/seo/analyze")
+async def seo_analyze_endpoint(request: dict):
+    """
+    SEO analysis endpoint using LangGraph orchestrator.
+    Accepts URL and returns SEO audit report.
+    """
+    try:
+        url = request.get("url", "").strip()
+        if not url:
+            return {
+                "status": "error",
+                "error": "URL is required",
+                "url": url
+            }
+        
+        # Validate URL format
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        
+        # Run SEO analysis via agent adapter
+        from agent_adapters import run_seo_analysis
+        
+        result = run_seo_analysis(url=url)
+        
+        return {
+            "status": result.get("status", "completed"),
+            "url": url,
+            "final_url": url,
+            "seo_score": result.get("seo_score", 0.0),
+            "scores": {
+                "overall": result.get("seo_score", 0.0),
+                "recommendations": len(result.get("recommendations", [])),
+                "issues": len(result.get("issues", [])),
+                "opportunities": len(result.get("opportunities", [])),
+            },
+            "recommendations": result.get("recommendations", []) or result.get("issues", []),
+            "error": result.get("error"),
+            "audited_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"/seo/analyze failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e),
+            "url": request.get("url", ""),
+            "seo_score": 0.0,
+            "recommendations": []
+        }
+
+
+@app.post("/seo/analyze/detailed")
+async def seo_analyze_detailed_endpoint(request: dict):
+    """
+    Comprehensive SEO analysis endpoint.
+    More detailed than /seo/analyze, takes 20-30 seconds.
+    Includes full technical, content, and accessibility analysis.
+    Generates an HTML report and returns the path.
+    """
+    try:
+        url = request.get("url", "").strip()
+        if not url:
+            return {
+                "status": "error",
+                "error": "URL is required",
+                "url": url
+            }
+        
+        # Validate URL format
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        
+        # Run comprehensive SEO analysis
+        from comprehensive_seo_analysis import run_comprehensive_seo_analysis
+        
+        result = run_comprehensive_seo_analysis(url=url)
+        
+        # Generate HTML report if analysis was successful
+        report_path = None
+        if result.get("status") == "completed":
+            try:
+                from seo_html_report_generator import generate_seo_html_report
+                report_path = generate_seo_html_report(url, result)
+                logger.info(f"HTML report generated: {report_path}")
+            except Exception as e:
+                logger.warning(f"Failed to generate HTML report: {e}")
+        
+        return {
+            "status": result.get("status", "completed"),
+            "url": url,
+            "final_url": result.get("final_url", url),
+            "seo_score": result.get("seo_score", 0.0),
+            "scores": result.get("scores", {}),
+            "recommendations": result.get("recommendations", []),
+            "details": result.get("details", {}),
+            "analysis_time": result.get("analysis_time", "unknown"),
+            "report_path": report_path,
+            "error": result.get("error"),
+            "audited_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"/seo/analyze/detailed failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e),
+            "url": request.get("url", ""),
+            "seo_score": 0.0,
+            "recommendations": []
+        }
 
 
 @app.get("/tracer/status")
@@ -3986,9 +4916,31 @@ if ENABLE_A2A:
             except Exception as wh_err:
                 logger.warning(f"A2A webhook POST failed for {task_id}: {wh_err}")
 
+    def _normalize_campaign_proposal(raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize external campaign proposal payload for deterministic execution."""
+        if not isinstance(raw, dict):
+            raw = {}
+        theme = str(raw.get("theme") or raw.get("product_name") or "New Product Launch").strip()
+        tier = str(raw.get("tier") or "balanced").strip().lower()
+        duration_days = int(raw.get("duration_days") or 7)
+        summary = str(raw.get("summary") or raw.get("description") or "").strip()
+        budget_guardrail = raw.get("budget_guardrail")
+
+        if tier not in {"budget", "balanced", "premium"}:
+            tier = "balanced"
+
+        return {
+            "theme": theme,
+            "tier": tier,
+            "duration_days": max(1, duration_days),
+            "summary": summary,
+            "budget_guardrail": budget_guardrail,
+        }
+
     # ── Background worker: runs graph and updates task rows ──────────────────
     async def _a2a_run_task(task_id: str, user_message: str, user_id: int,
-                            session_id: str, active_brand: str = ""):
+                            session_id: str, active_brand: str = "",
+                            proposal: Optional[Dict[str, Any]] = None):
         """Execute the marketing graph for an A2A task (background)."""
         try:
             db.update_a2a_task_status(task_id, "working")
@@ -3997,6 +4949,151 @@ if ENABLE_A2A:
                 "taskId": task_id,
                 "status": {"state": "working", "message": "Pipeline started"},
             })
+
+            # Campaign proposal mode: skip intent routing and execute deterministic campaign activation.
+            if proposal:
+                # ── TRACING FOR CAMPAIGN EXECUTION ──
+                trace_id = f"campaign_{task_id}"
+                trace_mgr = get_trace_manager()
+                trace_mgr.create_trace(
+                    trace_id=trace_id,
+                    user_id=user_id,
+                    metadata={
+                        "intent": "campaign_execution",
+                        "workflow": "campaign_a2a",
+                        "task_id": task_id,
+                        "session_id": session_id,
+                    }
+                )
+                
+                try:
+                    normalized = _normalize_campaign_proposal(proposal)
+                    trace_agent_event = trace_workflow(
+                        name="campaign_acceptance_flow",
+                        tags=["campaign_agent", "a2a"],
+                        metadata={"task_id": task_id, "theme": normalized.get("theme")}
+                    )
+                    trace_agent_event.__enter__()
+                    
+                    await _a2a_emit_event(task_id, {
+                        "type": "lifecycle",
+                        "taskId": task_id,
+                        "stage": "proposal_accepted",
+                        "proposal": normalized,
+                    })
+
+                    campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
+                    start_date = (datetime.now() + timedelta(days=1)).isoformat()
+                    end_date = (datetime.now() + timedelta(days=normalized["duration_days"] + 1)).isoformat()
+
+                    # Trace database creation
+                    with trace_workflow(
+                        name="campaign_database_creation",
+                        tags=["database", "campaign"],
+                        metadata={"campaign_id": campaign_id}
+                    ):
+                        db.create_campaign(
+                            campaign_id=campaign_id,
+                            user_id=user_id,
+                            name=f"{normalized['theme']} Campaign",
+                            start_date=start_date,
+                            end_date=end_date,
+                            budget_tier=normalized["tier"],
+                            strategy=normalized["tier"],
+                        )
+
+                    # Trace agenda generation
+                    with trace_workflow(
+                        name="campaign_agenda_generation",
+                        tags=["planner", "campaign"],
+                        metadata={"theme": normalized["theme"], "duration_days": normalized["duration_days"]}
+                    ):
+                        agenda = planner_agent.generate_campaign_agenda(
+                            normalized["theme"],
+                            normalized["duration_days"],
+                            normalized["tier"],
+                        )
+                    
+                    # Trace agenda storage
+                    with trace_workflow(
+                        name="campaign_agenda_storage",
+                        tags=["database", "agenda"],
+                        metadata={"agenda_count": len(agenda), "campaign_id": campaign_id}
+                    ):
+                        for item in agenda:
+                            db.add_campaign_agenda_item(
+                                campaign_id=campaign_id,
+                                scheduled_time=item["scheduled_time"],
+                                action=item["action"],
+                                metadata=item["metadata"],
+                            )
+
+                    completion_artifact = {
+                        "name": "campaign_execution",
+                        "parts": [{
+                            "type": "text",
+                            "text": json.dumps({
+                                "campaign_id": campaign_id,
+                                "theme": normalized["theme"],
+                                "tier": normalized["tier"],
+                                "duration_days": normalized["duration_days"],
+                                "agenda_count": len(agenda),
+                                "publish_status": "scheduled",
+                                "metrics_hook": {
+                                    "tracer_status": "/tracer/status",
+                                    "mabo_stats": "/mabo/stats",
+                                },
+                            }),
+                        }],
+                    }
+                    artifacts = [
+                        {
+                            "name": "response",
+                            "parts": [{
+                                "type": "text",
+                                "text": (
+                                    f"Campaign proposal accepted and activated. "
+                                    f"Campaign {campaign_id} was created with {len(agenda)} agenda items."
+                                ),
+                            }],
+                        },
+                        completion_artifact,
+                    ]
+
+                    db.update_a2a_task_status(task_id, "completed", artifacts=artifacts)
+                    await _a2a_emit_event(task_id, {
+                        "type": "lifecycle",
+                        "taskId": task_id,
+                        "stage": "campaign_completed",
+                        "campaign_id": campaign_id,
+                        "agenda_count": len(agenda),
+                    })
+                    await _a2a_emit_event(task_id, {
+                        "type": "status",
+                        "taskId": task_id,
+                        "status": {"state": "completed", "message": "Campaign executed"},
+                    })
+                    for art in artifacts:
+                        await _a2a_emit_event(task_id, {
+                            "type": "artifact",
+                            "taskId": task_id,
+                            "artifact": art,
+                        })
+                    q = _a2a_event_queues.get(task_id)
+                    if q:
+                        await q.put(None)
+                    
+                    # Close trace context
+                    trace_agent_event.__exit__(None, None, None)
+                    trace_mgr.complete_trace(trace_id, success=True)
+                    logger.info(f"Campaign execution trace completed: {trace_id}")
+                    return
+                    
+                except Exception as campaign_err:
+                    logger.error(f"Campaign execution error: {campaign_err}", exc_info=True)
+                    trace_agent_event.__exit__(campaign_err.__class__, campaign_err, campaign_err.__traceback__)
+                    trace_mgr.complete_trace(trace_id, success=False, error=str(campaign_err))
+                    raise
 
             # Build brand context (same logic as chat_endpoint)
             brand_info_dict = None
@@ -4053,7 +5150,6 @@ if ENABLE_A2A:
                 
                 # If parsed content is empty, just dump the raw dict for the robot to parse manually
                 if not content_text.strip():
-                    import json
                     content_text = json.dumps(opt)
                     
                 artifacts.append({
@@ -4155,6 +5251,14 @@ if ENABLE_A2A:
         # ---------- tasks.sendSubscribe ----------
         elif rpc.method == "tasks.sendSubscribe":
             return await _a2a_handle_send(rpc, user_id, subscribe=True)
+
+        # ---------- campaigns.propose ----------
+        elif rpc.method == "campaigns.propose":
+            return await _a2a_handle_campaign_propose(rpc, user_id)
+
+        # ---------- campaigns.accept ----------
+        elif rpc.method == "campaigns.accept":
+            return await _a2a_handle_campaign_accept(rpc, user_id)
 
         # ---------- tasks.cancel ----------
         elif rpc.method == "tasks.cancel":
@@ -4278,6 +5382,115 @@ if ENABLE_A2A:
                 id=rpc.id,
                 result=_a2a_task_from_row(row) if row else {},
             ).model_dump()
+
+    async def _a2a_handle_campaign_propose(rpc: A2AJsonRpcRequest, user_id: int):
+        """Create a campaign proposal task without executing until explicitly accepted."""
+        params = rpc.params
+        task_id = params.get("taskId", str(uuid.uuid4()))
+        proposal = _normalize_campaign_proposal(params.get("proposal", {}))
+
+        if not proposal.get("theme"):
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                error=A2AJsonRpcError(code=-32602, message="proposal.theme is required"),
+            ).model_dump()
+
+        session_id = f"a2a_{task_id}"
+        try:
+            db.create_session(session_id, user_id, f"A2A Proposal {task_id[:8]}")
+        except Exception as e:
+            logger.debug(f"Session {session_id} already exists: {e}")
+
+        payload = {
+            "taskId": task_id,
+            "proposal": proposal,
+            "metadata": params.get("metadata", {}),
+            "messages": [
+                {
+                    "role": "user",
+                    "parts": [{"type": "text", "text": proposal.get("summary") or proposal["theme"]}],
+                }
+            ],
+        }
+        db.create_a2a_task(task_id, rpc.method, payload, user_id)
+        db.update_a2a_task_status(task_id, "submitted", artifacts=[
+            {
+                "name": "proposal",
+                "parts": [{"type": "text", "text": json.dumps(proposal)}],
+            }
+        ])
+
+        await _a2a_emit_event(task_id, {
+            "type": "lifecycle",
+            "taskId": task_id,
+            "stage": "proposal_received",
+            "proposal": proposal,
+        })
+
+        row = db.get_a2a_task(task_id)
+        return A2AJsonRpcResponse(
+            id=rpc.id,
+            result=_a2a_task_from_row(row) if row else {},
+        ).model_dump()
+
+    async def _a2a_handle_campaign_accept(rpc: A2AJsonRpcRequest, user_id: int):
+        """Accept a previously proposed campaign task and execute it."""
+        params = rpc.params
+        task_id = params.get("taskId", "")
+        row = db.get_a2a_task(task_id)
+        if not row:
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                error=A2AJsonRpcError(code=-32001, message="Task not found"),
+            ).model_dump()
+
+        request_payload = row.get("request_payload", {})
+        proposal = request_payload.get("proposal")
+        if not proposal:
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                error=A2AJsonRpcError(code=-32602, message="Task has no proposal payload"),
+            ).model_dump()
+
+        await _a2a_emit_event(task_id, {
+            "type": "lifecycle",
+            "taskId": task_id,
+            "stage": "campaign_executing",
+        })
+
+        active_brand = request_payload.get("metadata", {}).get("brand", "")
+        session_id = f"a2a_{task_id}"
+        run_async = bool(params.get("async", True))
+        if run_async:
+            _a2a_asyncio.create_task(
+                _a2a_run_task(
+                    task_id,
+                    proposal.get("summary") or proposal.get("theme", "Campaign proposal"),
+                    row.get("user_id") or user_id,
+                    session_id,
+                    active_brand,
+                    proposal=proposal,
+                )
+            )
+            latest = db.get_a2a_task(task_id)
+            return A2AJsonRpcResponse(
+                id=rpc.id,
+                result=_a2a_task_from_row(latest) if latest else {},
+            ).model_dump()
+
+        await _a2a_run_task(
+            task_id,
+            proposal.get("summary") or proposal.get("theme", "Campaign proposal"),
+            row.get("user_id") or user_id,
+            session_id,
+            active_brand,
+            proposal=proposal,
+        )
+        latest = db.get_a2a_task(task_id)
+        return A2AJsonRpcResponse(
+            id=rpc.id,
+            result=_a2a_task_from_row(latest) if latest else {},
+        ).model_dump()
 
     # ══════════════════════════════════════════════════════════════════════════
     # ROUTE: Task status polling

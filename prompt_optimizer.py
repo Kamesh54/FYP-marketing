@@ -19,6 +19,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from groq import Groq
+from llm_failover import groq_chat_with_failover
 
 load_dotenv()
 logger = logging.getLogger("prompt_optimizer")
@@ -153,9 +154,11 @@ Rules:
 IMPROVED PROMPT:"""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
+        resp, _used_model = groq_chat_with_failover(
+            groq_client,
             messages=[{"role": "user", "content": meta_prompt}],
+            primary_model=GROQ_MODEL,
+            logger=logger,
             temperature=0.4,
             max_tokens=1000,
         )

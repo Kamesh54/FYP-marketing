@@ -1,10 +1,10 @@
-class MessageFormatter {
+﻿class MessageFormatter {
     private codeBlockId = 0
   
     format(text: string): string {
       if (!text) return ""
   
-      let formatted = text
+      let formatted = this.normalizeText(text)
   
       // Escape HTML first to prevent XSS
       formatted = this.escapeHtml(formatted)
@@ -17,6 +17,9 @@ class MessageFormatter {
   
       // Format bold text
       formatted = this.formatBold(formatted)
+
+      // Format markdown headings so raw ### markers do not appear in the UI
+      formatted = this.formatHeadings(formatted)
   
       // Format italic text
       formatted = this.formatItalic(formatted)
@@ -35,7 +38,41 @@ class MessageFormatter {
   
       return formatted
     }
-  
+
+    private normalizeText(text: string): string {
+      return text
+        .replace(/\r\n/g, "\n")
+        .replace(/âœ…/g, "")
+        .replace(/âœ“/g, "")
+        .replace(/âœ”/g, "")
+        .replace(/âœ—/g, "")
+        .replace(/âš ï¸/g, "Warning:")
+        .replace(/âš /g, "Warning:")
+        .replace(/ðŸ“£/g, "")
+        .replace(/ðŸ“/g, "")
+        .replace(/ðŸ”/g, "")
+        .replace(/ðŸ”„/g, "")
+        .replace(/Ã¢â‚¬Â¦/g, "...")
+        .replace(/Ã¢â‚¬â€œ/g, "-")
+        .replace(/Ã¢â‚¬â€/g, "-")
+        .replace(/Ã¢â‚¬Â¢/g, "•")
+        .replace(/Ã‚Â·/g, "·")
+        .replace(/Ã‚/g, "")
+        .replace(/Ã¢Å“Â¦/g, "")
+        .replace(/â€¦/g, "...")
+        .replace(/â€“/g, "-")
+        .replace(/â€”/g, "-")
+        .replace(/â€¢/g, "•")
+        .replace(/â€˜|â€™/g, "'")
+        .replace(/â€œ|â€/g, '"')
+        .replace(/âœ¦/g, "")
+        .replace(/âœ/g, "")
+        .replace(/Â/g, "")
+        .replace(/â(?=\S)/g, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+    }
+
     private escapeHtml(text: string): string {
       const div = document.createElement("div")
       div.textContent = text
@@ -78,6 +115,13 @@ class MessageFormatter {
     private formatBold(text: string): string {
       return text.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>").replace(/__([^_\n]+?)__/g, "<strong>$1</strong>")
     }
+
+    private formatHeadings(text: string): string {
+      return text.replace(/^\s*(#{1,6})\s+(.+)$/gm, (_match, hashes: string, content: string) => {
+        const level = Math.min(hashes.length, 6)
+        return `<h${level} class="message-heading message-heading-${level}">${content.trim()}</h${level}>`
+      })
+    }
   
     private formatItalic(text: string): string {
       return text
@@ -94,13 +138,13 @@ class MessageFormatter {
       let formatted = text
   
       // Unordered lists
-      const unorderedListRegex = /(?:^|\n)((?:[•\-*] .+\n?)+)/gm
+      const unorderedListRegex = /(?:^|\n)((?:[â€¢\-*] .+\n?)+)/gm
       formatted = formatted.replace(unorderedListRegex, (match, listItems) => {
         const items = listItems
           .split("\n")
           .filter((line: string) => line.trim())
           .map((line: string) => {
-            const content = line.replace(/^[•\-*] /, "").trim()
+            const content = line.replace(/^[â€¢\-*] /, "").trim()
             return `<li>${content}</li>`
           })
           .join("")
@@ -145,6 +189,7 @@ class MessageFormatter {
             para.trim().startsWith("<div") ||
             para.trim().startsWith("<ul") ||
             para.trim().startsWith("<ol") ||
+            para.trim().startsWith("<h") ||
             para.trim().startsWith("<pre") ||
             para.trim().startsWith("<blockquote")
           ) {
@@ -190,3 +235,4 @@ class MessageFormatter {
   
   export const messageFormatter = new MessageFormatter()
   
+

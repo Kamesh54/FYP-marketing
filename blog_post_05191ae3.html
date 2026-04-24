@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Building a Premium Blog Website for Bikes 90</title><meta name='description' content='Create a stunning blog website for Bikes 90, targeting the youth audience and showcasing the brand's unique strengths and values.'><meta property='og:title' content='Bikes 90 Blog'><meta property='og:description' content='Explore the world of Bikes 90 through our premium blog website, designed specifically for the youth audience.'><style>
+      :root {
+         --primary-color: #3498db;
+         --secondary-color: #f1c40f;
+         --background-color: #f9f9f9;
+         --text-color: #333;
+      }
+      body {
+         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+         margin: 0;
+         padding: 0;
+         background-color: var(--background-color);
+         color: var(--text-color);
+         line-height: 1.6;
+      }
+      header {
+         background-color: var(--primary-color);
+         color: #fff;
+         padding: 1em;
+         text-align: center;
+      }
+      nav {
+         background-color: var(--secondary-color);
+         padding: 0.5em;
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+      }
+      nav ul {
+         list-style: none;
+         margin: 0;
+         padding: 0;
+         display: flex;
+      }
+      nav li {
+         margin-right: 20px;
+      }
+      nav a {
+         color: #333;
+         text-decoration: none;
+      }
+      main {
+         display: grid;
+         grid-template-columns: 1fr;
+         grid-gap: 20px;
+         padding: 2em;
+      }
+      section {
+         background-color: #fff;
+         padding: 2em;
+         border: 1px solid #ddd;
+         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1, h2, h3 {
+         color: var(--primary-color);
+         margin-bottom: 0.5em;
+      }
+      h1 {
+         font-size: 24px;
+      }
+      h2 {
+         font-size: 20px;
+      }
+      h3 {
+         font-size: 18px;
+      }
+      .hero {
+         background-image: linear-gradient(to bottom, var(--primary-color), var(--secondary-color));
+         background-size: 100% 300px;
+         background-position: 0% 100%;
+         height: 100vh;
+         display: flex;
+         justify-content: center;
+         align-items: center;
+         color: #fff;
+      }
+      .toc {
+         position: sticky;
+         top: 0;
+         background-color: var(--secondary-color);
+         padding: 1em;
+         border: 1px solid #ddd;
+      }
+      .toc ul {
+         list-style: none;
+         margin: 0;
+         padding: 0;
+      }
+      .toc li {
+         margin-bottom: 10px;
+      }
+      .toc a {
+         color: #333;
+         text-decoration: none;
+      }
+      .back-to-top {
+         position: fixed;
+         bottom: 20px;
+         right: 20px;
+         background-color: var(--primary-color);
+         color: #fff;
+         padding: 10px;
+         border: none;
+         border-radius: 5px;
+         cursor: pointer;
+      }
+      .back-to-top:hover {
+         background-color: var(--secondary-color);
+      }
+      .dark-mode {
+         position: fixed;
+         top: 20px;
+         right: 20px;
+         background-color: var(--primary-color);
+         color: #fff;
+         padding: 10px;
+         border: none;
+         border-radius: 5px;
+         cursor: pointer;
+      }
+      .dark-mode:hover {
+         background-color: var(--secondary-color);
+      }
+      @media print {
+         body {
+            font-size: 14px;
+         }
+         header, nav, footer {
+            display: none;
+         }
+      }
+   </style></head><body><header><h1>Building a Premium Blog Website for Bikes 90</h1></header><nav><ul><li><a href='#intro'>Introduction</a></li><li><a href='#design'>Design</a></li><li><a href='#development'>Development</a></li><li><a href='#conclusion'>Conclusion</a></li></ul></nav><main><section id='intro' class='hero'><h1>Welcome to Bikes 90</h1><p>We are excited to create a premium blog website for Bikes 90, targeting the youth audience and showcasing the brand's unique strengths and values.</p></section><section id='design'><h2>Designing a Stunning Website</h2><p.Our goal is to create a visually impressive and highly interactive website that rivals top-tier modern websites. We will use advanced CSS techniques such as Grid, Flexbox, Custom Properties, Animations, Transforms, Filters, and Backdrop Filters to achieve this.</p><blockquote cite='https://www.w3schools.com/css/'> CSS is a styling language used to control layout and appearance of web pages.</blockquote></section><section id='development'><h2>Developing a Premium Website</h2><p>We will use modern JavaScript (ES6+) and HTML5 to create a responsive and interactive website. We will also ensure that the website is optimized for performance and follows best practices.</p><code>const nav = document.querySelector('nav');</code></section><section id='conclusion'><h2>Conclusion</h2><p>In conclusion, building a premium blog website for Bikes 90 requires a deep understanding of modern web development technologies and techniques. We are excited to create a stunning and highly interactive website that showcases the brand's unique strengths and values.</p><p class='reading-time'>Reading time: 10 minutes</p></section><aside class='toc'><h3>Table of Contents</h3><ul><li><a href='#intro'>Introduction</a></li><li><a href='#design'>Design</a></li><li><a href='#development'>Development</a></li><li><a href='#conclusion'>Conclusion</a></li></ul></aside><button class='back-to-top'>Back to Top</button><button class='dark-mode'>Dark Mode</button></main><script>
+      const nav = document.querySelector('nav');
+      const navToggle = document.querySelector('.nav-toggle');
+      navToggle.addEventListener('click', () => {
+         nav.classList.toggle('open');
+      });
+      const backToTop = document.querySelector('.back-to-top');
+      window.addEventListener('scroll', () => {
+         if (window.scrollY > 300) {
+            backToTop.style.display = 'block';
+         } else {
+            backToTop.style.display = 'none';
+         }
+      });
+      backToTop.addEventListener('click', () => {
+         window.scrollTo(0, 0);
+      });
+      const darkMode = document.querySelector('.dark-mode');
+      darkMode.addEventListener('click', () => {
+         document.body.classList.toggle('dark-mode');
+      });
+      const readingTime = document.querySelector('.reading-time');
+      const article = document.querySelector('article');
+      const words = article.textContent.split(' ').length;
+      const readingTimeMinutes = Math.ceil(words / 200);
+      readingTime.textContent = `Reading time: ${readingTimeMinutes} minutes`;
+   </script></body></html>

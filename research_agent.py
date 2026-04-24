@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from groq import Groq
+from llm_failover import groq_chat_with_failover
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -293,9 +294,11 @@ Write a structured brief covering:
 Keep it concise and actionable."""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
+        resp, _used_model = groq_chat_with_failover(
+            groq_client,
             messages=[{"role": "user", "content": prompt}],
+            primary_model=GROQ_MODEL,
+            logger=logger,
             temperature=0.5,
             max_tokens=1200,
         )

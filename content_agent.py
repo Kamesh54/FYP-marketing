@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import uuid
+import re
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
@@ -24,12 +25,39 @@ except Exception:
     def format_kg_context_for_prompt(ctx): return ""  # noqa
 
 from fastapi.responses import FileResponse
+
 # Load env
 load_dotenv()
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Import shared global cooldown (accessible to ALL agents) — after logger is set up
+try:
+    from shared_cooldown import is_model_on_cooldown, get_cooldown_remaining, handle_groq_429
+    SHARED_COOLDOWN_AVAILABLE = True
+except ImportError:
+    SHARED_COOLDOWN_AVAILABLE = False
+    logger.warning("shared_cooldown not found; cooldown will not be shared across agents.")
+
+
+def _is_rate_limited_error(error_text: str) -> bool:
+    text = (error_text or "").lower()
+    return "429" in text or "rate_limit" in text or "too many requests" in text
+
+
+def _parse_retry_after_seconds(error_text: str) -> float:
+    text = error_text or ""
+    m = re.search(r"try again in\s+(\d+)m(\d+(?:\.\d+)?)s", text, flags=re.IGNORECASE)
+    if m:
+        return float(m.group(1)) * 60.0 + float(m.group(2))
+
+    s = re.search(r"try again in\s+(\d+(?:\.\d+)?)\s*(?:seconds?|s)", text, flags=re.IGNORECASE)
+    if s:
+        return float(s.group(1))
+
+    return 45.0
 
 # Groq client
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -139,56 +167,172 @@ def normalize_keywords_input(keywords: Optional[Dict[str, Any]], keywords_job_id
         return {"source": "extractor_job", "data": data}
     raise ValueError("Either 'keywords' or 'keywords_job_id' must be provided.")
 
+
+def _get_groq_model_candidates(primary_model: str) -> List[str]:
+    """Return ordered model list: primary first, then configured fallbacks."""
+    fallback_raw = os.getenv(
+        "GROQ_FALLBACK_MODELS",
+        "meta-llama/llama-4-scout-17b-16e-instruct,qwen/qwen3-32b,openai/gpt-oss-120b,openai/gpt-oss-20b,llama-3.1-8b-instant,llama3-8b-8192",
+    )
+    models = [primary_model]
+    models.extend([m.strip() for m in fallback_raw.split(",") if m.strip()])
+
+    deduped: List[str] = []
+    for m in models:
+        if m not in deduped:
+            deduped.append(m)
+    return deduped
+
 def safe_groq_chat(prompt: str, model: str = "llama-3.3-70b-versatile", timeout: int = 120,
-                   system_instruction: Optional[str] = None) -> Dict[str, Any]:
-    """Call Groq aiming for strict JSON. If that fails, retry without response_format and sanitize output."""
+                   system_instruction: Optional[str] = None, strict_json: bool = True) -> Dict[str, Any]:
+    """
+    Call Groq aiming for strict JSON. If that fails, retry without response_format and sanitize output.
+    Uses SHARED GLOBAL cooldown to prevent repeated 429s across all agents.
+    """
+    if not groq_client:
+        return {
+            "error": "groq_unavailable",
+            "message": "Groq client is not configured.",
+        }
+
     logger.info("Calling Groq (strict JSON)...")
     messages: List[Dict[str, str]] = []
     if system_instruction:
         messages.append({"role": "system", "content": system_instruction})
     messages.append({"role": "user", "content": prompt})
-    try:
-        resp = groq_client.chat.completions.create(
-            model=model,
-            messages=messages,
-            response_format={"type": "json_object"}
-        )
+
+    models_to_try = _get_groq_model_candidates(model)
+    last_error = ""
+    saw_rate_limit = False
+
+    for candidate_model in models_to_try:
+        # === HARD CHECK: Is this model on global cooldown? ===
+        if SHARED_COOLDOWN_AVAILABLE and is_model_on_cooldown(candidate_model):
+            remaining = get_cooldown_remaining(candidate_model)
+            if remaining is not None:
+                logger.info(f"Skipping model {candidate_model} due to active cooldown ({remaining:.1f}s left)")
+            continue
+
         try:
-            return json.loads(resp.choices[0].message.content)
-        except Exception as e:
-            logger.warning(f"Strict JSON parse failed: {e}. Falling back to sanitize.")
-            text = resp.choices[0].message.content or ""
-            # Try to extract JSON substring
-            start = text.find("{"); end = text.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                candidate = text[start:end+1]
-                try:
-                    return json.loads(candidate)
-                except Exception:
-                    pass
-            return {"raw_text": text}
-    except Exception as e:
-        # Retry without response_format if server rejected strict JSON (e.g., json_validate_failed)
-        logger.warning(f"Groq strict JSON request failed: {e}. Retrying without response_format...")
-        relaxed_prompt = prompt + "\n\nReturn ONLY a valid JSON object. No prose, no code fences."
-        _retry_messages: List[Dict[str, str]] = []
-        if system_instruction:
-            _retry_messages.append({"role": "system", "content": system_instruction})
-        _retry_messages.append({"role": "user", "content": relaxed_prompt})
-        resp2 = groq_client.chat.completions.create(
-            model=model,
-            messages=_retry_messages,
-        )
-        text = resp2.choices[0].message.content or ""
-        # Sanitize to JSON
-        start = text.find("{"); end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            candidate = text[start:end+1]
+            request_kwargs: Dict[str, Any] = {
+                "model": candidate_model,
+                "messages": messages,
+                "timeout": timeout,
+            }
+            if strict_json:
+                request_kwargs["response_format"] = {"type": "json_object"}
+
+            resp = groq_client.chat.completions.create(**request_kwargs)
             try:
-                return json.loads(candidate)
+                parsed = json.loads(resp.choices[0].message.content)
+                if isinstance(parsed, dict):
+                    parsed.setdefault("_model_used", candidate_model)
+                return parsed
+            except Exception as e:
+                logger.warning(f"Strict JSON parse failed on {candidate_model}: {e}. Falling back to sanitize.")
+                text = resp.choices[0].message.content or ""
+                start = text.find("{")
+                end = text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    candidate = text[start:end+1]
+                    try:
+                        parsed = json.loads(candidate)
+                        if isinstance(parsed, dict):
+                            parsed.setdefault("_model_used", candidate_model)
+                        return parsed
+                    except Exception:
+                        pass
+                return {"raw_text": text, "_model_used": candidate_model}
+        except Exception as e:
+            last_error = str(e)
+            
+            # === SHARED COOLDOWN: On 429, register with global cooldown ===
+            if _is_rate_limited_error(last_error):
+                saw_rate_limit = True
+                if SHARED_COOLDOWN_AVAILABLE:
+                    # Let shared_cooldown parse and set the cooldown
+                    try:
+                        error_dict = {}
+                        # Try to extract error dict from exception
+                        if hasattr(e, 'response'):
+                            try:
+                                error_dict = e.response.json()
+                            except:
+                                error_dict = {"error": {"message": last_error}}
+                        else:
+                            error_dict = {"error": {"message": last_error}}
+                        handle_groq_429(candidate_model, error_dict)
+                    except Exception as cooldown_err:
+                        logger.warning(f"Failed to set shared cooldown: {cooldown_err}")
+
+            if not strict_json:
+                mode_label = "strict JSON" if strict_json else "standard"
+                logger.error(f"Groq {mode_label} request failed on {candidate_model}: {e}")
+                continue
+
+            mode_label = "strict JSON" if strict_json else "standard"
+            logger.warning(f"Groq {mode_label} request failed on {candidate_model}: {e}. Retrying without response_format...")
+
+            relaxed_prompt = prompt + "\n\nReturn ONLY a valid JSON object. No prose, no code fences."
+            retry_messages: List[Dict[str, str]] = []
+            if system_instruction:
+                retry_messages.append({"role": "system", "content": system_instruction})
+            retry_messages.append({"role": "user", "content": relaxed_prompt})
+
+            try:
+                resp2 = groq_client.chat.completions.create(
+                    model=candidate_model,
+                    messages=retry_messages,
+                    timeout=timeout,
+                )
+                text = resp2.choices[0].message.content or ""
+                start = text.find("{")
+                end = text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    candidate = text[start:end+1]
+                    try:
+                        parsed = json.loads(candidate)
+                        if isinstance(parsed, dict):
+                            parsed.setdefault("_model_used", candidate_model)
+                        return parsed
+                    except Exception as e2:
+                        logger.warning(f"Relaxed parse failed on {candidate_model}: {e2}")
+                return {"raw_text": text, "_model_used": candidate_model}
             except Exception as e2:
-                logger.warning(f"Relaxed parse still failed: {e2}. Returning raw text.")
-        return {"raw_text": text}
+                last_error = str(e2)
+                
+                # === SHARED COOLDOWN: On 429 during relaxed retry ===
+                if _is_rate_limited_error(last_error):
+                    saw_rate_limit = True
+                    if SHARED_COOLDOWN_AVAILABLE:
+                        try:
+                            error_dict = {}
+                            if hasattr(e2, 'response'):
+                                try:
+                                    error_dict = e2.response.json()
+                                except:
+                                    error_dict = {"error": {"message": last_error}}
+                            else:
+                                error_dict = {"error": {"message": last_error}}
+                            handle_groq_429(candidate_model, error_dict)
+                        except Exception as cooldown_err:
+                            logger.warning(f"Failed to set shared cooldown: {cooldown_err}")
+                
+                logger.error(f"Groq relaxed request failed on {candidate_model}: {e2}")
+                continue
+
+    if saw_rate_limit:
+        return {
+            "error": "rate_limited",
+            "message": "Groq limits reached on all configured models.",
+            "models_attempted": models_to_try,
+        }
+
+    return {
+        "error": "groq_request_failed",
+        "message": last_error or "Unknown Groq failure",
+        "models_attempted": models_to_try,
+    }
 
 # Core prompt builders
 def build_analyze_prompt(page_json: Dict[str, Any], keywords_obj: Dict[str, Any], site_url: Optional[str], tone: str, max_replacements: int) -> str:
@@ -308,7 +452,7 @@ Return ONLY a valid JSON object with this EXACT structure:
       "hashtags": ["#RelevantHashtag", "#{brand.replace(' ', '')}", {'"#' + location.replace(' ', '') + '"' if location else '""'}, "#{''.join(industry.split()[:2]) if industry else 'Business'}"]
     }}
   }},
-  "image_prompts": ["Photorealistic image prompt 1 for {brand}{' in ' + location if location else ''}", "Photorealistic image prompt 2 for {brand}"],
+  "image_prompts": ["Photorealistic image prompt 1 for {brand}{' in ' + location if location else ' '} prominently featuring brand name '{brand}' in the image text", "Photorealistic image prompt 2 for {brand} prominence for '{brand}'"],
   "meta": {{
     "brand_name": "{brand}",
     "location": "{location or 'N/A'}",
@@ -562,6 +706,48 @@ async def generate_social_background(
         logger.error(f"Social generation job {job_id} failed: {e}")
         jobs[job_id].update({"status": "failed", "message": str(e), "end_time": datetime.now()})
 
+def _clean_markdown_wrapped_html(text: str) -> str:
+    """Extract actual HTML from markdown code blocks or JSON wrappers."""
+    if not text:
+        return ""
+    
+    text = text.strip()
+    
+    # Remove markdown code block wrapper (```json ... ```)
+    if text.startswith("```json"):
+        text = text[7:]  # Remove ```json
+    elif text.startswith("```html"):
+        text = text[7:]  # Remove ```html
+    elif text.startswith("```"):
+        text = text[3:]  # Remove generic ```
+    
+    if text.endswith("```"):
+        text = text[:-3]  # Remove closing ```
+    
+    text = text.strip()
+    
+    # If it's wrapped in JSON, extract the html_content field
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                # Try various keys
+                for key in ["html_content", "html", "content", "body"]:
+                    if key in parsed:
+                        return str(parsed[key]).strip()
+                # If none found, return the first string value
+                for v in parsed.values():
+                    if isinstance(v, str):
+                        return v.strip()
+        except json.JSONDecodeError:
+            pass
+    
+    # Return as-is if it's already HTML
+    if text.startswith("<!DOCTYPE") or text.startswith("<html"):
+        return text
+    
+    return text
+
 async def generate_blog_background(business_details: str, keywords_obj: Dict[str, Any], crawled_content: Optional[Dict[str, Any]], gap_analysis: Optional[Dict[str, Any]], target_tone: str, blog_length: str, job_id: str, variant_label: Optional[str] = None):
     jobs[job_id] = {"status": "running", "start_time": datetime.now()}
     save_path = None
@@ -599,11 +785,19 @@ async def generate_blog_background(business_details: str, keywords_obj: Dict[str
             logger.warning(f"[PromptOptimizer] Blog wiring skipped: {_po_err}")
         # ────────────────────────────────────────────────────────────────
 
-        blog_response = safe_groq_chat(prompt, system_instruction=_sys_instruction_blog)
+        blog_response = safe_groq_chat(
+            prompt,
+            system_instruction=_sys_instruction_blog,
+            strict_json=False,
+        )
         
         blog_html = blog_response.get("html_content", "")
-        if not blog_html:
-            logger.warning("Groq did not return 'html_content' for blog; using raw output.")
+        
+        # Clean up markdown-wrapped responses
+        blog_html = _clean_markdown_wrapped_html(blog_html)
+        
+        if not blog_html or blog_html.startswith("{"):
+            logger.warning("Groq did not return valid 'html_content' for blog; using raw output.")
             blog_html = f"<html><body><h1>Error Generating Blog</h1><p>Could not generate blog content. Raw response: {json.dumps(blog_response)}</p></body></html>"
 
         save_path = f"blog_post_{job_id[:8]}.html"

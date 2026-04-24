@@ -1,0 +1,345 @@
+
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SEO Report - https://www.bisleri.com/</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+                    background: #f3f4f6;
+                    color: #111827;
+                    line-height: 1.6;
+                }
+                
+                .container {
+                    max-width: 900px;
+                    margin: 0 auto;
+                    padding: 40px 20px;
+                }
+                
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 40px;
+                    border-radius: 12px;
+                    margin-bottom: 30px;
+                    text-align: center;
+                }
+                
+                .header h1 {
+                    font-size: 32px;
+                    margin-bottom: 10px;
+                }
+                
+                .header p {
+                    font-size: 14px;
+                    opacity: 0.9;
+                }
+                
+                .score-display {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 20px;
+                    margin-top: 20px;
+                }
+                
+                .score-circle {
+                    width: 120px;
+                    height: 120px;
+                    border-radius: 50%;
+                    background: rgba(255,255,255,0.2);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    border: 4px solid white;
+                }
+                
+                .score-number {
+                    font-size: 48px;
+                    font-weight: bold;
+                }
+                
+                .score-label {
+                    font-size: 12px;
+                    opacity: 0.9;
+                }
+                
+                .summary {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+                
+                .summary-card {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    text-align: center;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
+                
+                .summary-number {
+                    font-size: 28px;
+                    font-weight: bold;
+                    margin: 10px 0;
+                }
+                
+                .summary-label {
+                    font-size: 13px;
+                    color: #6b7280;
+                }
+                
+                .high { color: #ef4444; }
+                .medium { color: #f59e0b; }
+                .low { color: #22c55e; }
+                
+                .section {
+                    background: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
+                
+                .section h2 {
+                    font-size: 22px;
+                    margin-bottom: 20px;
+                    color: #111827;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid #e5e7eb;
+                }
+                
+                .url-display {
+                    background: #f9fafb;
+                    padding: 12px;
+                    border-radius: 6px;
+                    color: #667eea;
+                    word-break: break-all;
+                    font-size: 14px;
+                }
+                
+                .recommendation-card {
+                    border-left: 4px solid #667eea;
+                    padding: 16px;
+                    margin: 12px 0;
+                    background: #f9fafb;
+                    border-radius: 8px;
+                }
+                
+                .recommendation-card h4 {
+                    margin: 8px 0;
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+                
+                .recommendation-card p {
+                    margin: 8px 0;
+                    color: #6b7280;
+                    font-size: 14px;
+                }
+                
+                .badge {
+                    display: inline-block;
+                    padding: 4px 12px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    margin-right: 8px;
+                    margin-bottom: 8px;
+                }
+                
+                .details-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 20px;
+                }
+                
+                .details-section {
+                    padding: 15px;
+                }
+                
+                .detail-item {
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 12px 0;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                
+                .detail-label {
+                    color: #6b7280;
+                    font-size: 14px;
+                }
+                
+                .detail-value {
+                    font-weight: 600;
+                    color: #111827;
+                }
+                
+                .footer {
+                    text-align: center;
+                    margin-top: 40px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e5e7eb;
+                    color: #6b7280;
+                    font-size: 12px;
+                }
+                
+                @media (max-width: 768px) {
+                    .summary {
+                        grid-template-columns: 1fr;
+                    }
+                    .details-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <!-- Header with Score -->
+                <div class="header">
+                    <h1>SEO Audit Report</h1>
+                    <p>Comprehensive SEO Analysis & Recommendations</p>
+                    <div class="score-display">
+                        <div class="score-circle" style="background: #f59e0b22; border-color: #f59e0b;">
+                            <div class="score-number" style="color: #f59e0b;">56</div>
+                            <div class="score-label">Overall Score</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- URL Info -->
+                <div class="section">
+                    <h2>Audited URL</h2>
+                    <div class="url-display">https://www.bisleri.com/</div>
+                    <p style="margin-top: 10px; color: #6b7280; font-size: 13px;">Audited on 2026-04-06 08:57:26</p>
+                </div>
+                
+                <!-- Summary Cards -->
+                <div class="summary">
+                    <div class="summary-card">
+                        <div class="summary-label">High Priority Issues</div>
+                        <div class="summary-number high">2</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Medium Priority Issues</div>
+                        <div class="summary-number medium">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Low Priority Issues</div>
+                        <div class="summary-number low">0</div>
+                    </div>
+                </div>
+                
+                <!-- Recommendations -->
+                <div class="section"><h2>Recommendations & Issues</h2>
+            <div class="recommendation-card" style="border-left: 4px solid #ef4444; padding: 16px; margin: 12px 0; background: #f9fafb; border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <span style="background: #ef444422; color: #ef4444; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                        High
+                    </span>
+                    <span style="background: #e5e7eb; color: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;">Content & Keywords</span>
+                </div>
+                <h4 style="margin: 8px 0; font-size: 16px; font-weight: 600; color: #111827;">Missing H1 heading</h4>
+                <p style="margin: 8px 0; color: #6b7280; font-size: 14px;">Add one H1 tag containing your primary keyword</p>
+            </div>
+            
+            <div class="recommendation-card" style="border-left: 4px solid #ef4444; padding: 16px; margin: 12px 0; background: #f9fafb; border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <span style="background: #ef444422; color: #ef4444; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                        High
+                    </span>
+                    <span style="background: #e5e7eb; color: #374151; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;">Images</span>
+                </div>
+                <h4 style="margin: 8px 0; font-size: 16px; font-weight: 600; color: #111827;">17 of 86 images missing alt text</h4>
+                <p style="margin: 8px 0; color: #6b7280; font-size: 14px;">Add alt text to all images for better accessibility and SEO</p>
+            </div>
+            </div>
+                
+                <!-- Detailed Metrics -->
+                <div class="section">
+                    <h2>Detailed Metrics</h2>
+                    <div style="padding: 0;">
+                        
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Title</span>
+                    <span style="font-weight: 600; color: #111827;">89 chars</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Meta Description</span>
+                    <span style="font-weight: 600; color: #111827;">254 chars</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">H1 Headings</span>
+                    <span style="font-weight: 600; color: #111827;">0</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">H2 Headings</span>
+                    <span style="font-weight: 600; color: #111827;">15</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">H3 Headings</span>
+                    <span style="font-weight: 600; color: #111827;">8</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Total Images</span>
+                    <span style="font-weight: 600; color: #111827;">86</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Alt Text Coverage</span>
+                    <span style="font-weight: 600; color: #111827;">80%</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Internal Links</span>
+                    <span style="font-weight: 600; color: #111827;">110</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">External Links</span>
+                    <span style="font-weight: 600; color: #111827;">16</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">HTTPS/SSL</span>
+                    <span style="font-weight: 600; color: #111827;">✓ Yes</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Word Count</span>
+                    <span style="font-weight: 600; color: #111827;">1056</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                    <span style="color: #6b7280; font-size: 14px;">Paragraphs</span>
+                    <span style="font-weight: 600; color: #111827;">35</span>
+                </div>
+                
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="footer">
+                    <p>Generated by FYP Marketing SEO Analyzer | 2026-04-06 08:57:26</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        

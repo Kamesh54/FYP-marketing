@@ -139,6 +139,24 @@ export default function VisualizerPage() {
     }
   };
 
+  const agentSummary = React.useMemo(() => {
+    if (!selectedTrace) return [] as Array<{ node: string; starts: number; completes: number; errors: number }>;
+
+    const summary = new Map<string, { node: string; starts: number; completes: number; errors: number }>();
+    for (const event of selectedTrace.events) {
+      const node = event.node || "unknown";
+      if (!summary.has(node)) {
+        summary.set(node, { node, starts: 0, completes: 0, errors: 0 });
+      }
+      const item = summary.get(node)!;
+      if (event.event_type === "start") item.starts += 1;
+      if (event.event_type === "complete") item.completes += 1;
+      if (event.event_type === "error") item.errors += 1;
+    }
+
+    return Array.from(summary.values());
+  }, [selectedTrace]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -253,6 +271,24 @@ export default function VisualizerPage() {
                 </div>
 
                 {/* Event Timeline */}
+                <div className="bg-black/20 rounded-lg p-4 border border-white/10">
+                  <h3 className="font-semibold mb-3 text-sm text-gray-300">Agents Ran</h3>
+                  {agentSummary.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No agent/node events yet for this trace.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {agentSummary.map((agent) => (
+                        <div key={agent.node} className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs">
+                          <div className="font-semibold text-gray-100">{agent.node}</div>
+                          <div className="text-gray-400 mt-1">
+                            start: {agent.starts} | complete: {agent.completes} | error: {agent.errors}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="max-h-[calc(100vh-480px)] overflow-y-auto">
                   <h3 className="font-semibold mb-3 text-sm text-gray-300">Execution Timeline</h3>
                   {selectedTrace.events.length === 0 ? (
@@ -273,7 +309,7 @@ export default function VisualizerPage() {
                           <div className="flex-1 bg-black/30 rounded-lg p-4 border border-white/10">
                             <div className="flex items-start justify-between mb-2">
                               <div>
-                                <span className="font-semibold text-sm">{event.node}</span>
+                                <span className="font-semibold text-sm">{event.node} • {event.event_type}</span>
                                 <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
                                   event.event_type === "complete" ? "bg-green-500/20 text-green-300" :
                                   event.event_type === "error" ? "bg-red-500/20 text-red-300" :

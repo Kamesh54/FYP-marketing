@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Calendar, Send, Trash2, Plus, Clock, RotateCw, History, Image as ImageIcon, ExternalLink } from "lucide-react"
 import Link from "next/link"
 
-const CAMPAIGN_API = "http://127.0.0.1:8008"
-const ORCHESTRATOR  = "http://127.0.0.1:8004"
+const ORCHESTRATOR = "http://127.0.0.1:8004"
+const CAMPAIGN_API = ORCHESTRATOR
 
 interface Schedule {
   id: number
@@ -63,6 +63,21 @@ interface PostRecord {
   ai_generated?: boolean
 }
 
+interface CampaignHistoryRecord {
+  id: string
+  name: string
+  status: string
+  start_date?: string
+  end_date?: string
+  budget_tier?: string
+  strategy?: string
+  created_at: string
+  agenda_total?: number
+  agenda_completed?: number
+  agenda_pending?: number
+  agenda_failed?: number
+}
+
 interface GeneratedImage {
   filename: string
   url: string
@@ -83,6 +98,7 @@ export default function CampaignsPage() {
   const [tab, setTab] = useState<"schedules" | "post-now" | "history" | "media">("schedules")
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [postHistory, setPostHistory] = useState<PostRecord[]>([])
+  const [campaignHistory, setCampaignHistory] = useState<CampaignHistoryRecord[]>([])
   const [images, setImages] = useState<GeneratedImage[]>([])
   const [brands, setBrands] = useState<Brand[]>([])
   const [selectedBrand, setSelectedBrand] = useState<string>("")
@@ -98,6 +114,7 @@ export default function CampaignsPage() {
   const [sTrigger, setSTrigger] = useState<"once" | "recurring">("once")
   const [sRunAt, setSRunAt] = useState("")
   const [sCron, setSCron] = useState("")
+  const [sRecurringDays, setSRecurringDays] = useState("7")
   const [sAiGenerate, setSAiGenerate] = useState(true)
 
   // Post Now state
@@ -107,25 +124,50 @@ export default function CampaignsPage() {
   const [postResult, setPostResult] = useState<PostJob | null>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
+  function getResolvedUserId(): string {
+    // Keep compatibility with both key styles used across the app.
+    return localStorage.getItem("userId") || localStorage.getItem("user_id") || "1"
+  }
+
   useEffect(() => {
-    const uid = localStorage.getItem("user_id") || "1"
+    const uid = getResolvedUserId()
     setUserId(uid)
     const savedBrand = localStorage.getItem("activeBrandName") || ""
     setSelectedBrand(savedBrand)
     fetchSchedules(uid)
-    fetchBrands(uid)
+    fetchBrands(uid, savedBrand)
   }, [])
 
-  async function fetchBrands(uid = userId) {
+  async function fetchBrands(uid = userId, savedBrandName = selectedBrand) {
     try {
       const r = await fetch(`${CAMPAIGN_API}/brands/${uid}`)
       const data = await r.json()
-      setBrands(data.brands || [])
+      const fetched: Brand[] = data.brands || []
+
+      // If API has no rows but we already have an active brand in localStorage,
+      // keep it visible so campaign forms still carry correct brand context.
+      if ((!fetched || fetched.length === 0) && savedBrandName) {
+        const fallback = [{ brand_name: savedBrandName }]
+        setBrands(fallback)
+        setSelectedBrand(savedBrandName)
+        return
+      }
+
+      setBrands(fetched)
+
+      // Ensure selected brand always points to an available option.
+      if (savedBrandName && fetched.some((b) => b.brand_name === savedBrandName)) {
+        setSelectedBrand(savedBrandName)
+      } else if (fetched.length > 0) {
+        setSelectedBrand(fetched[0].brand_name)
+        localStorage.setItem("activeBrandName", fetched[0].brand_name)
+      }
     } catch (_) {}
   }
 
   useEffect(() => {
     if (tab === "history") fetchHistory()
+    if (tab === "history") fetchCampaignHistory()
     if (tab === "media") fetchImages()
   }, [tab])
 
@@ -145,6 +187,14 @@ export default function CampaignsPage() {
     } catch (_) {}
   }
 
+  async function fetchCampaignHistory() {
+    try {
+      const r = await fetch(`${CAMPAIGN_API}/campaigns/history/${userId}`)
+      const data = await r.json()
+      setCampaignHistory(data.campaigns || [])
+    } catch (_) {}
+  }
+
   async function fetchImages() {
     try {
       const r = await fetch(`${ORCHESTRATOR}/images`)
@@ -160,6 +210,10 @@ export default function CampaignsPage() {
     }
     if (sTrigger === "once" && !sRunAt) { setMsg("Please specify a run time for one-off schedule."); return }
     if (sTrigger === "recurring" && !sCron) { setMsg("Please enter a cron expression for recurring schedule."); return }
+    if (sTrigger === "recurring" && sRecurringDays && Number(sRecurringDays) <= 0) {
+      setMsg("Recurring days must be greater than 0.")
+      return
+    }
     setLoading(true); setMsg("")
     try {
       const body: Record<string, unknown> = {
@@ -169,14 +223,17 @@ export default function CampaignsPage() {
         brand_name: selectedBrand || undefined,
       }
       if (sTrigger === "once") body.run_at = sRunAt
-      else body.cron_expr = sCron
+      else {
+        body.cron_expr = sCron
+        if (sRecurringDays) body.recurring_days = parseInt(sRecurringDays)
+      }
       const r = await fetch(`${CAMPAIGN_API}/schedule`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
       if (r.ok) {
         setMsg("Schedule created!")
-        setSName(""); setSContent(""); setSRunAt(""); setSCron("")
+        setSName(""); setSContent(""); setSRunAt(""); setSCron(""); setSRecurringDays("7")
         fetchSchedules()
       } else { setMsg("Failed: " + (await r.text())) }
     } catch (e: any) { setMsg("Error: " + e.message) }
@@ -353,6 +410,19 @@ export default function CampaignsPage() {
                     <Label>Cron Expression</Label>
                     <Input value={sCron} onChange={(e) => setSCron(e.target.value)} placeholder="0 9 * * 1 (Mon 9am)" className="bg-gray-800 border-gray-600 font-mono text-sm" />
                     <p className="text-xs text-gray-500">Standard cron: min hour day month weekday</p>
+                    <div className="pt-2">
+                      <Label>Run For (Days)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={sRecurringDays}
+                        onChange={(e) => setSRecurringDays(e.target.value)}
+                        placeholder="7"
+                        className="bg-gray-800 border-gray-600"
+                      />
+                      <p className="text-xs text-gray-500">After this many days, recurring schedule stops automatically.</p>
+                    </div>
                   </div>
                 )}
                 <Button onClick={createSchedule} disabled={loading} className="w-full bg-green-600 hover:bg-green-700">{loading ? "Schedulingâ€¦" : "Create Schedule"}</Button>
@@ -517,6 +587,41 @@ export default function CampaignsPage() {
       {/* â”€â”€ History tab â”€â”€â”€ */}
       {tab === "history" && (
         <div className="space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-gray-400">{campaignHistory.length} campaign(s)</p>
+            <Button variant="ghost" size="sm" onClick={fetchCampaignHistory}><RotateCw className="h-3 w-3 mr-1" />Refresh Campaigns</Button>
+          </div>
+          {campaignHistory.length === 0 ? (
+            <Card className="bg-gray-900 border-gray-700 text-center py-10">
+              <CardContent><p className="text-gray-500">No campaign history yet. Create a campaign plan from chat and activate a tier.</p></CardContent>
+            </Card>
+          ) : (
+            campaignHistory.map((c) => (
+              <Card key={c.id} className="bg-gray-900 border-gray-700">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium">{c.name}</p>
+                        <Badge className={`${statusColor(c.status)} text-white text-xs`}>{c.status}</Badge>
+                        {c.budget_tier && <Badge className="bg-indigo-700 text-white text-xs">{c.budget_tier}</Badge>}
+                      </div>
+                      <p className="text-xs text-gray-500">Created: {new Date(c.created_at).toLocaleString()}</p>
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+                        {c.start_date && <span>Start: {new Date(c.start_date).toLocaleDateString()}</span>}
+                        {c.end_date && <span>End: {new Date(c.end_date).toLocaleDateString()}</span>}
+                        <span>Agenda: {c.agenda_completed || 0}/{c.agenda_total || 0} completed</span>
+                        {(c.agenda_failed || 0) > 0 && <span className="text-red-400">Failed: {c.agenda_failed}</span>}
+                        {(c.agenda_pending || 0) > 0 && <span className="text-yellow-400">Pending: {c.agenda_pending}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+
+          <div className="h-px bg-gray-800 my-3" />
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm text-gray-400">{postHistory.length} post(s)</p>
             <Button variant="ghost" size="sm" onClick={fetchHistory}><RotateCw className="h-3 w-3 mr-1" />Refresh</Button>

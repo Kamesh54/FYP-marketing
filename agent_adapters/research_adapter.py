@@ -11,7 +11,8 @@ logger = logging.getLogger("adapter.research")
 def run_deep_research(domain: str,
                       depth_level: str = "standard",
                       competitors: Optional[List[str]] = None,
-                      use_cache: bool = True) -> Dict[str, Any]:
+                      use_cache: bool = True,
+                      max_competitors: int = 8) -> Dict[str, Any]:
     """
     Run deep competitor/topic research pipeline:
     1. Check cache
@@ -24,6 +25,7 @@ def run_deep_research(domain: str,
     import os
     from datetime import datetime
     from groq import Groq
+    from llm_failover import groq_chat_with_failover
     from database import get_research_cache, save_research_cache
     from .webcrawler_adapter import run_webcrawler
     from .keyword_adapter import run_keyword_extraction
@@ -43,11 +45,43 @@ def run_deep_research(domain: str,
 
         # Step 2: Extract keywords
         raw_text = crawl_data.get("content", "")[:8000]
-        kw_result = run_keyword_extraction(raw_text, max_results=5, max_pages=1)
+        target_competitors = max(3, min(max_competitors, 15))
+        kw_result = run_keyword_extraction(
+            raw_text,
+            max_results=target_competitors,
+            max_pages=1,
+            max_competitors=target_competitors,
+        )
         keywords = []
+        competitors_list = []
+        import urllib.parse
+        target_parsed = urllib.parse.urlparse(url)
+        target_netloc = target_parsed.netloc.replace("www.", "").lower() if target_parsed.netloc else domain.replace("www.", "").lower()
+
         for comp in kw_result.get("competitors", []):
-            keywords.extend(comp.get("short_keywords", []))
-            keywords.extend(comp.get("long_tail_keywords", []))
+            comp_name = comp.get("competitor_name", "Unknown")
+            comp_url = comp.get("url", "")
+            comp_netloc = ""
+            
+            # Simple check to avoid listing the target domain as a competitor
+            is_self = False
+            if comp_url:
+                comp_parsed = urllib.parse.urlparse(comp_url)
+                comp_netloc = comp_parsed.netloc.replace("www.", "").lower() if comp_parsed.netloc else comp_url.replace("www.", "").lower()
+                if target_netloc in comp_netloc or comp_netloc in target_netloc:
+                    is_self = True
+                    
+            if comp_name != "Unknown" and not is_self:
+                import re
+                clean_name = re.split(r'[-|:]', comp_name)[0].strip()
+                if not clean_name and comp_url:
+                    clean_name = comp_netloc.replace("www.", "").split(".")[0].title()
+                if clean_name not in competitors_list:
+                    competitors_list.append(clean_name)
+            
+            if not is_self:
+                keywords.extend(comp.get("short_keywords", []))
+                keywords.extend(comp.get("long_tail_keywords", []))
         keywords = list(set(keywords))[:20]
 
         # Step 3: Gap analysis (if competitors provided)
@@ -75,6 +109,7 @@ def run_deep_research(domain: str,
         if GROQ_API_KEY:
             client = Groq(api_key=GROQ_API_KEY)
             kw_str = ", ".join(keywords[:15]) or "none found"
+            comp_str = "\n".join(f"- {c}" for c in competitors_list) or "none found"
             gap_str = "\n".join(f"- {g}" for g in gaps[:8]) or "- none analyzed"
             
             pages = crawl_data.get("pages", [])
@@ -86,6 +121,9 @@ def run_deep_research(domain: str,
 Website title: {title}
 Description: {desc}
 
+Identified Competitors:
+{comp_str}
+
 Top keywords found: {kw_str}
 
 Competitor content gaps:
@@ -93,17 +131,20 @@ Competitor content gaps:
 
 Write a structured brief covering:
 1. Brand positioning / market niche (2-3 sentences)
-2. Audience signals inferred from keywords
-3. Top 3 content opportunities based on gaps
-4. Recommended content tone and format
-5. 5 specific blog / social post ideas with suggested titles
+2. Main competitors identified
+3. Audience signals inferred from keywords
+4. Top 3 content opportunities based on gaps
+5. Recommended content tone and format
+6. 5 specific blog / social post ideas with suggested titles
 
 Keep it concise and actionable."""
 
             try:
-                resp = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                resp, _used_model = groq_chat_with_failover(
+                    client,
                     messages=[{"role": "user", "content": prompt}],
+                    primary_model="llama-3.3-70b-versatile",
+                    logger=logger,
                     temperature=0.5,
                     max_tokens=1200,
                 )
@@ -117,6 +158,7 @@ Keep it concise and actionable."""
             "crawl_summary": {
                 "pages_crawled": crawl_data.get("pages_count", 0),
             },
+            "competitors_found": competitors_list,
             "top_keywords": keywords[:20],
             "competitor_gaps": gaps[:10],
             "research_brief": brief,
